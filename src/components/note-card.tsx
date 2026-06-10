@@ -1,37 +1,48 @@
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { NoteItem } from "@/user-db/migrations";
 import { useDb } from "@/user-db/user-db";
-import { useNoteDialogStore } from "./note-dialog";
+
+export function NoteCardContent({ note }: { note: NoteItem }) {
+  return (
+    <div className="px-4 py-3">
+      {note.title && <p className="mb-1 line-clamp-2 font-medium text-sm leading-snug">{note.title}</p>}
+      {note.content ? (
+        <p className="line-clamp-8 whitespace-pre-wrap text-muted-foreground text-sm leading-relaxed">{note.content}</p>
+      ) : (
+        !note.title && <p className="text-muted-foreground/50 text-sm italic">Empty note</p>
+      )}
+    </div>
+  );
+}
 
 type NoteCardProps = {
   note: NoteItem;
+  onOpen: () => void;
 };
 
-export function NoteCard({ note }: NoteCardProps) {
-  const sortable = useSortable({
-    id: note.id,
-    data: note,
-    animateLayoutChanges: (args) => {
-      return !args.wasDragging;
-    },
-  });
+export function NoteCard({ note, onOpen }: NoteCardProps) {
+  const draggable = useDraggable({ id: note.id });
+  const droppable = useDroppable({ id: note.id });
 
   const db = useDb();
-  const openNoteDialog = useNoteDialogStore((s) => s.open);
 
   return (
     <div className="group">
       <div
-        className="relative rounded-lg border bg-card text-card-foreground shadow-xs"
-        ref={sortable.setNodeRef}
-        style={{
-          transform: CSS.Translate.toString(sortable.transform),
-          transition: sortable.transition,
+        className={cn(
+          "relative rounded-lg border bg-card text-card-foreground shadow-xs",
+          // While dragging, the card stays in the grid as an invisible
+          // placeholder so the empty slot reflows with the layout.
+          draggable.isDragging && "opacity-0",
+        )}
+        ref={(el) => {
+          draggable.setNodeRef(el);
+          droppable.setNodeRef(el);
         }}
-        {...sortable.attributes}
-        {...sortable.listeners}
+        {...draggable.attributes}
+        {...draggable.listeners}
       >
         {/* Hover actions */}
         <div className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -48,20 +59,8 @@ export function NoteCard({ note }: NoteCardProps) {
           </button>
         </div>
 
-        <div
-          className="cursor-pointer select-none px-4 py-3"
-          onClick={() => {
-            if (!sortable.isDragging) openNoteDialog(note.id);
-          }}
-        >
-          {note.title && <p className="mb-1 line-clamp-2 font-medium text-sm leading-snug">{note.title}</p>}
-          {note.content ? (
-            <p className="line-clamp-8 whitespace-pre-wrap text-muted-foreground text-sm leading-relaxed">
-              {note.content}
-            </p>
-          ) : (
-            !note.title && <p className="text-muted-foreground/50 text-sm italic">Empty note</p>
-          )}
+        <div className="cursor-pointer select-none" onClick={onOpen}>
+          <NoteCardContent note={note} />
         </div>
       </div>
     </div>
