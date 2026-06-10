@@ -9,7 +9,7 @@ const envSchema = z.object({
   AUTH_SECRET: z.string(),
   MODE: z.enum(["development", "production"]),
   VITE_APP_URL: z.string(),
-  RESEND_API_KEY: z.string().optional(),
+  CLOUDFLARE_EMAIL_SENDER: z.string().optional(),
 });
 envSchema.parse(env);
 

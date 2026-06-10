@@ -1,53 +1,72 @@
+import { render } from "@react-email/components";
 import React from "react";
-import { Resend } from "resend";
 import { getContext } from "../context";
 import MagicLinkEmail, { type MagicLinkEmailProps } from "./magic-link.email";
 
 React;
+
+const DEFAULT_FROM = "noreply@system.krolebord.com";
 
 type SendEmailProps<TemplateProps> = TemplateProps & {
   to: string;
   from?: string;
 };
 
-export class EmailService {
-  private readonly resend: Resend | null;
+type SendResult = { success: true; error: undefined } | { success: false; error: string };
 
-  constructor(resendApiKey: string) {
-    if (resendApiKey) {
-      this.resend = new Resend(resendApiKey);
-    } else {
-      this.resend = null;
-    }
+export class EmailService {
+  private readonly binding: SendEmail | null;
+  private readonly sender: string;
+
+  constructor(binding: SendEmail | undefined, sender?: string) {
+    this.binding = binding ?? null;
+    this.sender = sender ?? DEFAULT_FROM;
   }
 
-  async sendMagicLinkEmail(
-    opts: SendEmailProps<MagicLinkEmailProps>,
-  ): Promise<{ success: true; error: undefined } | { success: false; error: string }> {
+  async sendMagicLinkEmail(opts: SendEmailProps<MagicLinkEmailProps>): Promise<SendResult> {
     const { to, from, ...props } = opts;
 
-    if (!this.resend) {
-      console.warn("Resend API key is not set, skipping email");
+    if (!this.binding) {
+      console.warn("Email binding is not configured, skipping email");
       console.warn("Email data", JSON.stringify(opts, null, 2));
       return { success: true, error: undefined };
     }
 
-    const result = await this.resend.emails.send({
-      from: from ?? "noreply@email.krolebord.com",
+    const html = await render(<MagicLinkEmail {...props} />);
+
+    return this.send({
       to,
+      from,
       subject: "Your login link",
-      react: <MagicLinkEmail {...props} />,
+      html,
     });
+  }
 
-    const success = !!result.data;
-    const error = result.error?.message ?? result.error?.name ?? "Unknown error";
-
-    if (success) {
+  /**
+   * Send an email through the Cloudflare Email Service Worker binding.
+   * @see https://developers.cloudflare.com/email-service/get-started/send-emails/
+   */
+  private async send(params: { to: string; from?: string; subject: string; html: string }): Promise<SendResult> {
+    if (!this.binding) {
       return { success: true, error: undefined };
     }
 
-    return { success: false, error };
+    try {
+      await this.binding.send({
+        to: params.to,
+        from: params.from ?? this.sender,
+        subject: params.subject,
+        html: params.html,
+      });
+      return { success: true, error: undefined };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 }
 
-export const emailService = new EmailService(getContext()?.RESEND_API_KEY ?? "");
+const context = getContext();
+export const emailService = new EmailService(context?.EMAIL, context?.CLOUDFLARE_EMAIL_SENDER);
