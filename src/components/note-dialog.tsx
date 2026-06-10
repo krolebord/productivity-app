@@ -1,5 +1,5 @@
 import { generateId } from "@sqlite-sync/core";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { useDebounceCallback } from "@/lib/use-debounced-callback";
@@ -69,6 +69,7 @@ function NoteDialogContent() {
 
   const [title, setTitle] = useState(note?.title ?? "");
   const [content, setContent] = useState(note?.content ?? "");
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   const saveNote = useDebounceCallback((fields: { title?: string; content?: string }) => {
     db.db.executeKysely((q) => q.updateTable("item").set(fields).where("id", "=", noteId));
@@ -83,10 +84,14 @@ function NoteDialogContent() {
     });
   };
 
+  function saveAndClose() {
+    saveNote.flush();
+    closeDialog();
+  }
+
   function handleOpenChange(open: boolean) {
     if (!open) {
-      saveNote.flush();
-      closeDialog();
+      saveAndClose();
     }
   }
 
@@ -101,13 +106,26 @@ function NoteDialogContent() {
             onChange={(e) => {
               updateNote({ title: e.target.value });
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                contentRef.current?.focus();
+              }
+            }}
             className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
           />
           <Textarea
+            ref={contentRef}
             placeholder="Take a note..."
             value={content}
             onChange={(e) => {
               updateNote({ content: e.target.value });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                saveAndClose();
+              }
             }}
             className="min-h-40 resize-none rounded-none border-0 bg-transparent! px-0 shadow-none focus-visible:ring-0"
           />
