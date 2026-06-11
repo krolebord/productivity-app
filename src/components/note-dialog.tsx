@@ -4,9 +4,9 @@ import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { type DebouncedCallback, useDebounceCallback } from "@/lib/use-debounced-callback";
 import { useDb, useDbQuery } from "@/user-db/user-db";
+import { NoteEditor, type NoteEditorHandle } from "./note-editor";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { Textarea } from "./ui/textarea";
 
 export const useNoteDialogStore = create(
   combine(
@@ -71,16 +71,15 @@ function NoteDialogContent({
   } = useDbQuery((q) => q.selectFrom("item").selectAll().where("id", "=", noteId));
 
   const [title, setTitle] = useState(note?.title ?? "");
-  const [content, setContent] = useState(note?.content ?? "");
-  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<NoteEditorHandle>(null);
+  // Latest values live in a ref so every save carries both fields,
+  // regardless of which input triggered it.
+  const fieldsRef = useRef({ title: note?.title ?? "", content: note?.content ?? "" });
 
   const updateNote = (fields: { title?: string; content?: string }) => {
-    setTitle(fields.title ?? title);
-    setContent(fields.content ?? content);
-    saveNote({
-      title: fields.title ?? title,
-      content: fields.content ?? content,
-    });
+    if (fields.title !== undefined) setTitle(fields.title);
+    fieldsRef.current = { ...fieldsRef.current, ...fields };
+    saveNote({ ...fieldsRef.current });
   };
 
   return (
@@ -96,25 +95,19 @@ function NoteDialogContent({
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              contentRef.current?.focus();
+              editorRef.current?.focus();
             }
           }}
           className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
         />
-        <Textarea
-          ref={contentRef}
+        <NoteEditor
+          ref={editorRef}
+          initialContent={note?.content ?? ""}
           placeholder="Take a note..."
-          value={content}
-          onChange={(e) => {
-            updateNote({ content: e.target.value });
+          onChange={(markdown) => {
+            updateNote({ content: markdown });
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              onClose();
-            }
-          }}
-          className="min-h-40 resize-none rounded-none border-0 bg-transparent! px-0 shadow-none focus-visible:ring-0"
+          onEscape={onClose}
         />
       </div>
     </>

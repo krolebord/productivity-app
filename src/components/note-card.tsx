@@ -1,5 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Trash2 } from "lucide-react";
+import { NoteMarkdown } from "@/components/note-markdown";
 import { cn } from "@/lib/utils";
 import type { NoteItem } from "@/user-db/migrations";
 import { useDb } from "@/user-db/user-db";
@@ -9,7 +10,10 @@ export function NoteCardContent({ note }: { note: NoteItem }) {
     <div className="px-4 py-3">
       {note.title && <p className="mb-1 line-clamp-2 font-medium text-sm leading-snug">{note.title}</p>}
       {note.content ? (
-        <p className="line-clamp-8 whitespace-pre-wrap text-muted-foreground text-sm leading-relaxed">{note.content}</p>
+        <NoteMarkdown
+          content={note.content}
+          className="max-h-72 overflow-hidden text-muted-foreground text-sm leading-relaxed"
+        />
       ) : (
         !note.title && <p className="text-muted-foreground/50 text-sm italic">Empty note</p>
       )}
