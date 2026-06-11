@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, type ErrorComponentProps, Link, Outlet } from "@tanstack/react-router";
 import { AlertTriangle, FileQuestion } from "lucide-react";
 import { lazy, Suspense } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -62,6 +63,7 @@ function Root() {
   return (
     <>
       <Outlet />
+      <ConfirmDialog />
       <Toaster closeButton />
       <Suspense>
         <SQLiteSyncDevtools />
