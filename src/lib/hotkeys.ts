@@ -4,3 +4,4 @@ export const NEW_EXPENSE_HOTKEY = "Control+Meta+E";
 export const NEW_INCOME_HOTKEY = "Control+Meta+I";
 export const NEW_TRANSFER_HOTKEY = "Control+Meta+T";
 export const TOGGLE_SIDEBAR_HOTKEY = "Mod+B";
+export const TOGGLE_ASSISTANT_HOTKEY = "Mod+J";

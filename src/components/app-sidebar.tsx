@@ -22,15 +22,17 @@ import {
   PanelLeftOpen,
   PlusIcon,
   Search,
+  Sparkles,
   StickyNote,
   Wallet,
   Wifi,
   WifiOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
-import { TOGGLE_SIDEBAR_HOTKEY } from "@/lib/hotkeys";
+import { TOGGLE_ASSISTANT_HOTKEY, TOGGLE_SIDEBAR_HOTKEY } from "@/lib/hotkeys";
 import { useSidebarStore } from "@/lib/sidebar-store";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery, useDbState } from "@/user-db/user-db";
@@ -143,6 +145,35 @@ function SidebarNavLink({
   );
 }
 
+function AssistantToggle({ collapsed }: { collapsed: boolean }) {
+  const open = useAssistantStore((s) => s.open);
+  const toggle = useAssistantStore((s) => s.toggle);
+
+  return (
+    <SidebarTooltip label={`Assistant (${formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)})`} collapsed={collapsed}>
+      <Button
+        type="button"
+        variant="ghost"
+        size={collapsed ? "icon" : "sm"}
+        className={cn(!collapsed && "w-full justify-start gap-2", open && "text-primary")}
+        onClick={toggle}
+        aria-label={open ? "Close assistant" : "Open assistant"}
+        aria-keyshortcuts={TOGGLE_ASSISTANT_HOTKEY}
+      >
+        <Sparkles className="size-4" />
+        {!collapsed && (
+          <>
+            <span className="flex-1 text-left">Assistant</span>
+            <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
+              {formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)}
+            </kbd>
+          </>
+        )}
+      </Button>
+    </SidebarTooltip>
+  );
+}
+
 function SidebarContent({
   collapsed = false,
   onToggleCollapse,
@@ -219,7 +250,8 @@ function SidebarContent({
       <Separator />
 
       {onToggleCollapse && (
-        <div className={cn("p-2", collapsed && "flex justify-center")}>
+        <div className={cn("flex p-2", collapsed ? "flex-col items-center gap-1" : "flex-col gap-1")}>
+          <AssistantToggle collapsed={collapsed} />
           <SidebarTooltip
             label={
               collapsed
@@ -537,11 +569,18 @@ function MobileSidebar() {
 export function AppSidebar() {
   const collapsed = useSidebarStore((s) => s.collapsed);
   const toggle = useSidebarStore((s) => s.toggle);
+  const toggleAssistant = useAssistantStore((s) => s.toggle);
 
   useHotkey(TOGGLE_SIDEBAR_HOTKEY, (e) => {
     if (!window.matchMedia("(min-width: 768px)").matches) return;
     e.preventDefault();
     toggle();
+  });
+
+  useHotkey(TOGGLE_ASSISTANT_HOTKEY, (e) => {
+    if (!window.matchMedia("(min-width: 768px)").matches) return;
+    e.preventDefault();
+    toggleAssistant();
   });
 
   return (

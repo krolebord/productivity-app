@@ -1,4 +1,5 @@
 import { getCookie, unsign } from "@orpc/server/helpers";
+import { routeAgentRequest } from "agents";
 import { routePartykitRequest } from "partyserver";
 import { apiHandler } from "./api/api-handler";
 import { orpcHandler } from "./orpc/orpc-router";
@@ -43,6 +44,27 @@ export default {
       return apiHandler(request);
     }
 
+    if (url.pathname.startsWith("/agents")) {
+      // Agent instances are named `user-${userId}` — only the owning user may reach theirs.
+      const guard = async (req: Request, lobby: { name: string }) => {
+        const userId = await getUserIdFromRequest(req, env);
+        if (!userId || lobby.name !== `user-${userId}`) {
+          return new Response("Unauthorized", { status: 401 });
+        }
+      };
+
+      const agentResponse = await routeAgentRequest(request, env, {
+        locationHint: "weur",
+        onBeforeConnect: (req, lobby) => guard(req, lobby),
+        onBeforeRequest: (req, lobby) => guard(req, lobby),
+      });
+      if (agentResponse) {
+        return agentResponse;
+      }
+
+      return new Response("Not found", { status: 404 });
+    }
+
     const partykitRequest = await routePartykitRequest(request, env, {
       prefix: "user-db",
       locationHint: "weur",
@@ -61,4 +83,5 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+export { AssistantAgent } from "./agent/assistant-agent";
 export { UserDbServer } from "./user-db/user-db-server";
