@@ -385,7 +385,8 @@ function AccountsNavItem({
   const activeAccountId =
     lastMatch?.fullPath === "/transactions" ? (lastMatch.search as { accountId?: string }).accountId : undefined;
 
-  const isActive = currentPath === "/transactions";
+  const isAccountsPageActive = currentPath === "/accounts";
+  const isActive = currentPath === "/transactions" || isAccountsPageActive;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -448,17 +449,15 @@ function AccountsNavItem({
           <Wallet className="size-4 shrink-0" />
           Accounts
         </Link>
-        {accounts.length > 0 && (
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
-              aria-label="Toggle accounts list"
-            >
-              <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
-            </button>
-          </CollapsibleTrigger>
-        )}
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
+            aria-label="Toggle accounts list"
+          >
+            <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
+          </button>
+        </CollapsibleTrigger>
       </div>
       <CollapsibleContent>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -472,6 +471,19 @@ function AccountsNavItem({
                   onNavigate={onNavigate}
                 />
               ))}
+              <Link
+                to="/accounts"
+                viewTransition
+                onClick={onNavigate}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                  isAccountsPageActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70",
+                )}
+              >
+                <span className="flex-1 truncate text-left">All accounts</span>
+              </Link>
             </div>
           </SortableContext>
         </DndContext>

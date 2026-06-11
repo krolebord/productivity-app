@@ -7,10 +7,10 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useCallback } from "react";
-import { toast } from "sonner";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { formatDateTimeLocal, parseDateTimeLocal } from "@/lib/date-time";
+import { createDynamicValidationLogic, dynamicZodValidators } from "@/lib/form-schemas";
 import {
   createTransaction,
   deleteTransaction,
@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { useCreateAccount } from "./account-dialog";
+import { createTransactionFormSchema } from "./transaction-dialog.schema";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
 import { useAppForm } from "./ui/form";
@@ -139,7 +140,7 @@ function getDialogTitle(mode: "create" | "edit" | null, type: TransactionType | 
 function TransactionDialogContent() {
   const db = useDb();
   const createAccount = useCreateAccount();
-  const { draft, isOpen, mode, transactionId } = useTransactionDialogStore();
+  const { draft, mode, transactionId } = useTransactionDialogStore();
   const closeDialog = useTransactionDialogStore((state) => state.close);
 
   const { data: accounts } = useDbQuery((query) => query.selectFrom("account").selectAll().orderBy("order", "asc"));
@@ -166,6 +167,8 @@ function TransactionDialogContent() {
     accounts.find((account) => account.id !== (draft?.accountId ?? fallbackAccountId))?.id ?? "";
 
   const form = useAppForm({
+    validationLogic: createDynamicValidationLogic(),
+    validators: dynamicZodValidators(createTransactionFormSchema(accounts.length)),
     defaultValues: {
       accountId: existing?.accountId ?? draft?.accountId ?? fallbackAccountId,
       amount:
@@ -180,63 +183,51 @@ function TransactionDialogContent() {
       type: selectedType,
     },
     onSubmit: ({ value }) => {
-      if (accounts.length === 0) {
-        toast.error("Create an account before adding transactions.");
-        return;
+      const effectiveAt = parseDateTimeLocal(value.effectiveAt);
+      const baseInput = {
+        accountId: value.accountId,
+        effectiveAt,
+        notes: value.notes,
+        title: value.title,
+      };
+
+      switch (value.type as TransactionType) {
+        case "expense":
+          createOrUpdate({
+            ...baseInput,
+            amount: Number.parseFloat(value.amount),
+            category: value.category,
+            type: "expense",
+          });
+          break;
+        case "income":
+          createOrUpdate({
+            ...baseInput,
+            amount: Number.parseFloat(value.amount),
+            category: value.category,
+            type: "income",
+          });
+          break;
+        case "transfer":
+          createOrUpdate({
+            ...baseInput,
+            amount: Number.parseFloat(value.amount),
+            counterpartyAccountId: value.counterpartyAccountId,
+            counterpartyAmount: Number.parseFloat(value.counterpartyAmount),
+            type: "transfer",
+          });
+          break;
+        case "adjustment":
+          createOrUpdate({
+            ...baseInput,
+            amount: Number.parseFloat(value.amount),
+            category: value.category,
+            type: "adjustment",
+          });
+          break;
       }
 
-      try {
-        const effectiveAt = parseDateTimeLocal(value.effectiveAt);
-        const baseInput = {
-          accountId: value.accountId,
-          effectiveAt,
-          notes: value.notes,
-          title: value.title,
-        };
-
-        switch (value.type as TransactionType) {
-          case "expense":
-            createOrUpdate({
-              ...baseInput,
-              amount: Number.parseFloat(value.amount),
-              category: value.category,
-              type: "expense",
-            });
-            break;
-          case "income":
-            createOrUpdate({
-              ...baseInput,
-              amount: Number.parseFloat(value.amount),
-              category: value.category,
-              type: "income",
-            });
-            break;
-          case "transfer":
-            if (accounts.length < 2) {
-              throw new Error("Create at least two accounts before recording a transfer.");
-            }
-            createOrUpdate({
-              ...baseInput,
-              amount: Number.parseFloat(value.amount),
-              counterpartyAccountId: value.counterpartyAccountId,
-              counterpartyAmount: Number.parseFloat(value.counterpartyAmount),
-              type: "transfer",
-            });
-            break;
-          case "adjustment":
-            createOrUpdate({
-              ...baseInput,
-              amount: Number.parseFloat(value.amount),
-              category: value.category,
-              type: "adjustment",
-            });
-            break;
-        }
-
-        closeDialog();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Unable to save transaction.");
-      }
+      closeDialog();
     },
   });
 
@@ -264,38 +255,38 @@ function TransactionDialogContent() {
   const typeConfig = TYPE_CONFIG[currentType];
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && closeDialog()}>
-      <DialogContent className="sm:max-w-xl">
-        <div className="flex items-center gap-2">
-          <span className={cn("size-2 shrink-0 rounded-full transition-colors", typeConfig.dotColor)} />
-          <DialogTitle>{getDialogTitle(mode, currentType)}</DialogTitle>
-        </div>
-        <DialogDescription className="sr-only">Create or edit a balance-affecting transaction.</DialogDescription>
+    <>
+      <div className="flex items-center gap-2">
+        <span className={cn("size-2 shrink-0 rounded-full transition-colors", typeConfig.dotColor)} />
+        <DialogTitle>{getDialogTitle(mode, currentType)}</DialogTitle>
+      </div>
+      <DialogDescription className="sr-only">Create or edit a balance-affecting transaction.</DialogDescription>
 
-        {accounts.length === 0 ? (
-          <div className="flex flex-col items-center gap-4 py-4 text-center">
-            <p className="text-muted-foreground text-sm">
-              Create an account before adding income, expenses, or transfers.
-            </p>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={openAccountCreator}>
-                New account
-              </Button>
-            </div>
+      {accounts.length === 0 ? (
+        <div className="flex flex-col items-center gap-4 py-4 text-center">
+          <p className="text-muted-foreground text-sm">
+            Create an account before adding income, expenses, or transfers.
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={closeDialog}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={openAccountCreator}>
+              New account
+            </Button>
           </div>
-        ) : (
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              form.handleSubmit();
-            }}
-          >
-            <form.AppField name="type">
-              {(field) => (
+        </div>
+      ) : (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            form.handleSubmit();
+          }}
+        >
+          <form.AppField name="type">
+            {(field) => (
+              <field.FormItem>
                 <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted/50 p-1">
                   {TRANSACTION_TYPES.map((type) => {
                     const config = TYPE_CONFIG[type];
@@ -319,14 +310,31 @@ function TransactionDialogContent() {
                     );
                   })}
                 </div>
+                <field.FormMessage />
+              </field.FormItem>
+            )}
+          </form.AppField>
+
+          <div className={canRenderTransfer ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
+            <form.AppField name="accountId">
+              {(field) => (
+                <field.FieldContainer labelText={currentType === "transfer" ? "Source account" : "Account"}>
+                  <field.FormSelect placeholder="Select account">
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.labelText || "Untitled"} ({account.currency})
+                      </SelectItem>
+                    ))}
+                  </field.FormSelect>
+                </field.FieldContainer>
               )}
             </form.AppField>
 
-            <div className={canRenderTransfer ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
-              <form.AppField name="accountId">
+            {canRenderTransfer && (
+              <form.AppField name="counterpartyAccountId">
                 {(field) => (
-                  <field.FieldContainer labelText={currentType === "transfer" ? "Source account" : "Account"}>
-                    <field.FormSelect placeholder="Select account">
+                  <field.FieldContainer labelText="Destination account">
+                    <field.FormSelect placeholder="Select destination">
                       {accounts.map((account) => (
                         <SelectItem key={account.id} value={account.id}>
                           {account.labelText || "Untitled"} ({account.currency})
@@ -336,71 +344,45 @@ function TransactionDialogContent() {
                   </field.FieldContainer>
                 )}
               </form.AppField>
+            )}
+          </div>
 
-              {canRenderTransfer && (
-                <form.AppField name="counterpartyAccountId">
-                  {(field) => (
-                    <field.FieldContainer labelText="Destination account">
-                      <field.FormSelect placeholder="Select destination">
-                        {accounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.labelText || "Untitled"} ({account.currency})
-                          </SelectItem>
-                        ))}
-                      </field.FormSelect>
-                    </field.FieldContainer>
-                  )}
-                </form.AppField>
+          <div className={canRenderTransfer ? "grid gap-3 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2"}>
+            <form.AppField name="amount">
+              {(field) => (
+                <field.FieldContainer
+                  labelText={
+                    currentType === "adjustment"
+                      ? `Balance delta${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
+                      : `Amount${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
+                  }
+                >
+                  <field.FormInput
+                    type="number"
+                    step="0.01"
+                    placeholder={currentType === "adjustment" ? "-12.50 or 12.50" : "0.00"}
+                    className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                </field.FieldContainer>
               )}
-            </div>
+            </form.AppField>
 
-            <div className={canRenderTransfer ? "grid gap-3 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2"}>
-              <form.AppField name="amount">
+            {canRenderTransfer ? (
+              <form.AppField name="counterpartyAmount">
                 {(field) => (
                   <field.FieldContainer
-                    labelText={
-                      currentType === "adjustment"
-                        ? `Balance delta${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
-                        : `Amount${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
-                    }
+                    labelText={`Received amount${destinationAccount ? ` (${destinationAccount.currency})` : ""}`}
                   >
                     <field.FormInput
                       type="number"
                       step="0.01"
-                      placeholder={currentType === "adjustment" ? "-12.50 or 12.50" : "0.00"}
+                      placeholder="0.00"
                       className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </field.FieldContainer>
                 )}
               </form.AppField>
-
-              {canRenderTransfer ? (
-                <form.AppField name="counterpartyAmount">
-                  {(field) => (
-                    <field.FieldContainer
-                      labelText={`Received amount${destinationAccount ? ` (${destinationAccount.currency})` : ""}`}
-                    >
-                      <field.FormInput
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      />
-                    </field.FieldContainer>
-                  )}
-                </form.AppField>
-              ) : (
-                <form.AppField name="effectiveAt">
-                  {(field) => (
-                    <field.FieldContainer labelText="Date and time">
-                      <field.FormDateTimeInput />
-                    </field.FieldContainer>
-                  )}
-                </form.AppField>
-              )}
-            </div>
-
-            {canRenderTransfer && (
+            ) : (
               <form.AppField name="effectiveAt">
                 {(field) => (
                   <field.FieldContainer labelText="Date and time">
@@ -409,92 +391,111 @@ function TransactionDialogContent() {
                 )}
               </form.AppField>
             )}
+          </div>
 
-            {currentType === "transfer" && accounts.length < 2 && (
+          {canRenderTransfer && (
+            <form.AppField name="effectiveAt">
+              {(field) => (
+                <field.FieldContainer labelText="Date and time">
+                  <field.FormDateTimeInput />
+                </field.FieldContainer>
+              )}
+            </form.AppField>
+          )}
+
+          {currentType === "transfer" && accounts.length < 2 && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+              Transfers require at least two accounts.
+            </p>
+          )}
+
+          <form.AppField name="title">
+            {(field) => (
+              <field.FieldContainer labelText="Title">
+                <field.FormInput
+                  placeholder={
+                    currentType === "expense"
+                      ? "Coffee"
+                      : currentType === "income"
+                        ? "Salary"
+                        : currentType === "transfer"
+                          ? "Between accounts"
+                          : "Manual correction"
+                  }
+                />
+              </field.FieldContainer>
+            )}
+          </form.AppField>
+
+          {currentType !== "transfer" && (
+            <form.AppField name="category">
+              {(field) => (
+                <field.FieldContainer labelText="Category">
+                  <field.FormComboboxInput options={categories} placeholder="Optional category" />
+                </field.FieldContainer>
+              )}
+            </form.AppField>
+          )}
+
+          <form.AppField name="notes">
+            {(field) => (
+              <field.FieldContainer labelText="Notes">
+                <field.FormTextarea placeholder="Optional notes..." className="min-h-20 resize-none" />
+              </field.FieldContainer>
+            )}
+          </form.AppField>
+
+          {currentType === "transfer" &&
+            sourceAccount &&
+            destinationAccount &&
+            sourceAccount.currency !== destinationAccount.currency && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-                Transfers require at least two accounts.
+                This transfer stores both entered amounts exactly. No exchange-rate conversion is applied.
               </p>
             )}
 
-            <form.AppField name="title">
-              {(field) => (
-                <field.FieldContainer labelText="Title">
-                  <field.FormInput
-                    placeholder={
-                      currentType === "expense"
-                        ? "Coffee"
-                        : currentType === "income"
-                          ? "Salary"
-                          : currentType === "transfer"
-                            ? "Between accounts"
-                            : "Manual correction"
-                    }
-                  />
-                </field.FieldContainer>
-              )}
-            </form.AppField>
-
-            {currentType !== "transfer" && (
-              <form.AppField name="category">
-                {(field) => (
-                  <field.FieldContainer labelText="Category">
-                    <field.FormComboboxInput options={categories} placeholder="Optional category" />
-                  </field.FieldContainer>
-                )}
-              </form.AppField>
-            )}
-
-            <form.AppField name="notes">
-              {(field) => (
-                <field.FieldContainer labelText="Notes">
-                  <field.FormTextarea placeholder="Optional notes..." className="min-h-20 resize-none" />
-                </field.FieldContainer>
-              )}
-            </form.AppField>
-
-            {currentType === "transfer" &&
-              sourceAccount &&
-              destinationAccount &&
-              sourceAccount.currency !== destinationAccount.currency && (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-                  This transfer stores both entered amounts exactly. No exchange-rate conversion is applied.
-                </p>
-              )}
-
-            <DialogFooter className="justify-between">
-              <div>
-                {mode === "edit" && transactionId ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => {
-                      deleteTransaction(db.db, transactionId);
-                      closeDialog();
-                    }}
-                  >
-                    <Trash2Icon />
-                    Delete
-                  </Button>
-                ) : null}
-              </div>
-
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={closeDialog}>
-                  Cancel
+          <DialogFooter className="justify-between">
+            <div>
+              {mode === "edit" && transactionId ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => {
+                    deleteTransaction(db.db, transactionId);
+                    closeDialog();
+                  }}
+                >
+                  <Trash2Icon />
+                  Delete
                 </Button>
-                <Button type="submit">{mode === "edit" ? "Save" : "Create"}</Button>
-              </div>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
+              ) : null}
+            </div>
+
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Cancel
+              </Button>
+              <Button type="submit">{mode === "edit" ? "Save" : "Create"}</Button>
+            </div>
+          </DialogFooter>
+        </form>
+      )}
+    </>
   );
 }
 
 export function TransactionDialog() {
+  const isOpen = useTransactionDialogStore((state) => state.isOpen);
   const openRevision = useTransactionDialogStore((state) => state.openRevision);
-  return <TransactionDialogContent key={openRevision} />;
+  const closeDialog = useTransactionDialogStore((state) => state.close);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && closeDialog()}>
+      <DialogContent className="sm:max-w-xl">
+        <TransactionDialogContent key={openRevision} />
+      </DialogContent>
+    </Dialog>
+  );
 }

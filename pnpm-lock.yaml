@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@cloudflare/vite-plugin':
         specifier: ^1.40.1
-        version: 1.40.1(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(workerd@1.20260609.1)(wrangler@4.99.0(@cloudflare/workers-types@4.20260609.1))
+        version: 1.40.1(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(workerd@1.20260609.1)(wrangler@4.99.0(@cloudflare/workers-types@4.20260609.1))
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -78,17 +78,20 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@sqlite-sync/cloudflare':
-        specifier: ^0.4.2
-        version: 0.4.2(@cloudflare/workers-types@4.20260609.1)(kysely@0.28.17)
+        specifier: ^0.4.5
+        version: 0.4.5(@cloudflare/workers-types@4.20260609.1)(kysely@0.28.17)
       '@sqlite-sync/core':
-        specifier: ^0.4.2
-        version: 0.4.2(kysely@0.28.17)
+        specifier: ^0.4.5
+        version: 0.4.5(kysely@0.28.17)
+      '@sqlite-sync/devtools':
+        specifier: ^0.4.5
+        version: 0.4.5(@sqlite-sync/core@0.4.5(kysely@0.28.17))(react@19.2.7)
       '@sqlite-sync/react':
-        specifier: ^0.4.2
-        version: 0.4.2(kysely@0.28.17)(react@19.2.7)
+        specifier: ^0.4.5
+        version: 0.4.5(kysely@0.28.17)(react@19.2.7)
       '@tailwindcss/vite':
         specifier: ^4.3.0
-        version: 4.3.0(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.3.0(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       '@tanstack/hotkeys':
         specifier: ^0.8.0
         version: 0.8.0
@@ -106,7 +109,7 @@ importers:
         version: 1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tanstack/router-plugin':
         specifier: ^1.168.18
-        version: 1.168.18(@tanstack/react-router@1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 1.168.18(@tanstack/react-router@1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       arctic:
         specifier: ^3.7.0
         version: 3.7.0
@@ -173,10 +176,10 @@ importers:
         version: 2.3.12
       '@tanstack/devtools-vite':
         specifier: ^0.7.0
-        version: 0.7.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.11.0)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 0.7.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.11.0)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       '@types/node':
-        specifier: ^25.9.2
-        version: 25.9.2
+        specifier: ^25.9.3
+        version: 25.9.3
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -188,7 +191,7 @@ importers:
         version: 7.0.0-dev.20260324.1
       '@vitejs/plugin-react':
         specifier: ^6.0.2
-        version: 6.0.2(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 6.0.2(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       kysely-codegen:
         specifier: ^0.20.0
         version: 0.20.0(kysely@0.28.17)(typescript@6.0.3)
@@ -203,7 +206,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: ^8.0.16
-        version: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+        version: 8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
       wrangler:
         specifier: ^4.99.0
         version: 4.99.0(@cloudflare/workers-types@4.20260609.1)
@@ -1901,19 +1904,25 @@ packages:
   '@speed-highlight/core@1.2.16':
     resolution: {integrity: sha512-yNm/fYEcnpRjYduLMaddTK9XKYil6xB88+qFg79ZdZhHu1PadfoQmFW7pVTx7FZqMBNcUuThiAhxhENgtAO2/w==}
 
-  '@sqlite-sync/cloudflare@0.4.2':
-    resolution: {integrity: sha512-Bsn1ceeuDt9LgOVALAdIAkiwAR+RBKPryR6V0frh6QDrgPCR2gNrLytyFs97hh2pytIjlANVEXHL+V+e0yLmsw==}
+  '@sqlite-sync/cloudflare@0.4.5':
+    resolution: {integrity: sha512-l3QDuQfQ46WwljD+aixnWHfnE2HTAPxvgQG0s4l6p0gA22ydg1tQqFk+aze+uXmzjRd2anjaSISsUf4rXV/XVw==}
     peerDependencies:
       '@cloudflare/workers-types': ^4.0.0
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/core@0.4.2':
-    resolution: {integrity: sha512-7zEfT9+CA/Pz8UDYZulp90hu3a+2CK15kFKVkvyrTsFeFhsaM9U/uNT1m2xeJOLPtimtZvttHfy7fTHmIsaHWg==}
+  '@sqlite-sync/core@0.4.5':
+    resolution: {integrity: sha512-UMwqBX0hD8nb/uD4pzdwVbfKIkExAJPiGqcQOEkFbJf+J1pwyTUFzptIEwqGt4/QuqMOyPI9UimoqB0Rvu3XPA==}
     peerDependencies:
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/react@0.4.2':
-    resolution: {integrity: sha512-IHx/KGs087fdP3okuZJA+OKo6+YrdqJt+UF2K6ADGQFMBWHU5dMrKcrDGODa0Y8N+xLAE9SaTUJbGhPX7fmYGw==}
+  '@sqlite-sync/devtools@0.4.5':
+    resolution: {integrity: sha512-I4Y7VtRz1zpxIfLM2xGRwUrZRCcEU67NTYXVaek+6Ve9IQmQCEOzGVrM0MAohEWcM/yABeLU2912c6XyKX1Jlw==}
+    peerDependencies:
+      '@sqlite-sync/core': ^0.4.5
+      react: ^18.0.0 || ^19.0.0
+
+  '@sqlite-sync/react@0.4.5':
+    resolution: {integrity: sha512-8EwP+ImqHAAcQRLnjRnae1sA0ntFdgKRXg2ajCEJoDBKUQfdGf0cMtcn2oV3LCqwCo8fqeuPxUGlFi4+2WIZWw==}
     peerDependencies:
       kysely: ^0.28.0 || ^0.29.0
       react: ^18.0.0 || ^19.0.0
@@ -2147,8 +2156,8 @@ packages:
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
-  '@types/node@25.9.2':
-    resolution: {integrity: sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw==}
+  '@types/node@25.9.3':
+    resolution: {integrity: sha512-603BddQMv3pUcr4U2dhujk83N2tTDVr/34wII2B6bJy6g+8WD6yUb11jszNs0gdi4PesVWl7ABt8nYMVpnLUcg==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -3312,12 +3321,12 @@ snapshots:
     optionalDependencies:
       workerd: 1.20260609.1
 
-  '@cloudflare/vite-plugin@1.40.1(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(workerd@1.20260609.1)(wrangler@4.99.0(@cloudflare/workers-types@4.20260609.1))':
+  '@cloudflare/vite-plugin@1.40.1(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(workerd@1.20260609.1)(wrangler@4.99.0(@cloudflare/workers-types@4.20260609.1))':
     dependencies:
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260609.1)
       miniflare: 4.20260609.0
       unenv: 2.0.0-rc.24
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vite: 8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
       wrangler: 4.99.0(@cloudflare/workers-types@4.20260609.1)
       ws: 8.20.1
     transitivePeerDependencies:
@@ -4579,13 +4588,13 @@ snapshots:
 
   '@speed-highlight/core@1.2.16': {}
 
-  '@sqlite-sync/cloudflare@0.4.2(@cloudflare/workers-types@4.20260609.1)(kysely@0.28.17)':
+  '@sqlite-sync/cloudflare@0.4.5(@cloudflare/workers-types@4.20260609.1)(kysely@0.28.17)':
     dependencies:
       '@cloudflare/workers-types': 4.20260609.1
-      '@sqlite-sync/core': 0.4.2(kysely@0.28.17)
+      '@sqlite-sync/core': 0.4.5(kysely@0.28.17)
       kysely: 0.28.17
 
-  '@sqlite-sync/core@0.4.2(kysely@0.28.17)':
+  '@sqlite-sync/core@0.4.5(kysely@0.28.17)':
     dependencies:
       '@sqlite.org/sqlite-wasm': 3.53.0-build1
       idb-keyval: 6.2.5
@@ -4593,9 +4602,14 @@ snapshots:
       xxhash-wasm: 1.1.0
       zod: 4.4.3
 
-  '@sqlite-sync/react@0.4.2(kysely@0.28.17)(react@19.2.7)':
+  '@sqlite-sync/devtools@0.4.5(@sqlite-sync/core@0.4.5(kysely@0.28.17))(react@19.2.7)':
     dependencies:
-      '@sqlite-sync/core': 0.4.2(kysely@0.28.17)
+      '@sqlite-sync/core': 0.4.5(kysely@0.28.17)
+      react: 19.2.7
+
+  '@sqlite-sync/react@0.4.5(kysely@0.28.17)(react@19.2.7)':
+    dependencies:
+      '@sqlite-sync/core': 0.4.5(kysely@0.28.17)
       kysely: 0.28.17
       react: 19.2.7
 
@@ -4666,12 +4680,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.0
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.0
 
-  '@tailwindcss/vite@4.3.0(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
+  '@tailwindcss/vite@4.3.0(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@tailwindcss/node': 4.3.0
       '@tailwindcss/oxide': 4.3.0
       tailwindcss: 4.3.0
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vite: 8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
 
   '@tanstack/devtools-client@0.0.6':
     dependencies:
@@ -4686,7 +4700,7 @@ snapshots:
 
   '@tanstack/devtools-event-client@0.4.3': {}
 
-  '@tanstack/devtools-vite@0.7.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.11.0)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
+  '@tanstack/devtools-vite@0.7.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.11.0)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@tanstack/devtools-client': 0.0.6
       '@tanstack/devtools-event-bus': 0.4.1
@@ -4695,7 +4709,7 @@ snapshots:
       magic-string: 0.30.21
       oxc-parser: 0.120.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.11.0)
       picomatch: 4.0.4
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vite: 8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -4781,7 +4795,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@tanstack/router-plugin@1.168.18(@tanstack/react-router@1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
+  '@tanstack/router-plugin@1.168.18(@tanstack/react-router@1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/template': 7.29.7
@@ -4794,7 +4808,7 @@ snapshots:
       zod: 4.4.3
     optionalDependencies:
       '@tanstack/react-router': 1.170.15(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vite: 8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -4822,7 +4836,7 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@types/node@25.9.2':
+  '@types/node@25.9.3':
     dependencies:
       undici-types: 7.24.6
 
@@ -4865,10 +4879,10 @@ snapshots:
       '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260324.1
       '@typescript/native-preview-win32-x64': 7.0.0-dev.20260324.1
 
-  '@vitejs/plugin-react@6.0.2(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
+  '@vitejs/plugin-react@6.0.2(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vite: 8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
 
   agent-install@0.0.5:
     dependencies:
@@ -5655,7 +5669,7 @@ snapshots:
     dependencies:
       react: 19.2.7
 
-  vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0):
+  vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -5663,7 +5677,7 @@ snapshots:
       rolldown: 1.0.3
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 25.9.2
+      '@types/node': 25.9.3
       esbuild: 0.28.0
       fsevents: 2.3.3
       jiti: 2.7.0

@@ -100,11 +100,6 @@ export function CommandPalette() {
             New note
             <CommandShortcut>{formatForDisplay(NEW_NOTE_HOTKEY)}</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={() => runAndClose(createAccount)}>
-            <PlusIcon className="size-4" />
-            New account
-            <CommandShortcut>{formatForDisplay(NEW_ACCOUNT_HOTKEY)}</CommandShortcut>
-          </CommandItem>
           <CommandItem onSelect={() => runAndClose(createExpense)}>
             <ArrowDownLeftIcon className="size-4 text-red-500" />
             New expense
@@ -119,6 +114,11 @@ export function CommandPalette() {
             <ArrowLeftRightIcon className="size-4 text-blue-500" />
             New transfer
             <CommandShortcut>{formatForDisplay(NEW_TRANSFER_HOTKEY)}</CommandShortcut>
+          </CommandItem>
+          <CommandItem onSelect={() => runAndClose(createAccount)}>
+            <PlusIcon className="size-4" />
+            New account
+            <CommandShortcut>{formatForDisplay(NEW_ACCOUNT_HOTKEY)}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Navigation">

@@ -1,16 +1,25 @@
 import { generateId } from "@sqlite-sync/core";
 import { useStore } from "@tanstack/react-form";
 import { useCallback, useState } from "react";
-import { toast } from "sonner";
+import { z } from "zod";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { APP_CURRENCIES } from "@/lib/currency/currencies";
+import { createDynamicValidationLogic, dynamicZodValidators, finiteAmountString } from "@/lib/form-schemas";
 import { createTransactionInTransaction } from "@/lib/transactions";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
 import { useAppForm } from "./ui/form";
 import { SelectItem } from "./ui/select";
+
+const accountFormSchema = z.object({
+  labelText: z.string(),
+  labelColor: z.string(),
+  currency: z.string().min(1, "Currency is required."),
+  balance: finiteAmountString("Balance"),
+  description: z.string(),
+});
 
 const LABEL_COLORS = [
   "#8b5cf6", // violet
@@ -47,7 +56,7 @@ export function useCreateAccount() {
 }
 
 function AccountDialogContent() {
-  const { isOpen, mode, accountId } = useAccountDialogStore();
+  const { mode, accountId } = useAccountDialogStore();
   const closeDialog = useAccountDialogStore((x) => x.close);
   const db = useDb();
   const [pendingBalanceChoice, setPendingBalanceChoice] = useState<null | {
@@ -163,6 +172,8 @@ function AccountDialogContent() {
   }
 
   const form = useAppForm({
+    validationLogic: createDynamicValidationLogic(),
+    validators: dynamicZodValidators(accountFormSchema),
     defaultValues: {
       labelText: existing?.labelText ?? "",
       labelColor: existing?.labelColor ?? "#8b5cf6",
@@ -172,144 +183,121 @@ function AccountDialogContent() {
       description: existing?.description ?? "",
     },
     onSubmit: ({ value }) => {
-      try {
-        const parsedBalance = Number.parseFloat(value.balance);
-        if (!Number.isFinite(parsedBalance)) {
-          throw new Error("Balance must be a valid number.");
-        }
+      const parsedBalance = Number.parseFloat(value.balance);
+      const nextValue = {
+        balance: parsedBalance,
+        currency: value.currency,
+        description: value.description,
+        labelColor: value.labelColor,
+        labelText: value.labelText,
+      };
 
-        const nextValue = {
-          balance: parsedBalance,
-          currency: value.currency,
-          description: value.description,
-          labelColor: value.labelColor,
-          labelText: value.labelText,
-        };
+      const balanceChanged = mode === "edit" && existing ? parsedBalance !== Number(existing.balance) : false;
 
-        const balanceChanged = mode === "edit" && existing ? parsedBalance !== Number(existing.balance) : false;
-
-        if (balanceChanged && hasTransactionHistory) {
-          setPendingBalanceChoice(nextValue);
-          return;
-        }
-
-        persistAccount(nextValue);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Unable to save account.");
+      if (balanceChanged && hasTransactionHistory) {
+        setPendingBalanceChoice(nextValue);
+        return;
       }
+
+      persistAccount(nextValue);
     },
   });
   const selectedCurrency = useStore(form.store, (state) => state.values.currency);
 
   return (
     <>
-      <Dialog
-        open={isOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingBalanceChoice(null);
-            closeDialog();
-          }
+      <DialogTitle>{mode === "create" ? "New account" : "Edit account"}</DialogTitle>
+      <DialogDescription className="sr-only">Create or edit an account and its current balance.</DialogDescription>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit();
         }}
+        className="flex flex-col gap-4"
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogTitle>{mode === "create" ? "New account" : "Edit account"}</DialogTitle>
-          <DialogDescription className="sr-only">Create or edit an account and its current balance.</DialogDescription>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              form.handleSubmit();
-            }}
-            className="flex flex-col gap-4"
-          >
-            <form.AppField name="labelText">
-              {(field) => (
-                <field.FormInput
-                  placeholder="Account name"
-                  className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
-                />
-              )}
-            </form.AppField>
+        <form.AppField name="labelText">
+          {(field) => (
+            <field.FormInput
+              placeholder="Account name"
+              className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
+            />
+          )}
+        </form.AppField>
 
-            <form.AppField name="labelColor">
-              {(field) => (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-muted-foreground text-xs">Color</span>
-                  <div className="flex gap-2">
-                    {LABEL_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className="size-6 rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        style={{
-                          backgroundColor: color,
-                          boxShadow:
-                            field.state.value === color ? `0 0 0 2px var(--background), 0 0 0 4px ${color}` : undefined,
-                        }}
-                        onClick={() => field.handleChange(color)}
-                        aria-label={`Select color ${color}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </form.AppField>
-
-            <div className="flex gap-3">
-              <form.AppField name="currency">
-                {(field) => (
-                  <field.FieldContainer labelText="Currency" className="flex-1">
-                    <field.FormSelect placeholder="Select currency">
-                      {APP_CURRENCIES.map((code) => (
-                        <SelectItem key={code} value={code}>
-                          {code}
-                        </SelectItem>
-                      ))}
-                    </field.FormSelect>
-                  </field.FieldContainer>
-                )}
-              </form.AppField>
-
-              <form.AppField name="balance">
-                {(field) => (
-                  <field.FieldContainer
-                    labelText={mode === "create" ? "Initial balance" : "Balance"}
-                    className="flex-1"
-                  >
-                    <field.FormInput
-                      type="number"
-                      step="0.01"
-                      className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                  </field.FieldContainer>
-                )}
-              </form.AppField>
+        <form.AppField name="labelColor">
+          {(field) => (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-muted-foreground text-xs">Color</span>
+              <div className="flex gap-2">
+                {LABEL_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className="size-6 rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    style={{
+                      backgroundColor: color,
+                      boxShadow:
+                        field.state.value === color ? `0 0 0 2px var(--background), 0 0 0 4px ${color}` : undefined,
+                    }}
+                    onClick={() => field.handleChange(color)}
+                    aria-label={`Select color ${color}`}
+                  />
+                ))}
+              </div>
             </div>
+          )}
+        </form.AppField>
 
-            {mode === "edit" && hasTransactionHistory && existing?.currency !== selectedCurrency && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-                Changing the account currency only affects future transactions. Existing transaction amounts keep their
-                original currency.
-              </p>
+        <div className="flex gap-3">
+          <form.AppField name="currency">
+            {(field) => (
+              <field.FieldContainer labelText="Currency" className="flex-1">
+                <field.FormSelect placeholder="Select currency">
+                  {APP_CURRENCIES.map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {code}
+                    </SelectItem>
+                  ))}
+                </field.FormSelect>
+              </field.FieldContainer>
             )}
+          </form.AppField>
 
-            <form.AppField name="description">
-              {(field) => (
-                <field.FieldContainer labelText="Description">
-                  <field.FormTextarea placeholder="Optional description..." className="min-h-20 resize-none" />
-                </field.FieldContainer>
-              )}
-            </form.AppField>
+          <form.AppField name="balance">
+            {(field) => (
+              <field.FieldContainer labelText={mode === "create" ? "Initial balance" : "Balance"} className="flex-1">
+                <field.FormInput
+                  type="number"
+                  step="0.01"
+                  className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+              </field.FieldContainer>
+            )}
+          </form.AppField>
+        </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button type="submit">{mode === "create" ? "Create" : "Save"}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+        {mode === "edit" && hasTransactionHistory && existing?.currency !== selectedCurrency && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+            Changing the account currency only affects future transactions. Existing transaction amounts keep their
+            original currency.
+          </p>
+        )}
+
+        <form.AppField name="description">
+          {(field) => (
+            <field.FieldContainer labelText="Description">
+              <field.FormTextarea placeholder="Optional description..." className="min-h-20 resize-none" />
+            </field.FieldContainer>
+          )}
+        </form.AppField>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={closeDialog}>
+            Cancel
+          </Button>
+          <Button type="submit">{mode === "create" ? "Create" : "Save"}</Button>
+        </DialogFooter>
+      </form>
 
       <Dialog open={pendingBalanceChoice !== null} onOpenChange={(open) => !open && setPendingBalanceChoice(null)}>
         <DialogContent className="sm:max-w-md">
@@ -323,12 +311,8 @@ function AccountDialogContent() {
               type="button"
               onClick={() => {
                 if (!pendingBalanceChoice) return;
-                try {
-                  persistAccount(pendingBalanceChoice, "adjustment");
-                  setPendingBalanceChoice(null);
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Unable to save account.");
-                }
+                persistAccount(pendingBalanceChoice, "adjustment");
+                setPendingBalanceChoice(null);
               }}
             >
               Create adjustment entry
@@ -338,12 +322,8 @@ function AccountDialogContent() {
               variant="outline"
               onClick={() => {
                 if (!pendingBalanceChoice) return;
-                try {
-                  persistAccount(pendingBalanceChoice, "overwrite");
-                  setPendingBalanceChoice(null);
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Unable to save account.");
-                }
+                persistAccount(pendingBalanceChoice, "overwrite");
+                setPendingBalanceChoice(null);
               }}
             >
               Overwrite balance only
@@ -359,6 +339,15 @@ function AccountDialogContent() {
 }
 
 export function AccountDialog() {
+  const isOpen = useAccountDialogStore((x) => x.isOpen);
   const openRevision = useAccountDialogStore((x) => x.openRevision);
-  return <AccountDialogContent key={openRevision} />;
+  const closeDialog = useAccountDialogStore((x) => x.close);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && closeDialog()}>
+      <DialogContent className="sm:max-w-md">
+        <AccountDialogContent key={openRevision} />
+      </DialogContent>
+    </Dialog>
+  );
 }

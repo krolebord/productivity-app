@@ -1,8 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, type ErrorComponentProps, Link, Outlet } from "@tanstack/react-router";
 import { AlertTriangle, FileQuestion } from "lucide-react";
+import { lazy, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
+
+const SQLiteSyncDevtools = import.meta.env.DEV
+  ? lazy(() => import("@sqlite-sync/devtools").then((m) => ({ default: m.SQLiteSyncDevtools })))
+  : () => null;
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -58,6 +63,9 @@ function Root() {
     <>
       <Outlet />
       <Toaster closeButton />
+      <Suspense>
+        <SQLiteSyncDevtools />
+      </Suspense>
     </>
   );
 }
