@@ -1,10 +1,17 @@
-import { durableObjectAdapter, type RemoteHandler, type TypedPersistedCrdtEvent } from "@sqlite-sync/cloudflare";
+import { type AiDbAccess, createAiDbAccess } from "@sqlite-sync/ai";
+import {
+  createKyselyExecutor,
+  durableObjectAdapter,
+  type RemoteHandler,
+  type TypedPersistedCrdtEvent,
+} from "@sqlite-sync/cloudflare";
 import { type JobRuntime, setupJobs } from "do-jobs";
 import { type Connection, Server } from "partyserver";
 import { cleanupConversationAgentJob } from "./jobs/cleanup-conversation-agent";
 import { fetchCurrencyRatesJob } from "./jobs/fetch-currency-rates";
 import { jobs } from "./jobs/jobs";
 import { syncDbSchema } from "./migrations";
+import { userDbSchemaDocContext } from "./schema-doc";
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 
@@ -17,6 +24,8 @@ export class UserDbServer extends Server<Env> {
   private remoteHandler: RemoteHandler = null!;
   // biome-ignore lint/style/noNonNullAssertion: initialize in onStart
   private jobRuntime: JobRuntime = null!;
+  // biome-ignore lint/style/noNonNullAssertion: initialize in onStart
+  private aiDbAccess: AiDbAccess = null!;
 
   async onStart() {
     const { syncDb, remoteHandler } = await durableObjectAdapter.createCrdtStorage({
@@ -30,6 +39,12 @@ export class UserDbServer extends Server<Env> {
     });
 
     this.remoteHandler = remoteHandler;
+
+    this.aiDbAccess = createAiDbAccess({
+      executor: createKyselyExecutor(this.ctx.storage),
+      syncDbSchema,
+      context: userDbSchemaDocContext,
+    });
 
     this.jobRuntime = await setupJobs({
       jobs,
@@ -52,6 +67,10 @@ export class UserDbServer extends Server<Env> {
 
   async onAlarm() {
     await this.jobRuntime.onAlarm();
+  }
+
+  getSchemaDoc(): string {
+    return this.aiDbAccess.getSchemaDoc();
   }
 
   private async onEventApplied(event: TypedPersistedCrdtEvent<typeof syncDbSchema>) {

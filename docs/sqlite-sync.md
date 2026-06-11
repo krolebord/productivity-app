@@ -16,6 +16,7 @@
 - [Sync State](#sync-state)
 - [Migrations](#migrations)
 - [Server-Side Mutations](#server-side-mutations)
+- [AI Agent Tools](#ai-agent-tools)
 - [Vite Configuration](#vite-configuration)
 - [API Reference](#api-reference)
 
@@ -35,6 +36,9 @@ pnpm add @sqlite-sync/devtools
 
 # Cloudflare Durable Objects adapter (server)
 pnpm add @sqlite-sync/cloudflare
+
+# AI agent tools (server)
+pnpm add @sqlite-sync/ai
 ```
 
 Peer dependencies:
@@ -42,9 +46,10 @@ Peer dependencies:
 | Package | Peers |
 |---------|-------|
 | `@sqlite-sync/core` | `@sqlite.org/sqlite-wasm`, `kysely` |
-| `@sqlite-sync/react` | `react ^18 \|\| ^19`, `kysely` |
-| `@sqlite-sync/devtools` | `react ^18 \|\| ^19` |
-| `@sqlite-sync/cloudflare` | `@cloudflare/workers-types`, `kysely` |
+| `@sqlite-sync/react` | `@sqlite-sync/core`, `react ^18 \|\| ^19`, `kysely` |
+| `@sqlite-sync/devtools` | `@sqlite-sync/core`, `react ^18 \|\| ^19` |
+| `@sqlite-sync/cloudflare` | `@sqlite-sync/core`, `@cloudflare/workers-types`, `kysely` |
+| `@sqlite-sync/ai` | `@sqlite-sync/core`, `ai ^6` |
 
 ---
 
@@ -158,7 +163,7 @@ export const syncDbSchema = createSyncDbSchema({ migrations })
 
 The schema carries three phantom types used for type inference:
 - `~clientSchema` — Used by React hooks. Includes both base tables (read-only) and CRDT views (read-write).
-- `~serverSchema` — Used by server-side `executeKysely`. Base tables only (read-only via Kysely types).
+- `~serverSchema` — Used by server-side `executeKysely`. Includes both base tables and read-only CRDT views.
 - `~mutationsSchema` — Used by `enqueueEvent` for typed CRDT payloads.
 
 ---
@@ -837,8 +842,7 @@ The `syncDb` object returned by `durableObjectAdapter.createCrdtStorage` lets yo
 ```ts
 const { rows } = syncDb.executeKysely((db) =>
   db
-    .selectFrom("_item")
-    .where("tombstone", "=", false)
+    .selectFrom("item")
     .where("id", "=", itemId)
     .select(["id", "title"])
 );
@@ -846,7 +850,7 @@ const { rows } = syncDb.executeKysely((db) =>
 const item = rows[0];
 ```
 
-Server-side reads use the **base table name** (e.g., `"_item"`), not the CRDT view name, since CRDT views are only set up on the client.
+Server-side reads can use the read-only **CRDT view name** (e.g., `"item"`). The Durable Object adapter creates these views from the schema and filters out tombstoned rows automatically. Writes still go through CRDT events, not SQL writes to the view.
 
 ### Writing Events
 
@@ -883,6 +887,34 @@ syncDb.addEventListener("event-applied", (event) => {
   }
 });
 ```
+
+---
+
+## AI Agent Tools
+
+`@sqlite-sync/ai` exposes a synced database to an AI SDK (v6) agent. Create the access object where the CRDT storage lives (e.g. a Durable Object's `onStart`, after migrations), then hand the agent a `ToolSet`:
+
+```ts
+import { createAiDbAccess, createDbTools } from "@sqlite-sync/ai";
+import { createKyselyExecutor } from "@sqlite-sync/cloudflare";
+
+// Next to the storage:
+const aiDbAccess = createAiDbAccess({
+  executor: createKyselyExecutor(this.ctx.storage),
+  syncDbSchema,
+  context: {
+    overview: "# My app's database\n\nA todo app for a single user.",
+    tables: {
+      todo: { description: "The user's todos.", columns: { completed: "1 when done." } },
+    },
+  },
+});
+
+// In the agent:
+const tools = createDbTools({ access: () => aiDbAccess });
+```
+
+The schema doc is generated from `PRAGMA table_info` plus the app-provided `context` (keys are CRDT view names), introspected once and cached. It always includes a built-in preamble (after your `overview`) explaining sqlite-sync mechanics — that the database syncs between devices and that the listed tables are read-only views with soft-deleted rows already filtered out. Your `context` only needs to describe your domain: what the app is, what each table/column means, and any data conventions (units, enums, timestamp formats). For cross-Durable-Object setups, `AiDbAccess` method names double as the RPC contract — a stub proxying `getSchemaDoc()` satisfies `createDbTools`. The `ToolSet` currently contains a single `getDbSchema` tool.
 
 ---
 
@@ -1054,6 +1086,8 @@ Behavior:
 
 Sets up CRDT storage inside a Cloudflare Durable Object.
 
+After running your schema migrations, the adapter recreates read-only CRDT views for each configured table. Each view uses the configured CRDT table name and selects non-tombstoned rows from the base table.
+
 ```ts
 function createCrdtStorage<Schema extends SyncDbSchema>(options: {
   storage: DurableObjectStorage;
@@ -1107,6 +1141,34 @@ function createMigrator(
   updateLogTableName?: string
 ): SyncDbMigrator
 ```
+
+### `@sqlite-sync/ai`
+
+#### `createAiDbAccess(options)`
+
+Creates read-only AI access to a synced database. Lives where the storage lives; the schema doc is introspected lazily and cached.
+
+```ts
+function createAiDbAccess(options: {
+  executor: AiDbExecutor; // satisfied by createKyselyExecutor from @sqlite-sync/cloudflare
+  syncDbSchema: SyncDbSchema;
+  context?: SchemaDocContext; // overview + per-table/column descriptions
+}): AiDbAccess // { getSchemaDoc(): string }
+```
+
+#### `createDbTools(options)`
+
+Builds an AI SDK v6 `ToolSet` backed by an `AiDbAccess` (or a stub proxying to one). `access` is a factory because acquiring the database may itself be async per call.
+
+```ts
+function createDbTools(options: {
+  access: () => DbToolsAccess | Promise<DbToolsAccess>
+}): ToolSet
+```
+
+#### `createSchemaDoc(options)`
+
+Lower-level helper that generates the markdown schema doc directly from an `execute` function — used internally by `createAiDbAccess`.
 
 ### WebSocket Protocol
 
