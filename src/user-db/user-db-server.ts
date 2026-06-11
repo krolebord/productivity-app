@@ -1,6 +1,7 @@
-import { durableObjectAdapter, type RemoteHandler } from "@sqlite-sync/cloudflare";
+import { durableObjectAdapter, type RemoteHandler, type TypedPersistedCrdtEvent } from "@sqlite-sync/cloudflare";
 import { type JobRuntime, setupJobs } from "do-jobs";
 import { type Connection, Server } from "partyserver";
+import { cleanupConversationAgentJob } from "./jobs/cleanup-conversation-agent";
 import { fetchCurrencyRatesJob } from "./jobs/fetch-currency-rates";
 import { jobs } from "./jobs/jobs";
 import { syncDbSchema } from "./migrations";
@@ -41,10 +42,26 @@ export class UserDbServer extends Server<Env> {
       dedupeKey: "currency-rates",
       everyMs: TWELVE_HOURS_MS,
     });
+
+    syncDb.addEventListener("event-applied", (event) => {
+      this.onEventApplied(event.payload).catch((error) => {
+        console.error("Error handling applied event", event.payload, error);
+      });
+    });
   }
 
   async onAlarm() {
     await this.jobRuntime.onAlarm();
+  }
+
+  private async onEventApplied(event: TypedPersistedCrdtEvent<typeof syncDbSchema>) {
+    if (event.type === "item-deleted" && event.dataset === "_conversation") {
+      // Conversation agents are named `${userDbName}:${conversationId}` — wipe the orphaned DO.
+      await this.jobRuntime.schedule(cleanupConversationAgentJob, {
+        input: { agentName: `${this.name}:${event.item_id}` },
+        at: Date.now(),
+      });
+    }
   }
 
   onMessage(connection: Connection, message: string) {

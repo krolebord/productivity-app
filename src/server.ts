@@ -45,10 +45,10 @@ export default {
     }
 
     if (url.pathname.startsWith("/agents")) {
-      // Agent instances are named `user-${userId}` — only the owning user may reach theirs.
+      // Agent instances are named `user-${userId}:${conversationId}` — only the owning user may reach theirs.
       const guard = async (req: Request, lobby: { name: string }) => {
         const userId = await getUserIdFromRequest(req, env);
-        if (!userId || lobby.name !== `user-${userId}`) {
+        if (!userId || !lobby.name.startsWith(`user-${userId}:`)) {
           return new Response("Unauthorized", { status: 401 });
         }
       };

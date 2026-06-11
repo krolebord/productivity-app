@@ -83,6 +83,14 @@ export type TransactionEntryItem = {
   tombstone?: boolean;
 };
 
+export type ConversationItem = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  tombstone?: boolean;
+};
+
 const migrations = createMigrations((b) => ({
   0: [
     b.createTable("_item", (t) =>
@@ -174,6 +182,16 @@ const migrations = createMigrations((b) => ({
         .addColumn("updatedAt", "integer", (col) => col.notNull()),
     ),
   ],
+  6: [
+    b.createTable("_conversation", (t) =>
+      t
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("title", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+  ],
 }));
 
 export type UserDb = (typeof syncDbSchema)["~clientSchema"];
@@ -191,4 +209,6 @@ export const syncDbSchema = createSyncDbSchema({
   .withConfig({ baseTableName: "_account", crdtTableName: "account" })
   .addTable<TransactionEntryItem>()
   .withConfig({ baseTableName: "_transaction_entry", crdtTableName: "transaction_entry" })
+  .addTable<ConversationItem>()
+  .withConfig({ baseTableName: "_conversation", crdtTableName: "conversation" })
   .build();

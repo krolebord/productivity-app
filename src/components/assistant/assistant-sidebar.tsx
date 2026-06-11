@@ -1,19 +1,42 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
+import { generateId } from "@sqlite-sync/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
 import { useAgent } from "agents/react";
 import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
 import { getToolName, isToolUIPart } from "ai";
-import { ArrowDown, Check, CircleAlert, CircleStop, Loader2, SendHorizontal, Sparkles, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import {
+  ArrowDown,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  CircleStop,
+  Loader2,
+  PlusIcon,
+  SendHorizontal,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { useConfirmDialogStore } from "@/components/confirm-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
 import { cn } from "@/lib/utils";
+import { useDb, useDbQuery } from "@/user-db/user-db";
 import { Button } from "../ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { Textarea } from "../ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+
+type ConversationRow = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+};
 
 function ToolCallChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
@@ -72,28 +95,125 @@ function ScrollToBottomButton() {
   );
 }
 
-export function AssistantSidebar() {
+function conversationLabel(conversation: ConversationRow) {
+  return conversation.title || "New conversation";
+}
+
+function ConversationSwitcher({
+  conversations,
+  active,
+  onDeleteConversation,
+}: {
+  conversations: ConversationRow[];
+  active: ConversationRow;
+  onDeleteConversation: (conversation: ConversationRow) => void;
+}) {
+  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left font-semibold text-sm transition-colors hover:bg-accent"
+          aria-label="Switch conversation"
+        >
+          <Sparkles className="size-4 shrink-0 text-primary" />
+          <span className="truncate">{conversationLabel(active)}</span>
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        {conversations.map((conversation) => (
+          <DropdownMenuItem
+            key={conversation.id}
+            className={cn("group gap-2", conversation.id === active.id && "bg-accent")}
+            onClick={() => setActiveConversation(conversation.id)}
+          >
+            <span className="flex-1 truncate">{conversationLabel(conversation)}</span>
+            <button
+              type="button"
+              className="rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+              aria-label={`Delete ${conversationLabel(conversation)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteConversation(conversation);
+              }}
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ConversationView({
+  conversation,
+  conversations,
+}: {
+  conversation: ConversationRow;
+  conversations: ConversationRow[];
+}) {
   const auth = useAuth();
+  const db = useDb();
   const setOpen = useAssistantStore((s) => s.setOpen);
+  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const [input, setInput] = useState("");
 
-  const agent = useAgent({ agent: "assistant-agent", name: `user-${auth.userId}` });
-  const { messages, sendMessage, status, stop, error, clearHistory, isServerStreaming } = useAgentChat({ agent });
+  const agent = useAgent({ agent: "assistant-agent", name: `user-${auth.userId}:${conversation.id}` });
+  const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({ agent });
+  const confirm = useConfirmDialogStore((s) => s.confirm);
 
   const isWorking = status === "submitted" || status === "streaming" || isServerStreaming;
+
+  function requestDeleteConversation(target: ConversationRow) {
+    confirm({
+      title: "Delete conversation?",
+      description: `"${conversationLabel(target)}" and its messages will be deleted.`,
+      confirmLabel: "Delete",
+      onConfirm: () => {
+        db.db.executeKysely((q) => q.deleteFrom("conversation").where("id", "=", target.id));
+        if (target.id === conversation.id) {
+          setActiveConversation(null);
+        }
+      },
+    });
+  }
+
+  function newConversation() {
+    // An empty active conversation already is a "new" one — just stay on it.
+    if (messages.length === 0) return;
+    const id = generateId();
+    const now = Date.now();
+    db.db.executeKysely((q) =>
+      q.insertInto("conversation").values({ id, title: "", createdAt: now, updatedAt: now, tombstone: false }),
+    );
+    setActiveConversation(id);
+  }
 
   function submit() {
     const text = input.trim();
     if (!text || isWorking) return;
     sendMessage({ text });
+    db.db.executeKysely((q) =>
+      q
+        .updateTable("conversation")
+        .set({ updatedAt: Date.now(), ...(messages.length === 0 && { title: text.slice(0, 80) }) })
+        .where("id", "=", conversation.id),
+    );
     setInput("");
   }
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
-        <Sparkles className="size-4 text-primary" />
-        <span className="flex-1 font-semibold text-sm">Assistant</span>
+      <div className="flex h-14 shrink-0 items-center gap-1 border-b px-2">
+        <ConversationSwitcher
+          conversations={conversations}
+          active={conversation}
+          onDeleteConversation={requestDeleteConversation}
+        />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -101,14 +221,28 @@ export function AssistantSidebar() {
               variant="ghost"
               size="icon"
               className="size-8 text-muted-foreground"
-              aria-label="Clear conversation"
-              disabled={messages.length === 0 || isWorking}
-              onClick={clearHistory}
+              aria-label="New conversation"
+              onClick={newConversation}
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">New conversation</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 text-muted-foreground"
+              aria-label="Delete conversation"
+              onClick={() => requestDeleteConversation(conversation)}
             >
               <Trash2 className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Clear conversation</TooltipContent>
+          <TooltipContent side="bottom">Delete conversation</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -171,6 +305,7 @@ export function AssistantSidebar() {
         }}
       >
         <Textarea
+          autoFocus
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -195,4 +330,45 @@ export function AssistantSidebar() {
       </form>
     </div>
   );
+}
+
+export function AssistantSidebar() {
+  const db = useDb();
+  const activeConversationId = useAssistantStore((s) => s.activeConversationId);
+  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+
+  const { data: conversations } = useDbQuery((db) =>
+    db.selectFrom("conversation").select(["id", "title", "createdAt", "updatedAt"]).orderBy("updatedAt", "desc"),
+  );
+
+  const active = conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
+
+  const creatingRef = useRef(false);
+  useEffect(() => {
+    if (active) {
+      creatingRef.current = false;
+      if (active.id !== activeConversationId) {
+        setActiveConversation(active.id);
+      }
+      return;
+    }
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    const id = generateId();
+    const now = Date.now();
+    db.db.executeKysely((q) =>
+      q.insertInto("conversation").values({ id, title: "", createdAt: now, updatedAt: now, tombstone: false }),
+    );
+    setActiveConversation(id);
+  }, [active, activeConversationId, db, setActiveConversation]);
+
+  if (!active) {
+    return (
+      <div className="flex h-full items-center justify-center bg-background">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return <ConversationView key={active.id} conversation={active} conversations={conversations} />;
 }
