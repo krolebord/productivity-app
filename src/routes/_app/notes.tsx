@@ -173,16 +173,16 @@ function NotesPage() {
 
     // Place the moved note between its new neighbors with a fractional order;
     // fall back to renumbering everything when the midpoint runs out of
-    // float precision.
+    // float precision or a neighbor has a null order.
     const prevOrder = movedIndex > 0 ? ordered[movedIndex - 1].order : undefined;
     const nextOrder = movedIndex < ordered.length - 1 ? ordered[movedIndex + 1].order : undefined;
     let movedOrder: number | null = null;
-    if (prevOrder !== undefined && nextOrder !== undefined) {
+    if (typeof prevOrder === "number" && typeof nextOrder === "number") {
       const mid = (prevOrder + nextOrder) / 2;
       if (mid > prevOrder && mid < nextOrder) movedOrder = mid;
-    } else if (prevOrder !== undefined) {
+    } else if (typeof prevOrder === "number" && nextOrder === undefined) {
       movedOrder = prevOrder + 1;
-    } else if (nextOrder !== undefined) {
+    } else if (typeof nextOrder === "number" && prevOrder === undefined) {
       movedOrder = nextOrder - 1;
     }
 

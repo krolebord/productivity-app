@@ -1,4 +1,11 @@
-import { type AiDbAccess, createAiDbAccess } from "@sqlite-sync/ai";
+import {
+  type AiDbAccess,
+  type AiMutationInput,
+  type AiMutationResult,
+  type AiQueryInput,
+  type AiQueryResult,
+  createAiDbAccess,
+} from "@sqlite-sync/ai";
 import {
   createKyselyExecutor,
   durableObjectAdapter,
@@ -14,6 +21,10 @@ import { syncDbSchema } from "./migrations";
 import { userDbSchemaDocContext } from "./schema-doc";
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+const CODEMODE_QUERY_LIMITS = {
+  maxRows: 1000,
+  maxCellChars: 4000,
+};
 
 export class UserDbServer extends Server<Env> {
   static options = {
@@ -26,6 +37,8 @@ export class UserDbServer extends Server<Env> {
   private jobRuntime: JobRuntime = null!;
   // biome-ignore lint/style/noNonNullAssertion: initialize in onStart
   private aiDbAccess: AiDbAccess = null!;
+  // biome-ignore lint/style/noNonNullAssertion: initialize in onStart
+  private codeAiDbAccess: AiDbAccess = null!;
 
   async onStart() {
     const { syncDb, remoteHandler } = await durableObjectAdapter.createCrdtStorage({
@@ -42,8 +55,16 @@ export class UserDbServer extends Server<Env> {
 
     this.aiDbAccess = createAiDbAccess({
       executor: createKyselyExecutor(this.ctx.storage),
+      storage: syncDb,
       syncDbSchema,
       context: userDbSchemaDocContext,
+    });
+
+    this.codeAiDbAccess = createAiDbAccess({
+      executor: createKyselyExecutor(this.ctx.storage),
+      syncDbSchema,
+      context: userDbSchemaDocContext,
+      limits: CODEMODE_QUERY_LIMITS,
     });
 
     this.jobRuntime = await setupJobs({
@@ -71,6 +92,22 @@ export class UserDbServer extends Server<Env> {
 
   getSchemaDoc(): string {
     return this.aiDbAccess.getSchemaDoc();
+  }
+
+  query(input: AiQueryInput): AiQueryResult {
+    return this.aiDbAccess.query(input);
+  }
+
+  mutate(input: AiMutationInput): AiMutationResult {
+    return (
+      this.aiDbAccess.mutate?.(input) ?? {
+        error: "Database mutations are not enabled.",
+      }
+    );
+  }
+
+  queryForCode(input: AiQueryInput): AiQueryResult {
+    return this.codeAiDbAccess.query(input);
   }
 
   private async onEventApplied(event: TypedPersistedCrdtEvent<typeof syncDbSchema>) {

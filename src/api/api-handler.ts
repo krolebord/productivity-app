@@ -1,8 +1,12 @@
 import type { ORPCContext } from "../orpc/common/os";
+import { assistantDownloadHandler } from "./handlers/assistant.download";
+import { assistantUploadHandler } from "./handlers/assistant.upload";
 import { googleCallbackHandler } from "./handlers/callback.google";
 
 export const apiHandler = createApiHandler({
   handlers: {
+    "/assistant/upload": assistantUploadHandler,
+    "/assistant/download": assistantDownloadHandler,
     "/auth/callback/google": googleCallbackHandler,
   },
   prefix: "/api",

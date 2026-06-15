@@ -10,7 +10,10 @@ import {
   ChevronDown,
   CircleAlert,
   CircleStop,
+  Cpu,
+  Download,
   Loader2,
+  Paperclip,
   PlusIcon,
   SendHorizontal,
   Sparkles,
@@ -20,6 +23,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { ASSISTANT_MODELS } from "@/agent/models";
 import { useConfirmDialogStore } from "@/components/confirm-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
@@ -37,6 +41,37 @@ type ConversationRow = {
   createdAt: number;
   updatedAt: number;
 };
+
+type UploadedWorkspaceFile = {
+  filename: string;
+  mediaType: string;
+  size: number;
+  path: string;
+};
+
+const MAX_UPLOAD_FILES = 5;
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function DownloadFileChip({ conversationId, file }: { conversationId: string; file: UploadedWorkspaceFile }) {
+  const href = `/api/assistant/download?conversationId=${encodeURIComponent(conversationId)}&path=${encodeURIComponent(file.path)}`;
+
+  return (
+    <a
+      href={href}
+      download={file.filename}
+      className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-foreground text-xs transition-colors hover:bg-accent"
+    >
+      <Download className="size-3.5 shrink-0" />
+      <span className="max-w-48 truncate">{file.filename}</span>
+      <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
+    </a>
+  );
+}
 
 function ToolCallChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
@@ -57,9 +92,13 @@ function ToolCallChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   );
 }
 
-function MessageParts({ message }: { message: UIMessage }) {
+function MessageParts({ message, conversationId }: { message: UIMessage; conversationId: string }) {
   return message.parts.map((part, i) => {
     if (part.type === "dynamic-tool" || isToolUIPart(part)) {
+      const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
+      if (name === "saveDownload" && part.state === "output-available" && part.output) {
+        return <DownloadFileChip key={i} conversationId={conversationId} file={part.output as UploadedWorkspaceFile} />;
+      }
       return <ToolCallChip key={i} part={part} />;
     }
 
@@ -149,6 +188,36 @@ function ConversationSwitcher({
   );
 }
 
+function ModelSelect() {
+  const model = useAssistantStore((s) => s.model);
+  const setModel = useAssistantStore((s) => s.setModel);
+  const active = ASSISTANT_MODELS.find((m) => m.id === model) ?? ASSISTANT_MODELS[0];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex w-fit items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+          aria-label="Select model"
+        >
+          <Cpu className="size-3.5 shrink-0" />
+          <span className="truncate">{active.label}</span>
+          <ChevronDown className="size-3 shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        {ASSISTANT_MODELS.map((m) => (
+          <DropdownMenuItem key={m.id} className="gap-2" onClick={() => setModel(m.id)}>
+            <span className="flex-1 truncate">{m.label}</span>
+            {m.id === active.id && <Check className="size-3.5 shrink-0" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function ConversationView({
   conversation,
   conversations,
@@ -161,12 +230,24 @@ function ConversationView({
   const setOpen = useAssistantStore((s) => s.setOpen);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const [input, setInput] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const model = useAssistantStore((s) => s.model);
+  const modelRef = useRef(model);
+  modelRef.current = model;
 
   const agent = useAgent({ agent: "assistant-agent", name: `user-${auth.userId}:${conversation.id}` });
-  const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({ agent });
+  const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({
+    agent,
+    // Read from a ref so the selected model is always current without re-creating the chat.
+    body: () => ({ model: modelRef.current }),
+  });
   const confirm = useConfirmDialogStore((s) => s.confirm);
 
-  const isWorking = status === "submitted" || status === "streaming" || isServerStreaming;
+  const isWorking = uploading || status === "submitted" || status === "streaming" || isServerStreaming;
 
   function requestDeleteConversation(target: ConversationRow) {
     confirm({
@@ -193,17 +274,71 @@ function ConversationView({
     setActiveConversation(id);
   }
 
-  function submit() {
+  async function uploadSelectedFiles() {
+    if (selectedFiles.length === 0) return [];
+
+    const formData = new FormData();
+    formData.set("conversationId", conversation.id);
+    for (const file of selectedFiles) {
+      formData.append("files", file);
+    }
+
+    const response = await fetch("/api/assistant/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const body = (await response.json().catch(() => null)) as {
+      files?: UploadedWorkspaceFile[];
+      error?: string;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(body?.error ?? "Upload failed.");
+    }
+    return body?.files ?? [];
+  }
+
+  async function submit() {
     const text = input.trim();
-    if (!text || isWorking) return;
-    sendMessage({ text });
+    if ((!text && selectedFiles.length === 0) || isWorking) return;
+
+    setUploadError(null);
+    let uploadedFiles: UploadedWorkspaceFile[] = [];
+    if (selectedFiles.length > 0) {
+      setUploading(true);
+      try {
+        uploadedFiles = await uploadSelectedFiles();
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : "Upload failed.");
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    const workspaceContext =
+      uploadedFiles.length > 0
+        ? [
+            "Uploaded files are available in the agent workspace:",
+            ...uploadedFiles.map((file) => `- ${file.filename}: ${file.path} (${file.mediaType}, ${file.size} bytes)`),
+          ].join("\n")
+        : "";
+    const messageText = [text, workspaceContext].filter(Boolean).join("\n\n");
+
+    sendMessage({ text: messageText });
     db.db.executeKysely((q) =>
       q
         .updateTable("conversation")
-        .set({ updatedAt: Date.now(), ...(messages.length === 0 && { title: text.slice(0, 80) }) })
+        .set({
+          updatedAt: Date.now(),
+          ...(messages.length === 0 && {
+            title: (text || selectedFiles.map((file) => file.name).join(", ")).slice(0, 80),
+          }),
+        })
         .where("id", "=", conversation.id),
     );
     setInput("");
+    setSelectedFiles([]);
   }
 
   return (
@@ -278,7 +413,7 @@ function ConversationView({
                 message.role === "user" && "ml-8 self-end rounded-lg bg-primary px-3 py-2 text-primary-foreground",
               )}
             >
-              <MessageParts message={message} />
+              <MessageParts message={message} conversationId={conversation.id} />
             </div>
           ))}
           {isWorking && (
@@ -291,9 +426,9 @@ function ConversationView({
         <ScrollToBottomButton />
       </StickToBottom>
 
-      {error && (
+      {(error || uploadError) && (
         <div className="mx-3 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-xs">
-          {error.message || "Something went wrong. Try again."}
+          {uploadError ?? error?.message ?? "Something went wrong. Try again."}
         </div>
       )}
 
@@ -304,26 +439,79 @@ function ConversationView({
           submit();
         }}
       >
-        <Textarea
-          autoFocus
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
+            event.target.value = "";
           }}
-          placeholder="Send a message…"
-          rows={2}
-          className="max-h-40 min-h-0 flex-1 resize-none"
         />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {selectedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedFiles.map((file, index) => (
+                <div
+                  key={`${file.name}-${file.lastModified}-${index}`}
+                  className="flex max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs"
+                >
+                  <span className="max-w-40 truncate">{file.name}</span>
+                  <span className="shrink-0">{formatFileSize(file.size)}</span>
+                  <button
+                    type="button"
+                    className="rounded-sm p-0.5 hover:bg-accent hover:text-foreground"
+                    aria-label={`Remove ${file.name}`}
+                    onClick={() => setSelectedFiles((files) => files.filter((_, i) => i !== index))}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <ModelSelect />
+          <div className="flex min-w-0 items-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              aria-label="Attach files"
+              disabled={isWorking || selectedFiles.length >= MAX_UPLOAD_FILES}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="size-4" />
+            </Button>
+            <Textarea
+              autoFocus
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder="Send a message…"
+              rows={2}
+              className="max-h-40 min-h-0 resize-none"
+            />
+          </div>
+        </div>
         {isWorking ? (
           <Button type="button" variant="secondary" size="icon" aria-label="Stop generating" onClick={() => stop()}>
-            <CircleStop className="size-4" />
+            {uploading ? <Loader2 className="size-4 animate-spin" /> : <CircleStop className="size-4" />}
           </Button>
         ) : (
-          <Button type="submit" size="icon" aria-label="Send message" disabled={!input.trim()}>
+          <Button
+            type="submit"
+            size="icon"
+            aria-label="Send message"
+            disabled={!input.trim() && selectedFiles.length === 0}
+          >
             <SendHorizontal className="size-4" />
           </Button>
         )}

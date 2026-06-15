@@ -14,6 +14,11 @@
     "MODE": "development",
     "VITE_APP_URL": "http://localhost:3001"
   },
+  "worker_loaders": [
+    {
+      "binding": "LOADER"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "MAIN_DB",

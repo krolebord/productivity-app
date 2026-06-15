@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import type { SelectQueryBuilder } from "kysely";
 import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
@@ -7,6 +8,7 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { formatBalance } from "@/components/account-card";
 import {
@@ -21,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import { getDisplayAmountForAccount, TRANSACTION_TYPES, type TransactionType } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
+import type { UserDb } from "@/user-db/migrations";
 import { useDbQuery } from "@/user-db/user-db";
 
 const transactionsSearchSchema = z.object({
@@ -29,6 +32,37 @@ const transactionsSearchSchema = z.object({
   q: z.string().optional(),
   type: z.enum(TRANSACTION_TYPES).optional(),
 });
+
+type TransactionsSearch = z.infer<typeof transactionsSearchSchema>;
+
+const DEFAULT_LIMIT = 50;
+
+function applyTransactionFilters<O>(
+  query: SelectQueryBuilder<UserDb, "transaction_entry", O>,
+  search: TransactionsSearch,
+) {
+  const accountId = search.accountId;
+  if (accountId) {
+    query = query.where((eb) => eb.or([eb("accountId", "=", accountId), eb("counterpartyAccountId", "=", accountId)]));
+  }
+
+  if (search.type) {
+    query = query.where("type", "=", search.type);
+  }
+
+  if (search.category) {
+    query = query.where("category", "like", `%${search.category}%`);
+  }
+
+  if (search.q) {
+    const q = search.q;
+    query = query.where((eb) =>
+      eb.or([eb("title", "like", `%${q}%`), eb("notes", "like", `%${q}%`), eb("category", "like", `%${q}%`)]),
+    );
+  }
+
+  return query;
+}
 
 export const Route = createFileRoute("/_app/transactions")({
   component: TransactionsPage,
@@ -97,38 +131,39 @@ function TransactionsPage() {
   const createExpense = useCreateExpense(search.accountId ? { accountId: search.accountId } : undefined);
   const createIncome = useCreateIncome(search.accountId ? { accountId: search.accountId } : undefined);
   const createTransfer = useCreateTransfer(search.accountId ? { accountId: search.accountId } : undefined);
-  const filteredAccountId = search.accountId;
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+
+  // Reset to the default page size whenever the active filters change.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset is keyed on filter values, not setLimit.
+  useEffect(() => {
+    setLimit(DEFAULT_LIMIT);
+  }, [search.accountId, search.type, search.category, search.q]);
 
   const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
-  const { data: transactions } = useDbQuery((db) => {
-    let query = db.selectFrom("transaction_entry").selectAll();
 
-    if (filteredAccountId) {
-      query = query.where((eb) =>
-        eb.or([eb("accountId", "=", filteredAccountId), eb("counterpartyAccountId", "=", filteredAccountId)]),
-      );
-    }
+  // Fetch one extra row beyond the limit so we can tell whether more remain.
+  const { data: transactions } = useDbQuery((db) =>
+    applyTransactionFilters(db.selectFrom("transaction_entry").selectAll(), search)
+      .orderBy("effectiveAt", "desc")
+      .orderBy("createdAt", "desc")
+      .limit(limit + 1),
+  );
 
-    if (search.type) {
-      query = query.where("type", "=", search.type);
-    }
+  // Aggregate the full filtered set in SQL so the summary cards stay accurate
+  // regardless of how many rows are currently rendered.
+  const { data: summaryRows } = useDbQuery((db) =>
+    applyTransactionFilters(db.selectFrom("transaction_entry"), search)
+      .select((eb) => [
+        "type",
+        "accountCurrency",
+        eb.fn.sum<number>("amount").as("total"),
+        eb.fn.countAll<number>().as("count"),
+      ])
+      .groupBy(["type", "accountCurrency"]),
+  );
 
-    if (search.category) {
-      query = query.where("category", "like", `%${search.category}%`);
-    }
-
-    if (search.q) {
-      query = query.where((eb) =>
-        eb.or([
-          eb("title", "like", `%${search.q}%`),
-          eb("notes", "like", `%${search.q}%`),
-          eb("category", "like", `%${search.q}%`),
-        ]),
-      );
-    }
-
-    return query.orderBy("effectiveAt", "desc").orderBy("createdAt", "desc");
-  });
+  const hasMore = transactions.length > limit;
+  const visibleTransactions = hasMore ? transactions.slice(0, limit) : transactions;
 
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
   const selectedAccount = search.accountId ? accountMap.get(search.accountId) : undefined;
@@ -138,27 +173,27 @@ function TransactionsPage() {
     incomeByCurrency: new Map<string, number>(),
     netByCurrency: new Map<string, number>(),
   };
+  let totalEntries = 0;
 
-  for (const transaction of transactions) {
-    const display = getDisplayAmountForAccount(transaction, search.accountId);
-    if (!display.currency) {
+  for (const row of summaryRows) {
+    const currency = row.accountCurrency;
+    const total = Number(row.total ?? 0);
+    totalEntries += Number(row.count ?? 0);
+
+    if (!currency) {
       continue;
     }
 
-    if (transaction.type === "income") {
-      summary.incomeByCurrency.set(
-        display.currency,
-        (summary.incomeByCurrency.get(display.currency) ?? 0) + Math.abs(display.amount),
-      );
-      summary.netByCurrency.set(display.currency, (summary.netByCurrency.get(display.currency) ?? 0) + display.amount);
-    } else if (transaction.type === "expense") {
-      summary.expenseByCurrency.set(
-        display.currency,
-        (summary.expenseByCurrency.get(display.currency) ?? 0) + Math.abs(display.amount),
-      );
-      summary.netByCurrency.set(display.currency, (summary.netByCurrency.get(display.currency) ?? 0) + display.amount);
-    } else if (transaction.type === "adjustment") {
-      summary.netByCurrency.set(display.currency, (summary.netByCurrency.get(display.currency) ?? 0) + display.amount);
+    // Income amounts are stored positive, expenses negative. Transfers are
+    // excluded from income/expense/net totals (counted in totalEntries only).
+    if (row.type === "income") {
+      summary.incomeByCurrency.set(currency, (summary.incomeByCurrency.get(currency) ?? 0) + total);
+      summary.netByCurrency.set(currency, (summary.netByCurrency.get(currency) ?? 0) + total);
+    } else if (row.type === "expense") {
+      summary.expenseByCurrency.set(currency, (summary.expenseByCurrency.get(currency) ?? 0) + Math.abs(total));
+      summary.netByCurrency.set(currency, (summary.netByCurrency.get(currency) ?? 0) + total);
+    } else if (row.type === "adjustment") {
+      summary.netByCurrency.set(currency, (summary.netByCurrency.get(currency) ?? 0) + total);
     }
   }
 
@@ -232,7 +267,7 @@ function TransactionsPage() {
             <span className="size-2 rounded-full bg-primary" />
             <p className="text-muted-foreground text-xs uppercase tracking-wide">Entries</p>
           </div>
-          <p className="mt-2 font-mono font-semibold text-lg tabular-nums">{transactions.length}</p>
+          <p className="mt-2 font-mono font-semibold text-lg tabular-nums">{totalEntries}</p>
           <p className="mt-1 text-muted-foreground text-xs">Transfers are excluded from the summary totals above.</p>
         </div>
       </div>
@@ -324,7 +359,7 @@ function TransactionsPage() {
       ) : (
         <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
           <div className="divide-y">
-            {transactions.map((transaction) => {
+            {visibleTransactions.map((transaction) => {
               const primaryAccount = accountMap.get(transaction.accountId);
               const secondaryAccount = transaction.counterpartyAccountId
                 ? accountMap.get(transaction.counterpartyAccountId)
@@ -403,6 +438,17 @@ function TransactionsPage() {
               );
             })}
           </div>
+
+          {hasMore ? (
+            <div className="border-t p-3 text-center">
+              <Button onClick={() => setLimit((current) => current + DEFAULT_LIMIT)} variant="outline" size="sm">
+                Load more
+              </Button>
+              <p className="mt-2 text-muted-foreground text-xs">
+                Showing {visibleTransactions.length} of {totalEntries}
+              </p>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

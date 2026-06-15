@@ -92,7 +92,7 @@ Use `createMigrations` to define versioned DDL operations:
 
 ```ts
 // src/migrations.ts
-import { createMigrations, createSyncDbSchema } from "@sqlite-sync/core";
+import { createMigrations } from "@sqlite-sync/core";
 
 export const migrations = createMigrations((b) => ({
   // Version 0: initial schema
@@ -135,31 +135,62 @@ Migration steps automatically generate **event transformers** — when syncing e
 
 ### Building the Schema
 
-Chain `.addTable<Type>().withConfig(...)` for each CRDT table, then call `.build()`:
+Declare tables with the `t.*` column builders and tie them to the migrations with `defineSyncSchema`.
+Record keys are the CRDT (view) table names; the base table name defaults to the key with an
+underscore prefix (override per table with `t.table(cols, { baseName })`). The `id` and `tombstone`
+columns are added automatically and must not be declared.
 
 ```ts
-// Type for rows in the todo table
-export type Todo = {
-  id: string;
-  title: string;
-  completed: boolean;
-  priority: number;
-  tombstone?: boolean;
-};
+import { defineSyncSchema, t } from "@sqlite-sync/core";
 
-export const syncDbSchema = createSyncDbSchema({ migrations })
-  .addTable<Todo>()
-  .withConfig({ baseTableName: "_todo", crdtTableName: "todo" })
-  .build();
+export const syncDbSchema = defineSyncSchema({
+  tables: {
+    todo: t
+      .table({
+        title: t.text().describe("Todo title."),
+        completed: t.boolean().default(false).describe("1 when done."),
+        priority: t.integer().default(0),
+      })
+      .describe("The user's todos."),
+    tag: t.table({
+      name: t.text(),
+    }),
+  },
+  migrations,
+});
 
-// For multiple tables:
-export const syncDbSchema = createSyncDbSchema({ migrations })
-  .addTable<Todo>()
-  .withConfig({ baseTableName: "_todo", crdtTableName: "todo" })
-  .addTable<Tag>()
-  .withConfig({ baseTableName: "_tag", crdtTableName: "tag" })
-  .build();
+// Row types are inferred from the declarations:
+export type Todo = typeof syncDbSchema.tables.todo.$row;
 ```
+
+Column builders: `t.text()`, `t.integer()`, `t.real()`, `t.boolean()` (stored as INTEGER 0/1),
+and `t.enum(["a", "b"])` (TEXT, validated against the values at runtime — no SQL CHECK
+constraint). JSON values are stored as serialized TEXT via `t.text()` — parse at the call site.
+Each column builder chains `.nullable()`, `.default(value)`,
+`.$type<Narrowed>()` (type-only narrowing, e.g. `t.text().$type<"a" | (string & {})>()`), and
+`.describe(text)` for generated schema docs. Table builders also chain `.describe(text)`.
+
+The table builders also expose runtime metadata: `syncDbSchema.tables.todo.columns` (per-column
+kind, nullability, defaults) and `validatePayload(payload, { event })` for checking CRDT event
+payloads against the declared columns.
+
+### Verifying Migrations Against the Schema
+
+Migrations are hand-written and can drift from the declared tables. `verifySyncSchema` replays the
+full migration history on a throwaway in-memory database and diffs the result against the
+declarations — missing/extra columns, type and nullability mismatches, wrong defaults, and a
+missing `id` primary key are reported as structured issues. Tables created by migrations but not
+declared (e.g. local-only caches) are ignored.
+
+```ts
+// Vitest one-liner:
+it("migrations produce the declared schema", async () => {
+  expect(await verifySyncSchema(syncDbSchema)).toEqual([]);
+});
+```
+
+In the browser, pass `verifySchema: import.meta.env.DEV` to `startDbWorker` — on mismatch the
+worker throws with the full issue list and refuses to start.
 
 The schema carries three phantom types used for type inference:
 - `~clientSchema` — Used by React hooks. Includes both base tables (read-only) and CRDT views (read-write).
@@ -234,7 +265,7 @@ export async function initDb() {
 |--------|------|-------------|
 | `dbId` | `string` | Unique database identifier. Must match `^[a-zA-Z][a-zA-Z\-0-9]{2,63}$`. Used for OPFS directory names and Web Lock keys. |
 | `worker` | `Worker` | The Web Worker instance running `startDbWorker`. |
-| `syncDbSchema` | `SyncDbSchema` | The schema built with `createSyncDbSchema`. |
+| `syncDbSchema` | `SyncDbSchema` | The schema built with `defineSyncSchema`. |
 | `workerProps` | `Props` | Extra data passed to the worker (accessible via `getWorkerConfig().props`). |
 
 To wipe the local database (e.g. during development or as a recovery path), use `syncedDb.requestReload({ clean: true })` — see [Reload and Recovery](#reload-and-recovery).
@@ -903,10 +934,7 @@ const aiDbAccess = createAiDbAccess({
   executor: createKyselyExecutor(this.ctx.storage),
   syncDbSchema,
   context: {
-    overview: "# My app's database\n\nA todo app for a single user.",
-    tables: {
-      todo: { description: "The user's todos.", columns: { completed: "1 when done." } },
-    },
+    overview: "# My app's database\n\nDeletes are soft-deletes; the views below already hide them.",
   },
 });
 
@@ -914,7 +942,21 @@ const aiDbAccess = createAiDbAccess({
 const tools = createDbTools({ access: () => aiDbAccess });
 ```
 
-The schema doc is generated from `PRAGMA table_info` plus the app-provided `context` (keys are CRDT view names), introspected once and cached. It always includes a built-in preamble (after your `overview`) explaining sqlite-sync mechanics — that the database syncs between devices and that the listed tables are read-only views with soft-deleted rows already filtered out. Your `context` only needs to describe your domain: what the app is, what each table/column means, and any data conventions (units, enums, timestamp formats). For cross-Durable-Object setups, `AiDbAccess` method names double as the RPC contract — a stub proxying `getSchemaDoc()` satisfies `createDbTools`. The `ToolSet` currently contains a single `getDbSchema` tool.
+The schema doc is generated from the declared sync schema's table builders (including table/column `.describe()` descriptions and enum values) plus the app-provided `context.overview` — no database access involved. For cross-Durable-Object setups, `AiDbAccess` method names double as the RPC contract — a stub proxying `getSchemaDoc()` and `query()` satisfies `createDbTools`. The default `ToolSet` contains `getDbSchema` and `queryDb`.
+
+To allow AI writes, pass the CRDT storage to `createAiDbAccess` and opt in when creating tools:
+
+```ts
+const aiDbAccess = createAiDbAccess({
+  executor: createKyselyExecutor(this.ctx.storage),
+  storage: crdtStorage,
+  syncDbSchema,
+});
+
+const tools = createDbTools({ access: () => aiDbAccess, mutations: true });
+```
+
+This adds `mutateDb`, which accepts `item-created`, `item-updated`, and `item-deleted` CRDT events. It applies them through sqlite-sync's own-event path, not arbitrary write SQL, so writes are validated, persisted to the event log, applied locally, and synced normally. For `item-created` events, omit `item_id` and `payload.id`; the tool generates ids, injects them into the CRDT events, and returns them as `createdIds`.
 
 ---
 
@@ -978,12 +1020,24 @@ function createSyncedDb<Database, Props = undefined>(
 | `requestReload(options)` | `(options: { clean: boolean }) => Promise<void>` | Reload all tabs for this `dbId`; `clean: true` also wipes the persisted worker DB on next startup |
 | `dispose()` | `() => Promise<void>` | Clean up all resources |
 
-#### `createSyncDbSchema(options)`
+#### `defineSyncSchema(config)`
 
-Creates a schema builder for defining CRDT tables.
+Defines the sync database schema from `t.table()` builders plus the migration history.
 
 ```ts
-function createSyncDbSchema(options: { migrations: Migrations }): CrdtSchemaBuilder
+function defineSyncSchema<Tables extends SyncSchemaTables>(config: {
+  tables: Tables;
+  migrations: Migrations;
+}): DefinedSyncSchema<Tables>
+```
+
+#### `verifySyncSchema(schema)`
+
+Replays the migration history on a throwaway in-memory database and diffs the result
+against the declared tables. Resolves with an empty array when they agree.
+
+```ts
+function verifySyncSchema(schema: SyncDbSchema): Promise<SchemaVerificationIssue[]>
 ```
 
 #### `createMigrations(builder)`
@@ -1013,6 +1067,8 @@ function startDbWorker(options: {
   logger?: Logger;
   workerConfig?: WorkerConfig;
   storageVersion?: string;
+  /** Dev-time drift check — throws and refuses to start on schema/migration mismatch. */
+  verifySchema?: boolean;
 }): Promise<void>
 ```
 
@@ -1110,6 +1166,7 @@ function createCrdtStorage<Schema extends SyncDbSchema>(options: {
 | `executeKysely(factory)` | Execute a typed Kysely query |
 | `enqueueEvent(event)` | Write a single CRDT event |
 | `enqueueEvents(events)` | Write multiple CRDT events |
+| `applyOwnEvents(events)` | Validate, persist, and immediately apply own CRDT events |
 | `createEvent(event)` | Type helper — returns the event as-is |
 | `addEventListener("event-applied", handler)` | Listen for applied events |
 
@@ -1146,14 +1203,15 @@ function createMigrator(
 
 #### `createAiDbAccess(options)`
 
-Creates read-only AI access to a synced database. Lives where the storage lives; the schema doc is introspected lazily and cached.
+Creates AI access to a synced database. Query access is read-only; mutation access is present only when a CRDT storage is provided. Lives where the storage lives; the schema doc is generated once from the declared schema.
 
 ```ts
 function createAiDbAccess(options: {
   executor: AiDbExecutor; // satisfied by createKyselyExecutor from @sqlite-sync/cloudflare
+  storage?: Pick<CrdtStorage, "applyOwnEvents">; // enables mutate(input)
   syncDbSchema: SyncDbSchema;
-  context?: SchemaDocContext; // overview + per-table/column descriptions
-}): AiDbAccess // { getSchemaDoc(): string }
+  context?: SchemaDocContext; // overview/app-level notes
+}): AiDbAccess // { getSchemaDoc(): string; query(input): AiQueryResult; mutate?(input): AiMutationResult }
 ```
 
 #### `createDbTools(options)`
@@ -1162,13 +1220,14 @@ Builds an AI SDK v6 `ToolSet` backed by an `AiDbAccess` (or a stub proxying to o
 
 ```ts
 function createDbTools(options: {
-  access: () => DbToolsAccess | Promise<DbToolsAccess>
+  access: () => DbToolsAccess | Promise<DbToolsAccess>;
+  mutations?: boolean; // expose mutateDb
 }): ToolSet
 ```
 
 #### `createSchemaDoc(options)`
 
-Lower-level helper that generates the markdown schema doc directly from an `execute` function — used internally by `createAiDbAccess`.
+Lower-level helper that generates the markdown schema doc directly from a `syncDbSchema` (and optional `context`) — used internally by `createAiDbAccess`.
 
 ### WebSocket Protocol
 
