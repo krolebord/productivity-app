@@ -275,7 +275,9 @@ function ConversationView({
   const db = useDb();
   const setOpen = useAssistantStore((s) => s.setOpen);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
-  const [input, setInput] = useState("");
+  // The draft lives in the store so off-screen rows can append context tokens to it.
+  const input = useAssistantStore((s) => s.inputDraft);
+  const setInput = useAssistantStore((s) => s.setInputDraft);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);

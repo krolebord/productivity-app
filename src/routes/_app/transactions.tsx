@@ -26,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import { getDisplayAmountForAccount, TRANSACTION_TYPES, type TransactionType } from "@/lib/transactions";
+import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import type { UserDb } from "@/user-db/migrations";
@@ -230,6 +231,7 @@ function TransactionsPage() {
   const isDesktop = useIsDesktop();
   const navigate = useNavigate();
   const openEdit = useTransactionDialogStore((state) => state.openEdit);
+  const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
   const createExpense = useCreateExpense(search.accountId ? { accountId: search.accountId } : undefined);
   const createIncome = useCreateIncome(search.accountId ? { accountId: search.accountId } : undefined);
   const createTransfer = useCreateTransfer(search.accountId ? { accountId: search.accountId } : undefined);
@@ -556,8 +558,15 @@ function TransactionsPage() {
                 <button
                   key={transaction.id}
                   type="button"
-                  onClick={() => openEdit(transaction.id)}
-                  className="flex w-full flex-col gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 sm:flex-row sm:items-center"
+                  onClick={
+                    isContextKeyHeld
+                      ? getAttachClickHandler({ table: "transaction_entry", id: transaction.id })
+                      : () => openEdit(transaction.id)
+                  }
+                  className={cn(
+                    "flex w-full flex-col gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 sm:flex-row sm:items-center",
+                    isContextKeyHeld && "cursor-copy",
+                  )}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">

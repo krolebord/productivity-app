@@ -2,6 +2,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCreateExpense } from "@/components/transaction-dialog";
+import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
+import { cn } from "@/lib/utils";
 import type { AccountItem } from "@/user-db/migrations";
 import { useDb } from "@/user-db/user-db";
 import { useAccountDialogStore } from "./account-dialog";
@@ -30,6 +32,8 @@ export function AccountCard({ account }: AccountCardProps) {
   const navigate = useNavigate();
   const openAccountDialog = useAccountDialogStore((s) => s.openEdit);
   const createExpense = useCreateExpense({ accountId: account.id });
+  const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
+  const attachRef = { table: "account", id: account.id } as const;
 
   return (
     <div className="group">
@@ -64,7 +68,10 @@ export function AccountCard({ account }: AccountCardProps) {
           </button>
         </div>
 
-        <div className="cursor-pointer select-none px-4 py-3" onClick={() => openAccountDialog(account.id)}>
+        <div
+          className={cn("select-none px-4 py-3", isContextKeyHeld ? "cursor-copy" : "cursor-pointer")}
+          onClick={isContextKeyHeld ? getAttachClickHandler(attachRef) : () => openAccountDialog(account.id)}
+        >
           <div className="mb-2 flex items-center gap-2">
             <span
               className="inline-block size-3 shrink-0 rounded-full"

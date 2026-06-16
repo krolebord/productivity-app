@@ -1,6 +1,7 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Trash2 } from "lucide-react";
 import { NoteMarkdown } from "@/components/note-markdown";
+import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { cn } from "@/lib/utils";
 import type { NoteItem } from "@/user-db/migrations";
 import { useDb } from "@/user-db/user-db";
@@ -31,6 +32,8 @@ export function NoteCard({ note, onOpen }: NoteCardProps) {
   const droppable = useDroppable({ id: note.id });
 
   const db = useDb();
+  const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
+  const attachRef = { table: "item", id: note.id } as const;
 
   return (
     <div className="group">
@@ -63,7 +66,10 @@ export function NoteCard({ note, onOpen }: NoteCardProps) {
           </button>
         </div>
 
-        <div className="cursor-pointer select-none" onClick={onOpen}>
+        <div
+          className={cn("select-none", isContextKeyHeld ? "cursor-copy" : "cursor-pointer")}
+          onClick={isContextKeyHeld ? getAttachClickHandler(attachRef) : onOpen}
+        >
           <NoteCardContent note={note} />
         </div>
       </div>
