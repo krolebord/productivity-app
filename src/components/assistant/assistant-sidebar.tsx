@@ -40,6 +40,8 @@ type ConversationRow = {
   title: string;
   createdAt: number;
   updatedAt: number;
+  totalCost: number;
+  totalTokens: number;
 };
 
 type UploadedWorkspaceFile = {
@@ -55,6 +57,11 @@ function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatCost(cost: number) {
+  if (cost > 0 && cost < 0.01) return `$${cost.toFixed(4)}`;
+  return `$${cost.toFixed(2)}`;
 }
 
 function DownloadFileChip({ conversationId, file }: { conversationId: string; file: UploadedWorkspaceFile }) {
@@ -218,6 +225,23 @@ function ModelSelect() {
   );
 }
 
+function ConversationCost({ conversation }: { conversation: ConversationRow }) {
+  if (!conversation.totalCost && !conversation.totalTokens) return null;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="shrink-0 px-1.5 py-0.5 text-muted-foreground text-xs tabular-nums">
+          {formatCost(conversation.totalCost)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {conversation.totalTokens.toLocaleString()} tokens · {formatCost(conversation.totalCost)} this conversation
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function ConversationView({
   conversation,
   conversations,
@@ -269,7 +293,9 @@ function ConversationView({
     const id = generateId();
     const now = Date.now();
     db.db.executeKysely((q) =>
-      q.insertInto("conversation").values({ id, title: "", createdAt: now, updatedAt: now, tombstone: false }),
+      q
+        .insertInto("conversation")
+        .values({ id, title: "", createdAt: now, updatedAt: now, tombstone: false, totalCost: 0, totalTokens: 0 }),
     );
     setActiveConversation(id);
   }
@@ -326,17 +352,16 @@ function ConversationView({
     const messageText = [text, workspaceContext].filter(Boolean).join("\n\n");
 
     sendMessage({ text: messageText });
-    db.db.executeKysely((q) =>
-      q
-        .updateTable("conversation")
-        .set({
-          updatedAt: Date.now(),
-          ...(messages.length === 0 && {
+    if (messages.length === 0) {
+      db.db.executeKysely((q) =>
+        q
+          .updateTable("conversation")
+          .set({
             title: (text || selectedFiles.map((file) => file.name).join(", ")).slice(0, 80),
-          }),
-        })
-        .where("id", "=", conversation.id),
-    );
+          })
+          .where("id", "=", conversation.id),
+      );
+    }
     setInput("");
     setSelectedFiles([]);
   }
@@ -433,7 +458,7 @@ function ConversationView({
       )}
 
       <form
-        className="flex shrink-0 items-end gap-2 border-t p-3"
+        className="flex shrink-0 flex-col gap-2 border-t p-3"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -450,71 +475,73 @@ function ConversationView({
             event.target.value = "";
           }}
         />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          {selectedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {selectedFiles.map((file, index) => (
-                <div
-                  key={`${file.name}-${file.lastModified}-${index}`}
-                  className="flex max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs"
+        {selectedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selectedFiles.map((file, index) => (
+              <div
+                key={`${file.name}-${file.lastModified}-${index}`}
+                className="flex max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs"
+              >
+                <span className="max-w-40 truncate">{file.name}</span>
+                <span className="shrink-0">{formatFileSize(file.size)}</span>
+                <button
+                  type="button"
+                  className="rounded-sm p-0.5 hover:bg-accent hover:text-foreground"
+                  aria-label={`Remove ${file.name}`}
+                  onClick={() => setSelectedFiles((files) => files.filter((_, i) => i !== index))}
                 >
-                  <span className="max-w-40 truncate">{file.name}</span>
-                  <span className="shrink-0">{formatFileSize(file.size)}</span>
-                  <button
-                    type="button"
-                    className="rounded-sm p-0.5 hover:bg-accent hover:text-foreground"
-                    aria-label={`Remove ${file.name}`}
-                    onClick={() => setSelectedFiles((files) => files.filter((_, i) => i !== index))}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-2">
           <ModelSelect />
-          <div className="flex min-w-0 items-end gap-2">
+          <ConversationCost conversation={conversation} />
+        </div>
+        <div className="flex min-w-0 items-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            aria-label="Attach files"
+            disabled={isWorking || selectedFiles.length >= MAX_UPLOAD_FILES}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Paperclip className="size-4" />
+          </Button>
+          <Textarea
+            autoFocus
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Send a message…"
+            rows={2}
+            className="max-h-40 min-h-0 flex-1 resize-none"
+          />
+          {isWorking ? (
+            <Button type="button" variant="secondary" size="icon" aria-label="Stop generating" onClick={() => stop()}>
+              {uploading ? <Loader2 className="size-4 animate-spin" /> : <CircleStop className="size-4" />}
+            </Button>
+          ) : (
             <Button
-              type="button"
-              variant="ghost"
+              type="submit"
               size="icon"
               className="shrink-0"
-              aria-label="Attach files"
-              disabled={isWorking || selectedFiles.length >= MAX_UPLOAD_FILES}
-              onClick={() => fileInputRef.current?.click()}
+              aria-label="Send message"
+              disabled={!input.trim() && selectedFiles.length === 0}
             >
-              <Paperclip className="size-4" />
+              <SendHorizontal className="size-4" />
             </Button>
-            <Textarea
-              autoFocus
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-              placeholder="Send a message…"
-              rows={2}
-              className="max-h-40 min-h-0 resize-none"
-            />
-          </div>
+          )}
         </div>
-        {isWorking ? (
-          <Button type="button" variant="secondary" size="icon" aria-label="Stop generating" onClick={() => stop()}>
-            {uploading ? <Loader2 className="size-4 animate-spin" /> : <CircleStop className="size-4" />}
-          </Button>
-        ) : (
-          <Button
-            type="submit"
-            size="icon"
-            aria-label="Send message"
-            disabled={!input.trim() && selectedFiles.length === 0}
-          >
-            <SendHorizontal className="size-4" />
-          </Button>
-        )}
       </form>
     </div>
   );
@@ -526,7 +553,10 @@ export function AssistantSidebar() {
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
 
   const { data: conversations } = useDbQuery((db) =>
-    db.selectFrom("conversation").select(["id", "title", "createdAt", "updatedAt"]).orderBy("updatedAt", "desc"),
+    db
+      .selectFrom("conversation")
+      .select(["id", "title", "createdAt", "updatedAt", "totalCost", "totalTokens"])
+      .orderBy("updatedAt", "desc"),
   );
 
   const active = conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
@@ -545,7 +575,9 @@ export function AssistantSidebar() {
     const id = generateId();
     const now = Date.now();
     db.db.executeKysely((q) =>
-      q.insertInto("conversation").values({ id, title: "", createdAt: now, updatedAt: now, tombstone: false }),
+      q
+        .insertInto("conversation")
+        .values({ id, title: "", createdAt: now, updatedAt: now, tombstone: false, totalCost: 0, totalTokens: 0 }),
     );
     setActiveConversation(id);
   }, [active, activeConversationId, db, setActiveConversation]);

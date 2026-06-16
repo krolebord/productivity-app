@@ -115,6 +115,22 @@ const migrations = createMigrations((b) => ({
         .addColumn("updatedAt", "integer", (col) => col.notNull()),
     ),
   ],
+  7: [
+    b.addColumn({
+      table: "_conversation",
+      column: "totalCost",
+      type: "real",
+      defaultValue: 0,
+      build: (col) => col.notNull(),
+    }),
+    b.addColumn({
+      table: "_conversation",
+      column: "totalTokens",
+      type: "integer",
+      defaultValue: 0,
+      build: (col) => col.notNull(),
+    }),
+  ],
 }));
 
 const currencyColumn = () => t.real().nullable();
@@ -233,8 +249,16 @@ export const syncDbSchema = defineSyncSchema({
         title: t.text().default(""),
         createdAt: t.integer(),
         updatedAt: t.integer(),
+        totalCost: t
+          .real()
+          .default(0)
+          .describe("Cumulative OpenRouter cost in USD across all turns in this conversation."),
+        totalTokens: t
+          .integer()
+          .default(0)
+          .describe("Cumulative total tokens used across all turns in this conversation."),
       })
-      .describe("Index of the user's conversations with this assistant (titles and timestamps)."),
+      .describe("Index of the user's conversations with this assistant (titles, timestamps, and usage totals)."),
   },
   migrations,
 });

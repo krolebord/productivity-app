@@ -1,5 +1,5 @@
 import { createWorkspaceStateBackend, type WorkspaceFsLike } from "@cloudflare/shell";
-import { Think, type TurnConfig, type TurnContext } from "@cloudflare/think";
+import { type ChatResponseResult, type StepContext, Think, type TurnConfig, type TurnContext } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
@@ -83,16 +83,60 @@ function sanitizeWorkspaceFilename(filename: string) {
   return clean;
 }
 
-export class AssistantAgent extends Think<Env> {
+type AssistantUsageState = {
+  totalCostUsd: number;
+  totalTokens: number;
+};
+
+export class AssistantAgent extends Think<Env, AssistantUsageState> {
+  initialState: AssistantUsageState = { totalCostUsd: 0, totalTokens: 0 };
+
   getModel(modelId: AssistantModelId = DEFAULT_ASSISTANT_MODEL): LanguageModel {
     const openrouter = createOpenRouter({
       apiKey: this.env.OPENROUTER_API_KEY,
     });
-    return openrouter.chat(modelId);
+    return openrouter.chat(modelId, { usage: { include: true } });
   }
 
   beforeTurn(ctx: TurnContext): TurnConfig {
     return { model: this.getModel(resolveAssistantModelId(ctx.body?.model)) };
+  }
+
+  onStepFinish(ctx: StepContext): void {
+    const usage = (
+      ctx.providerMetadata as { openrouter?: { usage?: { cost?: number; totalTokens?: number } } } | undefined
+    )?.openrouter?.usage;
+    const cost = usage?.cost ?? 0;
+    const tokens = usage?.totalTokens ?? ctx.usage?.totalTokens ?? 0;
+    if (cost === 0 && tokens === 0) {
+      return;
+    }
+    this.setState({
+      totalCostUsd: this.state.totalCostUsd + cost,
+      totalTokens: this.state.totalTokens + tokens,
+    });
+  }
+
+  async onChatResponse(_result: ChatResponseResult): Promise<void> {
+    await this.syncUsageToConversation();
+  }
+
+  private async syncUsageToConversation(): Promise<void> {
+    const stub = await this.getUserDbStub();
+    await stub.mutate({
+      events: [
+        {
+          type: "item-updated",
+          dataset: "_conversation",
+          item_id: this.getConversationId(),
+          payload: {
+            updatedAt: Date.now(),
+            totalCost: this.state.totalCostUsd,
+            totalTokens: this.state.totalTokens,
+          },
+        },
+      ],
+    });
   }
 
   getSystemPrompt() {
@@ -168,6 +212,14 @@ export class AssistantAgent extends Think<Env> {
     return await getServerByName(this.env.UserDbServer, userDbName, {
       locationHint: "weur",
     });
+  }
+
+  private getConversationId(): string {
+    const separatorIndex = this.name.indexOf(":");
+    if (separatorIndex === -1) {
+      throw new Error(`Unexpected agent name without a conversation suffix: ${this.name}`);
+    }
+    return this.name.slice(separatorIndex + 1);
   }
 
   private async getCodeDbAccess(): Promise<DbToolsAccess> {
