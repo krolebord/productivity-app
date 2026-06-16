@@ -24,7 +24,6 @@ import { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { ASSISTANT_MODELS } from "@/agent/models";
-import { useConfirmDialogStore } from "@/components/confirm-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
@@ -32,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
+import { useInlineConfirm } from "../ui/inline-confirm";
 import { Textarea } from "../ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
@@ -145,6 +145,34 @@ function conversationLabel(conversation: ConversationRow) {
   return conversation.title || "New conversation";
 }
 
+function ConversationDeleteButton({
+  label,
+  onDelete,
+  className,
+}: {
+  label: string;
+  onDelete: () => void;
+  className?: string;
+}) {
+  const { armed, pending, getButtonProps } = useInlineConfirm({ onConfirm: onDelete, disarmOnPointerLeave: false });
+  return (
+    <button
+      type="button"
+      className={cn(
+        "rounded-sm p-0.5 transition-colors",
+        armed ? "text-destructive" : "text-muted-foreground hover:text-destructive",
+        className,
+      )}
+      aria-label={armed ? `Confirm delete ${label}` : `Delete ${label}`}
+      title={armed ? "Click again to delete" : undefined}
+      data-armed={armed ? "" : undefined}
+      {...getButtonProps()}
+    >
+      {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+    </button>
+  );
+}
+
 function ConversationSwitcher({
   conversations,
   active,
@@ -177,17 +205,11 @@ function ConversationSwitcher({
             onClick={() => setActiveConversation(conversation.id)}
           >
             <span className="flex-1 truncate">{conversationLabel(conversation)}</span>
-            <button
-              type="button"
-              className="rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-              aria-label={`Delete ${conversationLabel(conversation)}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteConversation(conversation);
-              }}
-            >
-              <Trash2 className="size-3.5" />
-            </button>
+            <ConversationDeleteButton
+              label={conversationLabel(conversation)}
+              onDelete={() => onDeleteConversation(conversation)}
+              className="opacity-0 transition-opacity group-hover:opacity-100 data-[armed]:opacity-100"
+            />
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -269,23 +291,16 @@ function ConversationView({
     // Read from a ref so the selected model is always current without re-creating the chat.
     body: () => ({ model: modelRef.current }),
   });
-  const confirm = useConfirmDialogStore((s) => s.confirm);
-
   const isWorking = uploading || status === "submitted" || status === "streaming" || isServerStreaming;
 
-  function requestDeleteConversation(target: ConversationRow) {
-    confirm({
-      title: "Delete conversation?",
-      description: `"${conversationLabel(target)}" and its messages will be deleted.`,
-      confirmLabel: "Delete",
-      onConfirm: () => {
-        db.db.executeKysely((q) => q.deleteFrom("conversation").where("id", "=", target.id));
-        if (target.id === conversation.id) {
-          setActiveConversation(null);
-        }
-      },
-    });
+  function deleteConversation(target: ConversationRow) {
+    db.db.executeKysely((q) => q.deleteFrom("conversation").where("id", "=", target.id));
+    if (target.id === conversation.id) {
+      setActiveConversation(null);
+    }
   }
+
+  const deleteActive = useInlineConfirm({ onConfirm: () => deleteConversation(conversation) });
 
   function newConversation() {
     // An empty active conversation already is a "new" one — just stay on it.
@@ -372,7 +387,7 @@ function ConversationView({
         <ConversationSwitcher
           conversations={conversations}
           active={conversation}
-          onDeleteConversation={requestDeleteConversation}
+          onDeleteConversation={deleteConversation}
         />
         <Tooltip>
           <TooltipTrigger asChild>
@@ -389,20 +404,22 @@ function ConversationView({
           </TooltipTrigger>
           <TooltipContent side="bottom">New conversation</TooltipContent>
         </Tooltip>
-        <Tooltip>
+        <Tooltip open={deleteActive.armed || undefined}>
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost"
+              variant={deleteActive.armed ? "destructive" : "ghost"}
               size="icon"
-              className="size-8 text-muted-foreground"
-              aria-label="Delete conversation"
-              onClick={() => requestDeleteConversation(conversation)}
+              className={cn("size-8", !deleteActive.armed && "text-muted-foreground")}
+              aria-label={deleteActive.armed ? "Confirm delete conversation" : "Delete conversation"}
+              {...deleteActive.getButtonProps()}
             >
-              <Trash2 className="size-4" />
+              {deleteActive.pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Delete conversation</TooltipContent>
+          <TooltipContent side="bottom">
+            {deleteActive.armed ? "Click again to delete" : "Delete conversation"}
+          </TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>

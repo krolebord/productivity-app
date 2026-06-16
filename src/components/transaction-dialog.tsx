@@ -25,6 +25,7 @@ import { createTransactionFormSchema } from "./transaction-dialog.schema";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
 import { useAppForm } from "./ui/form";
+import { useInlineConfirm } from "./ui/inline-confirm";
 import { SelectItem } from "./ui/select";
 
 type TransactionDialogDraft = {
@@ -142,6 +143,14 @@ function TransactionDialogContent() {
   const createAccount = useCreateAccount();
   const { draft, mode, transactionId } = useTransactionDialogStore();
   const closeDialog = useTransactionDialogStore((state) => state.close);
+
+  const deleteConfirm = useInlineConfirm({
+    onConfirm: () => {
+      if (!transactionId) return;
+      deleteTransaction(db.db, transactionId);
+      closeDialog();
+    },
+  });
 
   const { data: accounts } = useDbQuery((query) => query.selectFrom("account").selectAll().orderBy("order", "asc"));
   const { data: existingTransactions } = useDbQuery((query) =>
@@ -454,26 +463,24 @@ function TransactionDialogContent() {
               </p>
             )}
 
-          <DialogFooter className="justify-between">
-            <div>
-              {mode === "edit" && transactionId ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => {
-                    deleteTransaction(db.db, transactionId);
-                    closeDialog();
-                  }}
-                >
-                  <Trash2Icon />
-                  Delete
-                </Button>
-              ) : null}
-            </div>
+          <DialogFooter className="flex-col gap-3 sm:flex-row sm:justify-between">
+            {mode === "edit" && transactionId ? (
+              <Button
+                type="button"
+                variant={deleteConfirm.armed ? "destructive" : "ghost"}
+                size="sm"
+                className={cn(
+                  "self-start",
+                  !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+                )}
+                {...deleteConfirm.getButtonProps()}
+              >
+                <Trash2Icon />
+                {deleteConfirm.armed ? "Click again to delete" : "Delete"}
+              </Button>
+            ) : null}
 
-            <div className="flex gap-2">
+            <div className="ml-auto flex gap-2">
               <Button type="button" variant="outline" onClick={closeDialog}>
                 Cancel
               </Button>
