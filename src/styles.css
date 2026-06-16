@@ -354,6 +354,8 @@
 
   .note-prose input[type="checkbox"] {
     accent-color: var(--color-primary);
+    width: 1.1rem;
+    height: 1.1rem;
   }
 
   /* Checkboxes are inert in the static card preview (the editor is .tiptap) */
