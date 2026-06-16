@@ -82,13 +82,15 @@ export function useAttachToAssistant() {
   const isContextKeyHeld = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const appendToInput = useAssistantStore((s) => s.appendToInput);
   const setOpen = useAssistantStore((s) => s.setOpen);
+  const requestComposerFocus = useAssistantStore((s) => s.requestComposerFocus);
 
   const attach = useCallback(
     (ref: AttachRef) => {
       appendToInput(formatAttachToken(ref));
       setOpen(true);
+      requestComposerFocus();
     },
-    [appendToInput, setOpen],
+    [appendToInput, setOpen, requestComposerFocus],
   );
 
   const getAttachClickHandler = useCallback(

@@ -282,6 +282,22 @@ function ConversationView({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerFocusNonce = useAssistantStore((s) => s.composerFocusNonce);
+
+  // Pull focus back to the composer when something requests it (e.g. attaching
+  // context from a card elsewhere on the page). rAF lets the sidebar mount first.
+  useEffect(() => {
+    if (composerFocusNonce === 0) return;
+    const frame = requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [composerFocusNonce]);
 
   const model = useAssistantStore((s) => s.model);
   const modelRef = useRef(model);
@@ -532,6 +548,7 @@ function ConversationView({
             <Paperclip className="size-4" />
           </Button>
           <Textarea
+            ref={textareaRef}
             autoFocus
             value={input}
             onChange={(e) => setInput(e.target.value)}

@@ -12,12 +12,19 @@ interface AssistantStore {
    * useAttachToAssistant. Not persisted: a half-written prompt shouldn't survive reloads.
    */
   inputDraft: string;
+  /**
+   * Bumped to request that the composer textarea take focus. The composer watches
+   * this and focuses itself — lets off-screen actions (e.g. attaching context)
+   * return focus to the input without holding a ref to it.
+   */
+  composerFocusNonce: number;
   toggle: () => void;
   setOpen: (open: boolean) => void;
   setActiveConversation: (id: string | null) => void;
   setModel: (model: AssistantModelId) => void;
   setInputDraft: (value: string) => void;
   appendToInput: (text: string) => void;
+  requestComposerFocus: () => void;
 }
 
 export const useAssistantStore = create<AssistantStore>()(
@@ -27,6 +34,7 @@ export const useAssistantStore = create<AssistantStore>()(
       activeConversationId: null,
       model: DEFAULT_ASSISTANT_MODEL,
       inputDraft: "",
+      composerFocusNonce: 0,
       toggle: () => set((s) => ({ open: !s.open })),
       setOpen: (open) => set({ open }),
       setActiveConversation: (id) => set({ activeConversationId: id }),
@@ -37,6 +45,7 @@ export const useAssistantStore = create<AssistantStore>()(
           const needsSpace = s.inputDraft.length > 0 && !/\s$/.test(s.inputDraft);
           return { inputDraft: `${s.inputDraft}${needsSpace ? " " : ""}${text} ` };
         }),
+      requestComposerFocus: () => set((s) => ({ composerFocusNonce: s.composerFocusNonce + 1 })),
     }),
     {
       name: "productivity-assistant",
