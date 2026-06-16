@@ -51,6 +51,7 @@ export async function fetchCurrentRatesAgainstBase(params: FetchCurrentRatesPara
   ]);
 
   const rates: CurrentRates = { ...frankfurterLatest.rates };
+  rates[parsedParams.base] = 1;
   // NBU gives "UAH per 1 base unit" — already Frankfurter-like
   const uahPerBase = nbuRates.find((r) => r.cc === parsedParams.base)?.rate;
   if (!uahPerBase) {

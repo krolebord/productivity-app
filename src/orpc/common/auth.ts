@@ -1,10 +1,4 @@
-import {
-  deleteCookie,
-  getCookie,
-  setCookie,
-  sign,
-  unsign,
-} from "@orpc/server/helpers";
+import { deleteCookie, getCookie, setCookie, sign, unsign } from "@orpc/server/helpers";
 import { getContext } from "@/lib/context";
 import { db } from "@/lib/db";
 import { type ORPCContext, osBase } from "./os";
@@ -57,40 +51,28 @@ async function checkAuthFromHeaders(
   return { auth: authSession, shouldClearCookie: false };
 }
 
-export async function getAuthFromHeaders(
-  headers: Headers | undefined,
-): Promise<AuthSession | null> {
+export async function getAuthFromHeaders(headers: Headers | undefined): Promise<AuthSession | null> {
   return (await checkAuthFromHeaders(headers)).auth;
 }
 
-export const authMiddleware = osBase.middleware(
-  async ({ context, next, errors }) => {
-    const { auth, shouldClearCookie } = await checkAuthFromHeaders(
-      context.reqHeaders,
-    );
+export const authMiddleware = osBase.middleware(async ({ context, next, errors }) => {
+  const { auth, shouldClearCookie } = await checkAuthFromHeaders(context.reqHeaders);
 
-    if (!auth) {
-      if (shouldClearCookie) {
-        await authCookieSession.clear(context);
-      }
-      throw errors.UNAUTHORIZED();
+  if (!auth) {
+    if (shouldClearCookie) {
+      await authCookieSession.clear(context);
     }
+    throw errors.UNAUTHORIZED();
+  }
 
-    return next({
-      context: {
-        auth,
-      },
-    });
-  },
-);
+  return next({
+    context: {
+      auth,
+    },
+  });
+});
 
-export function createCookieSession<T>({
-  name,
-  maxAge,
-}: {
-  name: string;
-  maxAge: number;
-}) {
+export function createCookieSession<T>({ name, maxAge }: { name: string; maxAge: number }) {
   const env = getContext();
 
   const getFromHeaders = async (headers: Headers | undefined) => {

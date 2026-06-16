@@ -5,6 +5,7 @@ import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
   ArrowUpRightIcon,
+  CoinsIcon,
   Home,
   PlusIcon,
   StickyNote,
@@ -133,6 +134,10 @@ export function CommandPalette() {
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/accounts" }))}>
             <Wallet className="size-4" />
             Accounts
+          </CommandItem>
+          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/currencies" }))}>
+            <CoinsIcon className="size-4" />
+            Currencies
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/transactions" }))}>
             <ArrowLeftRightIcon className="size-4" />

@@ -14,6 +14,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ChevronDown,
   ChevronsUpDown,
+  Coins,
   Home,
   Loader2,
   LogOut,
@@ -209,79 +210,91 @@ function SidebarContent({
 
       <Separator />
 
-      <div className={cn("hidden md:block", collapsed ? "flex justify-center p-2" : "p-2")}>
-        <SidebarTooltip label="Search (⌘K)" collapsed={collapsed}>
-          <button
-            type="button"
-            onClick={openCommand}
-            className={cn(
-              "flex items-center rounded-md border bg-sidebar-accent/50 text-muted-foreground text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              collapsed ? "size-9 justify-center p-0" : "w-full gap-2 px-3 py-1.5",
-            )}
-          >
-            <Search className="size-4 shrink-0" />
-            {!collapsed && (
-              <>
-                <span className="flex-1 text-left">Search...</span>
-                <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
-                  ⌘K
-                </kbd>
-              </>
-            )}
-          </button>
-        </SidebarTooltip>
-      </div>
-
-      <nav className="flex flex-1 flex-col gap-1 p-2">
-        {navItems.map((item) => (
-          <SidebarNavLink
-            key={item.to}
-            to={item.to}
-            label={item.label}
-            icon={item.icon}
-            isActive={currentPath === item.to}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
-        ))}
-        <AccountsNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
-      </nav>
-
-      <Separator />
-
-      {onToggleCollapse && (
-        <div className={cn("flex p-2", collapsed ? "flex-col items-center gap-1" : "flex-col gap-1")}>
-          <AssistantToggle collapsed={collapsed} />
-          <SidebarTooltip
-            label={
-              collapsed
-                ? `Expand sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
-                : `Collapse sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
-            }
-            collapsed={collapsed}
-          >
-            <Button
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className={cn("hidden md:block", collapsed ? "flex justify-center p-2" : "p-2")}>
+          <SidebarTooltip label="Search (⌘K)" collapsed={collapsed}>
+            <button
               type="button"
-              variant="ghost"
-              size={collapsed ? "icon" : "sm"}
-              className={cn(!collapsed && "w-full justify-start gap-2")}
-              onClick={onToggleCollapse}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-keyshortcuts={TOGGLE_SIDEBAR_HOTKEY}
+              onClick={openCommand}
+              className={cn(
+                "flex items-center rounded-md border bg-sidebar-accent/50 text-muted-foreground text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                collapsed ? "size-9 justify-center p-0" : "w-full gap-2 px-3 py-1.5",
+              )}
             >
-              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              <Search className="size-4 shrink-0" />
               {!collapsed && (
                 <>
-                  <span className="flex-1 text-left">Collapse</span>
+                  <span className="flex-1 text-left">Search...</span>
                   <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
-                    {formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)}
+                    ⌘K
                   </kbd>
                 </>
               )}
-            </Button>
+            </button>
           </SidebarTooltip>
         </div>
-      )}
+
+        <nav className="flex flex-col gap-1 p-2">
+          {navItems.map((item) => (
+            <SidebarNavLink
+              key={item.to}
+              to={item.to}
+              label={item.label}
+              icon={item.icon}
+              isActive={currentPath === item.to}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          ))}
+          <AccountsNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
+        </nav>
+      </div>
+
+      <Separator />
+
+      <div className={cn("flex p-2", collapsed ? "flex-col items-center gap-1" : "flex-col gap-1")}>
+        <SidebarNavLink
+          to="/currencies"
+          label="Currencies"
+          icon={Coins}
+          isActive={currentPath === "/currencies"}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        />
+        {onToggleCollapse && (
+          <>
+            <AssistantToggle collapsed={collapsed} />
+            <SidebarTooltip
+              label={
+                collapsed
+                  ? `Expand sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
+                  : `Collapse sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
+              }
+              collapsed={collapsed}
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size={collapsed ? "icon" : "sm"}
+                className={cn(!collapsed && "w-full justify-start gap-2")}
+                onClick={onToggleCollapse}
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-keyshortcuts={TOGGLE_SIDEBAR_HOTKEY}
+              >
+                {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+                {!collapsed && (
+                  <>
+                    <span className="flex-1 text-left">Collapse</span>
+                    <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
+                      {formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)}
+                    </kbd>
+                  </>
+                )}
+              </Button>
+            </SidebarTooltip>
+          </>
+        )}
+      </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

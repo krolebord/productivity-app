@@ -4,14 +4,13 @@ import { useCallback, useState } from "react";
 import { z } from "zod";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
-import { APP_CURRENCIES } from "@/lib/currency/currencies";
+import { CurrencySelect } from "@/components/currency-select";
 import { createDynamicValidationLogic, dynamicZodValidators, finiteAmountString } from "@/lib/form-schemas";
 import { createTransactionInTransaction } from "@/lib/transactions";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
 import { useAppForm } from "./ui/form";
-import { SelectItem } from "./ui/select";
 
 const accountFormSchema = z.object({
   labelText: z.string(),
@@ -252,13 +251,11 @@ function AccountDialogContent() {
           <form.AppField name="currency">
             {(field) => (
               <field.FieldContainer labelText="Currency" className="flex-1">
-                <field.FormSelect placeholder="Select currency">
-                  {APP_CURRENCIES.map((code) => (
-                    <SelectItem key={code} value={code}>
-                      {code}
-                    </SelectItem>
-                  ))}
-                </field.FormSelect>
+                <CurrencySelect
+                  value={field.state.value}
+                  onChange={(value) => field.handleChange(value)}
+                  onBlur={() => field.handleBlur()}
+                />
               </field.FieldContainer>
             )}
           </form.AppField>
