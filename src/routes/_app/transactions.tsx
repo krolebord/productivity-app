@@ -1,9 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import type { SelectQueryBuilder } from "kysely";
+import { endOfDay, format, startOfDay, startOfYear, subDays } from "date-fns";
+import { type SelectQueryBuilder, sql } from "kysely";
 import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
   ArrowUpRightIcon,
+  CalendarIcon,
   Landmark,
   PlusIcon,
   SlidersHorizontalIcon,
@@ -18,18 +20,27 @@ import {
   useTransactionDialogStore,
 } from "@/components/transaction-dialog";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import { getDisplayAmountForAccount, TRANSACTION_TYPES, type TransactionType } from "@/lib/transactions";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import type { UserDb } from "@/user-db/migrations";
 import { useDbQuery } from "@/user-db/user-db";
 
+const TRANSACTION_SORTS = ["date_desc", "date_asc", "amount_desc", "amount_asc", "title_asc", "title_desc"] as const;
+type TransactionSort = (typeof TRANSACTION_SORTS)[number];
+
 const transactionsSearchSchema = z.object({
   accountId: z.string().optional(),
   category: z.string().optional(),
+  from: z.coerce.number().finite().optional(),
   q: z.string().optional(),
+  sort: z.enum(TRANSACTION_SORTS).optional(),
+  to: z.coerce.number().finite().optional(),
   type: z.enum(TRANSACTION_TYPES).optional(),
 });
 
@@ -54,6 +65,14 @@ function applyTransactionFilters<O>(
     query = query.where("category", "like", `%${search.category}%`);
   }
 
+  if (search.from) {
+    query = query.where("effectiveAt", ">=", search.from);
+  }
+
+  if (search.to) {
+    query = query.where("effectiveAt", "<=", search.to);
+  }
+
   if (search.q) {
     const q = search.q;
     query = query.where((eb) =>
@@ -62,6 +81,26 @@ function applyTransactionFilters<O>(
   }
 
   return query;
+}
+
+function applyTransactionSort<O>(query: SelectQueryBuilder<UserDb, "transaction_entry", O>, sort: TransactionSort) {
+  switch (sort) {
+    case "date_asc":
+      return query.orderBy("effectiveAt", "asc").orderBy("createdAt", "asc");
+    case "amount_desc":
+      return query
+        .orderBy(sql<number>`abs(amount)`, "desc")
+        .orderBy("effectiveAt", "desc")
+        .orderBy("createdAt", "desc");
+    case "amount_asc":
+      return query.orderBy(sql<number>`abs(amount)`, "asc").orderBy("effectiveAt", "desc").orderBy("createdAt", "desc");
+    case "title_asc":
+      return query.orderBy("title", "asc").orderBy("effectiveAt", "desc").orderBy("createdAt", "desc");
+    case "title_desc":
+      return query.orderBy("title", "desc").orderBy("effectiveAt", "desc").orderBy("createdAt", "desc");
+    case "date_desc":
+      return query.orderBy("effectiveAt", "desc").orderBy("createdAt", "desc");
+  }
 }
 
 export const Route = createFileRoute("/_app/transactions")({
@@ -96,6 +135,51 @@ const TYPE_STYLE = {
   },
 } satisfies Record<TransactionType, { icon: unknown; dot: string; badge: string; accent: string }>;
 
+const SORT_LABELS = {
+  date_desc: "Newest first",
+  date_asc: "Oldest first",
+  amount_desc: "Amount high to low",
+  amount_asc: "Amount low to high",
+  title_asc: "Title A to Z",
+  title_desc: "Title Z to A",
+} satisfies Record<TransactionSort, string>;
+
+const TIME_RANGE_PRESETS = [
+  {
+    id: "7d",
+    label: "Last 7d",
+    getRange: () => {
+      const now = new Date();
+      return {
+        from: startOfDay(subDays(now, 6)).getTime(),
+        to: endOfDay(now).getTime(),
+      };
+    },
+  },
+  {
+    id: "30d",
+    label: "Last 30d",
+    getRange: () => {
+      const now = new Date();
+      return {
+        from: startOfDay(subDays(now, 29)).getTime(),
+        to: endOfDay(now).getTime(),
+      };
+    },
+  },
+  {
+    id: "year",
+    label: "Start of year",
+    getRange: () => {
+      const now = new Date();
+      return {
+        from: startOfYear(now).getTime(),
+        to: endOfDay(now).getTime(),
+      };
+    },
+  },
+] as const;
+
 function summaryAmountClass(amount: number) {
   if (amount > 0) {
     return "text-emerald-600 dark:text-emerald-400";
@@ -124,8 +208,26 @@ function renderCurrencyBreakdown(summaryByCurrency: Map<string, number>) {
   );
 }
 
+function formatTimeRangeLabel(from?: number, to?: number) {
+  if (from && to) {
+    return `${format(from, "MMM d, yyyy")} - ${format(to, "MMM d, yyyy")}`;
+  }
+
+  if (from) {
+    return `From ${format(from, "MMM d, yyyy")}`;
+  }
+
+  if (to) {
+    return `Until ${format(to, "MMM d, yyyy")}`;
+  }
+
+  return "All time";
+}
+
 function TransactionsPage() {
   const search = Route.useSearch();
+  const sort = search.sort ?? "date_desc";
+  const isDesktop = useIsDesktop();
   const navigate = useNavigate();
   const openEdit = useTransactionDialogStore((state) => state.openEdit);
   const createExpense = useCreateExpense(search.accountId ? { accountId: search.accountId } : undefined);
@@ -137,16 +239,15 @@ function TransactionsPage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset is keyed on filter values, not setLimit.
   useEffect(() => {
     setLimit(DEFAULT_LIMIT);
-  }, [search.accountId, search.type, search.category, search.q]);
+  }, [search.accountId, search.type, search.category, search.from, search.q, search.sort, search.to]);
 
   const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
 
   // Fetch one extra row beyond the limit so we can tell whether more remain.
   const { data: transactions } = useDbQuery((db) =>
-    applyTransactionFilters(db.selectFrom("transaction_entry").selectAll(), search)
-      .orderBy("effectiveAt", "desc")
-      .orderBy("createdAt", "desc")
-      .limit(limit + 1),
+    applyTransactionSort(applyTransactionFilters(db.selectFrom("transaction_entry").selectAll(), search), sort).limit(
+      limit + 1,
+    ),
   );
 
   // Aggregate the full filtered set in SQL so the summary cards stay accurate
@@ -184,15 +285,13 @@ function TransactionsPage() {
       continue;
     }
 
-    // Income amounts are stored positive, expenses negative. Transfers are
-    // excluded from income/expense/net totals (counted in totalEntries only).
+    // Income amounts are stored positive, expenses negative. Adjustments and
+    // transfers are excluded from income/expense/net totals.
     if (row.type === "income") {
       summary.incomeByCurrency.set(currency, (summary.incomeByCurrency.get(currency) ?? 0) + total);
       summary.netByCurrency.set(currency, (summary.netByCurrency.get(currency) ?? 0) + total);
     } else if (row.type === "expense") {
       summary.expenseByCurrency.set(currency, (summary.expenseByCurrency.get(currency) ?? 0) + Math.abs(total));
-      summary.netByCurrency.set(currency, (summary.netByCurrency.get(currency) ?? 0) + total);
-    } else if (row.type === "adjustment") {
       summary.netByCurrency.set(currency, (summary.netByCurrency.get(currency) ?? 0) + total);
     }
   }
@@ -205,7 +304,10 @@ function TransactionsPage() {
         return {
           accountId: merged.accountId || undefined,
           category: merged.category || undefined,
+          from: merged.from || undefined,
           q: merged.q || undefined,
+          sort: merged.sort === "date_desc" ? undefined : merged.sort,
+          to: merged.to || undefined,
           type: merged.type || undefined,
         };
       },
@@ -268,11 +370,13 @@ function TransactionsPage() {
             <p className="text-muted-foreground text-xs uppercase tracking-wide">Entries</p>
           </div>
           <p className="mt-2 font-mono font-semibold text-lg tabular-nums">{totalEntries}</p>
-          <p className="mt-1 text-muted-foreground text-xs">Transfers are excluded from the summary totals above.</p>
+          <p className="mt-1 text-muted-foreground text-xs">
+            Adjustments and transfers are excluded from the summary totals above.
+          </p>
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-xs md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-xs md:grid-cols-2 xl:grid-cols-6">
         <div className="space-y-1">
           <label htmlFor="transactions-account" className="text-muted-foreground text-xs uppercase tracking-wide">
             Account
@@ -289,6 +393,77 @@ function TransactionsPage() {
               {accounts.map((account) => (
                 <SelectItem key={account.id} value={account.id}>
                   {account.labelText || "Untitled"} ({account.currency})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="transactions-time-range" className="text-muted-foreground text-xs uppercase tracking-wide">
+            Time range
+          </label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button id="transactions-time-range" variant="outline" className="w-full justify-start px-3 font-normal">
+                <CalendarIcon className="size-4 text-muted-foreground" />
+                <span className="truncate">{formatTimeRangeLabel(search.from, search.to)}</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-0">
+              <div className="flex flex-col gap-3 p-3">
+                <div className="flex flex-wrap gap-2">
+                  {TIME_RANGE_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.id}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => patchSearch(preset.getRange())}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => patchSearch({ from: undefined, to: undefined })}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                <Calendar
+                  mode="range"
+                  numberOfMonths={isDesktop ? 2 : 1}
+                  selected={{
+                    from: search.from ? new Date(search.from) : undefined,
+                    to: search.to ? new Date(search.to) : undefined,
+                  }}
+                  onSelect={(range) =>
+                    patchSearch({
+                      from: range?.from ? startOfDay(range.from).getTime() : undefined,
+                      to: range?.to ? endOfDay(range.to).getTime() : undefined,
+                    })
+                  }
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="transactions-sort" className="text-muted-foreground text-xs uppercase tracking-wide">
+            Sort
+          </label>
+          <Select value={sort} onValueChange={(value) => patchSearch({ sort: value as TransactionSort })}>
+            <SelectTrigger id="transactions-sort" className="w-full">
+              <SelectValue placeholder="Sort transactions" />
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSACTION_SORTS.map((sortOption) => (
+                <SelectItem key={sortOption} value={sortOption}>
+                  {SORT_LABELS[sortOption]}
                 </SelectItem>
               ))}
             </SelectContent>

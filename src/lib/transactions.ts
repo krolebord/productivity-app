@@ -270,6 +270,48 @@ export function createBalanceAdjustment(
   });
 }
 
+export function refreshAccountBalances(db: TransactionDatabase) {
+  return db.executeTransaction((trx) => {
+    const nextBalances = trx.sql<{ id: string; balance: number; nextBalance: number }>`
+      select
+        account.id,
+        account.balance,
+        account.initialBalance
+          + coalesce(source_totals.total, 0)
+          + coalesce(destination_totals.total, 0) as nextBalance
+      from account
+      left join (
+        select accountId, sum(amount) as total
+        from transaction_entry
+        group by accountId
+      ) source_totals on source_totals.accountId = account.id
+      left join (
+        select counterpartyAccountId, sum(counterpartyAmount) as total
+        from transaction_entry
+        where counterpartyAccountId != '' and counterpartyAmount is not null
+        group by counterpartyAccountId
+      ) destination_totals on destination_totals.counterpartyAccountId = account.id
+    `.rows;
+    let changedCount = 0;
+
+    for (const row of nextBalances) {
+      if (Number(row.nextBalance) === Number(row.balance)) {
+        continue;
+      }
+
+      changedCount += 1;
+      trx.executeKysely((q) =>
+        q
+          .updateTable("account")
+          .set({ balance: Number(row.nextBalance) })
+          .where("id", "=", row.id),
+      );
+    }
+
+    return { accountCount: nextBalances.length, changedCount };
+  });
+}
+
 export function transactionTouchesAccount(transaction: TransactionRow, accountId: string) {
   return transaction.accountId === accountId || transaction.counterpartyAccountId === accountId;
 }
