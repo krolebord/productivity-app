@@ -12,19 +12,24 @@ import {
   CircleStop,
   Cpu,
   Download,
+  FileText,
+  ImageIcon,
   Loader2,
+  Mic,
   Paperclip,
   PlusIcon,
   SendHorizontal,
   Sparkles,
   Trash2,
+  Type,
+  Video,
   X,
 } from "lucide-react";
 import { type ClipboardEvent, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
-import { ASSISTANT_MODELS } from "@/agent/models";
+import { ASSISTANT_MODELS, type AssistantModel, type AssistantModelInputModality } from "@/agent/models";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
@@ -97,6 +102,15 @@ function formatFileSize(bytes: number) {
 function formatCost(cost: number) {
   if (cost > 0 && cost < 0.01) return `$${cost.toFixed(4)}`;
   return `$${cost.toFixed(2)}`;
+}
+
+function formatModelPrice(price: number) {
+  if (price >= 1) return `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`;
+  return `$${price.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}`;
+}
+
+function formatModelPricing(model: AssistantModel) {
+  return `${formatModelPrice(model.pricing.inputPerMillion)} in / ${formatModelPrice(model.pricing.outputPerMillion)} out per 1M`;
 }
 
 function DownloadFileChip({ conversationId, file }: { conversationId: string; file: UploadedWorkspaceFile }) {
@@ -275,6 +289,34 @@ function ConversationSwitcher({
   );
 }
 
+const MODEL_MODALITY_META = {
+  audio: { label: "Audio input", Icon: Mic },
+  file: { label: "File input", Icon: FileText },
+  image: { label: "Image input", Icon: ImageIcon },
+  text: { label: "Text input", Icon: Type },
+  video: { label: "Video input", Icon: Video },
+} satisfies Record<AssistantModelInputModality, { label: string; Icon: typeof Type }>;
+
+function ModelModalityIcons({ modalities }: { modalities: AssistantModelInputModality[] }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+      {modalities.map((modality) => {
+        const { label, Icon } = MODEL_MODALITY_META[modality];
+        return (
+          <Tooltip key={modality}>
+            <TooltipTrigger asChild>
+              <span aria-label={label} className="flex size-4 items-center justify-center" role="img" title={label}>
+                <Icon className="size-3.5" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top">{label}</TooltipContent>
+          </Tooltip>
+        );
+      })}
+    </span>
+  );
+}
+
 function ModelSelect() {
   const model = useAssistantStore((s) => s.model);
   const setModel = useAssistantStore((s) => s.setModel);
@@ -282,22 +324,35 @@ function ModelSelect() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex w-fit items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Select model"
-        >
-          <Cpu className="size-3.5 shrink-0" />
-          <span className="truncate">{active.label}</span>
-          <ChevronDown className="size-3 shrink-0" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Select model"
+            >
+              <Cpu className="size-3.5 shrink-0" />
+              <span className="truncate">{active.label}</span>
+              <ModelModalityIcons modalities={active.inputModalities} />
+              <ChevronDown className="size-3 shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{formatModelPricing(active)}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="w-72">
         {ASSISTANT_MODELS.map((m) => (
-          <DropdownMenuItem key={m.id} className="gap-2" onClick={() => setModel(m.id)}>
-            <span className="flex-1 truncate">{m.label}</span>
-            {m.id === active.id && <Check className="size-3.5 shrink-0" />}
+          <DropdownMenuItem key={m.id} className="items-start gap-2 py-2" onClick={() => setModel(m.id)}>
+            <Cpu className="mt-0.5 size-3.5 shrink-0" />
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate font-medium">{m.label}</span>
+                <ModelModalityIcons modalities={m.inputModalities} />
+              </span>
+              <span className="truncate text-muted-foreground text-xs">{formatModelPricing(m)}</span>
+            </span>
+            {m.id === active.id && <Check className="mt-0.5 size-3.5 shrink-0" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
