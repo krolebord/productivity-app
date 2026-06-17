@@ -35,6 +35,7 @@ import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
 import { TOGGLE_ASSISTANT_HOTKEY, TOGGLE_SIDEBAR_HOTKEY } from "@/lib/hotkeys";
 import { useSidebarStore } from "@/lib/sidebar-store";
+import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery, useDbState } from "@/user-db/user-db";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -376,6 +377,8 @@ function SortableAccountRow({
 }) {
   const sortable = useSortable({ id: account.id, data: { order: account.order } });
   const navigate = useNavigate();
+  const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
+  const attachRef = { table: "account", id: account.id } as const;
 
   return (
     <button
@@ -387,16 +390,21 @@ function SortableAccountRow({
       }}
       {...sortable.attributes}
       {...sortable.listeners}
-      onClick={() => {
-        if (!sortable.isDragging) {
-          navigate({ to: "/transactions", search: { accountId: account.id }, viewTransition: true });
-          onNavigate?.();
-        }
-      }}
+      onClick={
+        isContextKeyHeld
+          ? getAttachClickHandler(attachRef)
+          : () => {
+              if (!sortable.isDragging) {
+                navigate({ to: "/transactions", search: { accountId: account.id }, viewTransition: true });
+                onNavigate?.();
+              }
+            }
+      }
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
         isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70",
         sortable.isDragging && "opacity-50",
+        isContextKeyHeld && "cursor-copy",
       )}
     >
       <span className="inline-block size-2.5 shrink-0 rounded-full" style={{ backgroundColor: account.labelColor }} />
