@@ -555,6 +555,7 @@ function MobileSidebar() {
   }, [router]);
 
   const openCommand = useCommandStore((s) => s.open);
+  const toggleAssistant = useAssistantStore((s) => s.toggle);
 
   return (
     <>
@@ -577,6 +578,16 @@ function MobileSidebar() {
           <SidebarContent onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
+
+      <Button
+        variant="secondary"
+        size="icon"
+        className="!rounded-full fixed right-4 bottom-[4.75rem] z-40 size-11 shadow-lg md:hidden"
+        aria-label="Open assistant"
+        onClick={toggleAssistant}
+      >
+        <Sparkles className="size-5" />
+      </Button>
 
       <Button
         variant="default"

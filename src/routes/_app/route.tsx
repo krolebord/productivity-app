@@ -78,6 +78,20 @@ function RouteComponent() {
           )}
         </Group>
       </div>
+      {/* Mobile: the assistant fills the screen instead of docking in a panel. Its header X closes it. */}
+      {assistantOpen && !isDesktop && (
+        <div className="fixed inset-0 z-50 bg-background md:hidden">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center bg-background">
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              </div>
+            }
+          >
+            <AssistantSidebar />
+          </Suspense>
+        </div>
+      )}
       <CommandPalette />
       <NoteDialog />
       <AccountDialog />

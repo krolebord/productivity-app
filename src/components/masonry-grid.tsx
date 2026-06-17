@@ -4,7 +4,8 @@ export type MasonryRect = { x: number; y: number; width: number; height: number 
 
 /**
  * Google Keep-style masonry layout: fixed-width columns centered in the
- * container, items placed in order into the currently shortest column.
+ * container (a single column fills the container width), items placed in
+ * order into the currently shortest column.
  * Items are absolutely positioned via transforms so position changes animate,
  * and the computed rects are exposed so callers (e.g. drag-and-drop collision
  * detection) can work off the target layout instead of mid-animation DOM rects.
@@ -84,8 +85,11 @@ export function useMasonryLayout<T>({
         innerHeight: 0,
       };
     }
-    const colWidth = Math.min(columnWidth, outerWidth);
-    const columnCount = Math.max(1, Math.floor((outerWidth + gap) / (colWidth + gap)));
+    const targetWidth = Math.min(columnWidth, outerWidth);
+    const columnCount = Math.max(1, Math.floor((outerWidth + gap) / (targetWidth + gap)));
+    // Multi-column keeps the fixed, centered columns; a lone column fills the
+    // container instead of sitting in dead side-margin (e.g. on narrow phones).
+    const colWidth = columnCount === 1 ? outerWidth : columnWidth;
     const colHeights = new Array<number>(columnCount).fill(0);
     const rects = new Map<Key, MasonryRect>();
     for (const item of items) {

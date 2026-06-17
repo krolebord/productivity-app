@@ -35,6 +35,7 @@ import { useAuth } from "@/lib/auth-client";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
+import { useConfirmDialogStore } from "../confirm-dialog";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { useInlineConfirm } from "../ui/inline-confirm";
@@ -226,21 +227,24 @@ function ConversationDeleteButton({
   onDelete: () => void;
   className?: string;
 }) {
-  const { armed, pending, getButtonProps } = useInlineConfirm({ onConfirm: onDelete, disarmOnPointerLeave: false });
+  const confirm = useConfirmDialogStore((s) => s.confirm);
   return (
     <button
       type="button"
-      className={cn(
-        "rounded-sm p-0.5 transition-colors",
-        armed ? "text-destructive" : "text-muted-foreground hover:text-destructive",
-        className,
-      )}
-      aria-label={armed ? `Confirm delete ${label}` : `Delete ${label}`}
-      title={armed ? "Click again to delete" : undefined}
-      data-armed={armed ? "" : undefined}
-      {...getButtonProps()}
+      className={cn("rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-destructive", className)}
+      aria-label={`Delete ${label}`}
+      onClick={(e) => {
+        // Don't let the click switch the active conversation; open the confirm dialog instead.
+        e.stopPropagation();
+        confirm({
+          title: "Delete conversation",
+          description: `"${label}" will be permanently deleted. This cannot be undone.`,
+          confirmLabel: "Delete",
+          onConfirm: onDelete,
+        });
+      }}
     >
-      {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+      <Trash2 className="size-3.5" />
     </button>
   );
 }
@@ -269,7 +273,7 @@ function ConversationSwitcher({
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64">
+      <DropdownMenuContent align="start" className="w-80">
         {conversations.map((conversation) => (
           <DropdownMenuItem
             key={conversation.id}
@@ -280,7 +284,7 @@ function ConversationSwitcher({
             <ConversationDeleteButton
               label={conversationLabel(conversation)}
               onDelete={() => onDeleteConversation(conversation)}
-              className="opacity-0 transition-opacity group-hover:opacity-100 data-[armed]:opacity-100"
+              className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
             />
           </DropdownMenuItem>
         ))}
