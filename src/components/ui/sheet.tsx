@@ -51,4 +51,38 @@ function SheetContent({ className, children, ...props }: React.ComponentProps<ty
   );
 }
 
-export { Sheet, SheetClose, SheetContent, SheetOverlay, SheetPortal, SheetTrigger };
+function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="sheet-header" className={cn("flex flex-col gap-1.5 p-4", className)} {...props} />;
+}
+
+function SheetTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+  return (
+    <DialogPrimitive.Title
+      data-slot="sheet-title"
+      className={cn("font-semibold text-foreground", className)}
+      {...props}
+    />
+  );
+}
+
+function SheetDescription({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Description>) {
+  return (
+    <DialogPrimitive.Description
+      data-slot="sheet-description"
+      className={cn("text-muted-foreground text-sm", className)}
+      {...props}
+    />
+  );
+}
+
+export {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetOverlay,
+  SheetPortal,
+  SheetTitle,
+  SheetTrigger,
+};

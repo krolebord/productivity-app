@@ -82,9 +82,11 @@ function NoteDialogContent({
     saveNote({ ...fieldsRef.current });
   };
 
+  const isNew = !note?.title?.trim() && !note?.content?.trim();
+
   return (
     <>
-      <DialogTitle className="sr-only">Edit note</DialogTitle>
+      <DialogTitle>{isNew ? "New note" : "Edit note"}</DialogTitle>
       <div className="flex flex-col gap-3">
         <Input
           placeholder="Title"
@@ -133,7 +135,11 @@ export function NoteDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && saveAndClose()}>
       <DialogContent className="sm:max-w-lg" showCloseButton={false}>
-        {noteId && <NoteDialogContent key={openRevision} noteId={noteId} saveNote={saveNote} onClose={saveAndClose} />}
+        {noteId ? (
+          <NoteDialogContent key={openRevision} noteId={noteId} saveNote={saveNote} onClose={saveAndClose} />
+        ) : (
+          <DialogTitle>Edit note</DialogTitle>
+        )}
       </DialogContent>
     </Dialog>
   );
