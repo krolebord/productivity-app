@@ -6,6 +6,7 @@ import { createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { z } from "zod";
+import { ChartSpecSchema } from "./chart-spec";
 import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId } from "./models";
 
 type WorkspaceUploadInput = {
@@ -149,6 +150,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       "For multi-step analysis or coordinated changes, use the execute tool to write JavaScript that calls codemode.getDbSchema(), codemode.queryDb(), and codemode.mutateDb().",
       "Inside execute, state.* is also available for temporary workspace files and multi-step scratch work.",
       "When the user wants a file to download (CSV, JSON, report, etc.), first write it with the execute tool's state.* API, then call saveDownload with that file's path to make it downloadable from the chat.",
+      "To visualize data, call the renderChart tool. Aggregate and group the data first (with queryDb or execute) and embed only the final summarized points in the spec — keep the number of points and series small. Never sum or compare amounts across different currencies: group by currency or convert via the currency_rate table before charting. After rendering a chart, briefly describe what it shows in text; do not also paste the full underlying data as a table.",
       "Be concise and direct. Use markdown when it improves readability.",
     ].join("\n");
   }
@@ -199,6 +201,19 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
             .describe("Download file name including extension. Defaults to the source file's name."),
         }),
         execute: async ({ path, filename }) => this.saveDownloadFile({ path, filename }),
+      }),
+      renderChart: tool({
+        description: [
+          "Render a chart inline in the chat to visualize data for the user.",
+          "Embed the already-aggregated data directly in the spec; do not reference external data.",
+          "Supports line, area, and bar charts (with an optional `stacked` flag), pie/donut charts, and sankey flow diagrams.",
+          "Use sankey to show how amounts flow between categories (e.g. income sources into spending categories, or transfers between accounts); its links reference nodes by name and must form an acyclic flow.",
+          "Keep the data compact: aggregate, group, and limit with queryDb/execute before calling this.",
+        ].join("\n"),
+        inputSchema: ChartSpecSchema,
+        // The spec is the input; the client renders from it. Return a small ack
+        // to keep output tokens minimal.
+        execute: async (spec) => ({ rendered: true, type: spec.type, title: spec.title ?? null }),
       }),
     };
   }

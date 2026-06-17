@@ -20,7 +20,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { type ClipboardEvent, useEffect, useRef, useState } from "react";
+import { type ClipboardEvent, lazy, Suspense, useEffect, useRef, useState } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { ASSISTANT_MODELS } from "@/agent/models";
@@ -52,6 +53,9 @@ type UploadedWorkspaceFile = {
 };
 
 const MAX_UPLOAD_FILES = 5;
+
+// Recharts is heavy; keep it out of the main bundle until a chart is rendered.
+const ChartCard = lazy(() => import("./chart-card"));
 
 function getExtensionForMediaType(mediaType: string) {
   switch (mediaType) {
@@ -130,12 +134,35 @@ function ToolCallChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   );
 }
 
+function ChartErrorChip() {
+  return (
+    <div className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
+      <CircleAlert className="size-3 text-destructive" />
+      Could not render chart
+    </div>
+  );
+}
+
+function logChartError(error: unknown) {
+  console.error("Failed to render assistant chart", error);
+}
+
 function MessageParts({ message, conversationId }: { message: UIMessage; conversationId: string }) {
   return message.parts.map((part, i) => {
     if (part.type === "dynamic-tool" || isToolUIPart(part)) {
       const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
       if (name === "saveDownload" && part.state === "output-available" && part.output) {
         return <DownloadFileChip key={i} conversationId={conversationId} file={part.output as UploadedWorkspaceFile} />;
+      }
+      // The chart spec is the tool input; render it once the call has resolved.
+      if (name === "renderChart" && part.state === "output-available") {
+        return (
+          <ErrorBoundary key={i} fallback={<ChartErrorChip />} onError={logChartError} resetKeys={[part.input]}>
+            <Suspense fallback={<ToolCallChip part={part} />}>
+              <ChartCard spec={part.input} />
+            </Suspense>
+          </ErrorBoundary>
+        );
       }
       return <ToolCallChip key={i} part={part} />;
     }
