@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
 import { CommandPalette } from "@/components/command-palette";
 import { NoteDialog } from "@/components/note-dialog";
+import { SyncStatusMonitor } from "@/components/sync-status-monitor";
 import { TransactionDialog } from "@/components/transaction-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -44,6 +45,7 @@ function RouteComponent() {
 
   return (
     <DbProvider db={db}>
+      <SyncStatusMonitor />
       <div className="flex h-screen overflow-hidden">
         <AppSidebar />
         <Group
