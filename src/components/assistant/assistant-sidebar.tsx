@@ -20,7 +20,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type ClipboardEvent, useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { ASSISTANT_MODELS } from "@/agent/models";
@@ -52,6 +52,37 @@ type UploadedWorkspaceFile = {
 };
 
 const MAX_UPLOAD_FILES = 5;
+
+function getExtensionForMediaType(mediaType: string) {
+  switch (mediaType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/gif":
+      return "gif";
+    case "image/webp":
+      return "webp";
+    case "image/svg+xml":
+      return "svg";
+    default:
+      return "png";
+  }
+}
+
+function getPastedImageFiles(event: ClipboardEvent<HTMLTextAreaElement>) {
+  return Array.from(event.clipboardData.items)
+    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .map((item, index) => {
+      const file = item.getAsFile();
+      if (!file) return null;
+      const mediaType = file.type || item.type || "image/png";
+      const name =
+        file.name && file.name !== "image.png"
+          ? file.name
+          : `pasted-image-${new Date().toISOString().replace(/[:.]/g, "-")}-${index + 1}.${getExtensionForMediaType(mediaType)}`;
+      return new File([file], name, { type: mediaType, lastModified: Date.now() });
+    })
+    .filter((file): file is File => file !== null);
+}
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -399,6 +430,15 @@ function ConversationView({
     setSelectedFiles([]);
   }
 
+  function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = getPastedImageFiles(event);
+    if (files.length === 0) return;
+
+    event.preventDefault();
+    setUploadError(null);
+    setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
+  }
+
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center gap-1 border-b px-2">
@@ -552,6 +592,7 @@ function ConversationView({
             autoFocus
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={pasteImages}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

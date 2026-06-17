@@ -5,7 +5,6 @@ import { getContext } from "@/lib/context";
 import type { ApiHandler } from "../api-handler";
 
 const MAX_FILES = 5;
-const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TOTAL_BYTES = 5 * 1024 * 1024;
 const MAX_MULTIPART_BYTES = 6 * 1024 * 1024;
 
@@ -49,9 +48,6 @@ export const assistantUploadHandler: ApiHandler = async ({ request }) => {
   let totalBytes = 0;
   for (const file of files) {
     totalBytes += file.size;
-    if (file.size > MAX_FILE_BYTES) {
-      return Response.json({ error: `${file.name || "File"} is too large.` }, { status: 413 });
-    }
   }
   if (totalBytes > MAX_TOTAL_BYTES) {
     return Response.json({ error: "Combined upload is too large." }, { status: 413 });
