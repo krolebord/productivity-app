@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import * as arctic from "arctic";
 import { addSeconds } from "date-fns";
 import * as z from "zod";
+import { isAssistantAllowed } from "@/lib/assistant-access";
 import { getContext } from "@/lib/context";
 import { db } from "@/lib/db";
 import { emailService } from "@/lib/emails/emails";
@@ -97,7 +98,10 @@ export const verifyMagicLink = procedure
   });
 
 export const getAuth = protectedProcedure.handler(async ({ context }) => {
-  return context.auth;
+  return {
+    ...context.auth,
+    assistantEnabled: isAssistantAllowed(context.auth.userEmail),
+  };
 });
 
 export const signOut = protectedProcedure.handler(async ({ context }) => {

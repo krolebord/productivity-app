@@ -10,6 +10,7 @@ const envSchema = z.object({
   MODE: z.enum(["development", "production"]),
   VITE_APP_URL: z.string(),
   CLOUDFLARE_EMAIL_SENDER: z.string().optional(),
+  ASSISTANT_ALLOWLIST: z.string().optional(),
 });
 envSchema.parse(env);
 

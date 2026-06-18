@@ -596,7 +596,8 @@ function ConversationView({
               key={message.id}
               className={cn(
                 "min-w-0 space-y-2 text-sm",
-                message.role === "user" && "ml-8 self-end rounded-lg bg-primary px-3 py-2 text-primary-foreground",
+                message.role === "user" &&
+                  "ml-8 self-end rounded-lg bg-primary px-3 py-2 text-primary-foreground selection:bg-primary-foreground/30 selection:text-primary",
               )}
             >
               <MessageParts message={message} conversationId={conversation.id} />

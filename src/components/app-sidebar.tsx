@@ -35,6 +35,7 @@ import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
 import { TOGGLE_ASSISTANT_HOTKEY, TOGGLE_SIDEBAR_HOTKEY } from "@/lib/hotkeys";
 import { useSidebarStore } from "@/lib/sidebar-store";
+import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery, useDbState } from "@/user-db/user-db";
@@ -150,6 +151,11 @@ function SidebarNavLink({
 function AssistantToggle({ collapsed }: { collapsed: boolean }) {
   const open = useAssistantStore((s) => s.open);
   const toggle = useAssistantStore((s) => s.toggle);
+  const assistantEnabled = useAssistantEnabled();
+
+  if (!assistantEnabled) {
+    return null;
+  }
 
   return (
     <SidebarTooltip label={`Assistant (${formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)})`} collapsed={collapsed}>
@@ -556,6 +562,7 @@ function MobileSidebar() {
 
   const openCommand = useCommandStore((s) => s.open);
   const toggleAssistant = useAssistantStore((s) => s.toggle);
+  const assistantEnabled = useAssistantEnabled();
 
   return (
     <>
@@ -579,15 +586,17 @@ function MobileSidebar() {
         </SheetContent>
       </Sheet>
 
-      <Button
-        variant="secondary"
-        size="icon"
-        className="!rounded-full fixed right-4 bottom-[4.75rem] z-40 size-11 shadow-lg md:hidden"
-        aria-label="Open assistant"
-        onClick={toggleAssistant}
-      >
-        <Sparkles className="size-5" />
-      </Button>
+      {assistantEnabled && (
+        <Button
+          variant="secondary"
+          size="icon"
+          className="!rounded-full fixed right-4 bottom-[4.75rem] z-40 size-11 shadow-lg md:hidden"
+          aria-label="Open assistant"
+          onClick={toggleAssistant}
+        >
+          <Sparkles className="size-5" />
+        </Button>
+      )}
 
       <Button
         variant="default"
@@ -606,6 +615,7 @@ export function AppSidebar() {
   const collapsed = useSidebarStore((s) => s.collapsed);
   const toggle = useSidebarStore((s) => s.toggle);
   const toggleAssistant = useAssistantStore((s) => s.toggle);
+  const assistantEnabled = useAssistantEnabled();
 
   useHotkey(TOGGLE_SIDEBAR_HOTKEY, (e) => {
     if (!window.matchMedia("(min-width: 768px)").matches) return;
@@ -613,11 +623,15 @@ export function AppSidebar() {
     toggle();
   });
 
-  useHotkey(TOGGLE_ASSISTANT_HOTKEY, (e) => {
-    if (!window.matchMedia("(min-width: 768px)").matches) return;
-    e.preventDefault();
-    toggleAssistant();
-  });
+  useHotkey(
+    TOGGLE_ASSISTANT_HOTKEY,
+    (e) => {
+      if (!window.matchMedia("(min-width: 768px)").matches) return;
+      e.preventDefault();
+      toggleAssistant();
+    },
+    { enabled: assistantEnabled },
+  );
 
   return (
     <>

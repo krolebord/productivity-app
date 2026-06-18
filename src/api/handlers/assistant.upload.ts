@@ -1,6 +1,7 @@
 import { getAgentByName } from "agents";
 import { z } from "zod";
-import { getUserIdFromRequest } from "@/lib/auth-server";
+import { isAssistantAllowed } from "@/lib/assistant-access";
+import { getAuthFromRequest } from "@/lib/auth-server";
 import { getContext } from "@/lib/context";
 import type { ApiHandler } from "../api-handler";
 
@@ -23,10 +24,14 @@ export const assistantUploadHandler: ApiHandler = async ({ request }) => {
   }
 
   const env = getContext();
-  const userId = await getUserIdFromRequest(request);
-  if (!userId) {
+  const auth = await getAuthFromRequest(request);
+  if (!auth) {
     return new Response("Unauthorized", { status: 401 });
   }
+  if (!isAssistantAllowed(auth.userEmail)) {
+    return new Response("Assistant is not enabled for this account.", { status: 403 });
+  }
+  const userId = auth.userId;
 
   const formData = await request.formData();
   const parsed = uploadSchema.safeParse({

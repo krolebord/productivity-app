@@ -1,3 +1,4 @@
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { create } from "zustand";
@@ -46,6 +47,14 @@ export function ConfirmDialog() {
     },
   });
 
+  useHotkey(
+    "Enter",
+    () => {
+      mutation.mutate();
+    },
+    { enabled: options !== null && !mutation.isPending },
+  );
+
   return (
     <Dialog
       open={options !== null}
@@ -64,7 +73,12 @@ export function ConfirmDialog() {
           <Button variant="outline" onClick={close} disabled={mutation.isPending}>
             Cancel
           </Button>
-          <Button variant="destructive" autoFocus onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+          <Button
+            variant="destructive"
+            className="border-ring ring-[3px] ring-destructive/20 dark:ring-destructive/40"
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+          >
             {mutation.isPending && <Loader2 className="size-4 animate-spin" />}
             {options?.confirmLabel ?? "Confirm"}
           </Button>

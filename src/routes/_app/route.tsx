@@ -37,10 +37,11 @@ export const Route = createFileRoute("/_app")({
 });
 
 function RouteComponent() {
-  const { db } = Route.useLoaderData();
+  const { db, auth } = Route.useLoaderData();
   const assistantOpen = useAssistantStore((s) => s.open);
   const isDesktop = useIsDesktop();
-  const showAssistant = assistantOpen && isDesktop;
+  const assistantEnabled = auth.assistantEnabled;
+  const showAssistant = assistantEnabled && assistantOpen && isDesktop;
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "assistant-layout" });
 
   return (
@@ -79,7 +80,7 @@ function RouteComponent() {
         </Group>
       </div>
       {/* Mobile: the assistant fills the screen instead of docking in a panel. Its header X closes it. */}
-      {assistantOpen && !isDesktop && (
+      {assistantEnabled && assistantOpen && !isDesktop && (
         <div className="fixed inset-0 z-50 bg-background md:hidden">
           <Suspense
             fallback={
