@@ -2,14 +2,21 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "productivity",
   "main": "./src/server.ts",
+  "account_id": "1f507c7933d231cc8051d23050bda6ab",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
+  "route": {
+    "pattern": "productivity.krolebord.com",
+    "custom_domain": true
+  },
   "observability": {
     "enabled": true
   },
   "placement": {
     "mode": "smart"
   },
+  // Dev defaults. The `deploy` script overrides MODE=production and the prod
+  // VITE_APP_URL via `wrangler deploy --var` so deployments run in production mode.
   "vars": {
     "MODE": "development",
     "VITE_APP_URL": "http://localhost:3001"
@@ -22,8 +29,10 @@
   "d1_databases": [
     {
       "binding": "MAIN_DB",
+      // Local label kept as productivity-db so local dev data is preserved.
+      // Deploys bind by database_id (the prod productivity-prod database).
       "database_name": "productivity-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "da56fb48-d1ec-4584-aad5-86bd8785a6dc",
       "migrations_dir": "migrations"
     }
   ],
