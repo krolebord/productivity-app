@@ -1,6 +1,6 @@
 import { deleteCookie, getCookie, setCookie, sign, unsign } from "@orpc/server/helpers";
 import { getContext } from "@/lib/context";
-import { db } from "@/lib/db";
+import { db, type UserRole } from "@/lib/db";
 import { type ORPCContext, osBase } from "./os";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 180; // 180 days
@@ -14,6 +14,7 @@ export type AuthSession = {
   sessionId: string;
   userName: string;
   userEmail: string;
+  userRole: UserRole;
   sessionExpiresAt: string;
 };
 
@@ -40,6 +41,7 @@ async function checkAuthFromHeaders(
       "s.id as sessionId",
       "u.name as userName",
       "u.email as userEmail",
+      "u.role as userRole",
       "s.expiresAt as sessionExpiresAt",
     ])
     .executeTakeFirst();
