@@ -12,12 +12,14 @@ import {
   CircleStop,
   Cpu,
   Download,
+  ExternalLink,
   FileText,
   ImageIcon,
   Loader2,
   Mic,
   Paperclip,
   PlusIcon,
+  Search,
   SendHorizontal,
   Sparkles,
   Trash2,
@@ -149,6 +151,121 @@ function ToolCallChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   );
 }
 
+type SearchToolOutput = {
+  query?: string;
+  answer?: string;
+  results?: { title?: string | null; url: string }[];
+};
+
+type ExtractToolOutput = {
+  results?: { title?: string | null; url: string }[];
+  failedResults?: { url: string }[];
+};
+
+function hostname(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function SourceLink({ url, title }: { url: string; title?: string | null }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-start gap-1.5 rounded-sm px-1 py-0.5 hover:bg-accent"
+    >
+      <ExternalLink className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
+      <span className="min-w-0">
+        <span className="block truncate text-foreground">{title || hostname(url)}</span>
+        <span className="block truncate text-muted-foreground/70">{hostname(url)}</span>
+      </span>
+    </a>
+  );
+}
+
+function WebToolDetails({ name, output }: { name: string; output: unknown }) {
+  if (name === "web_search") {
+    const { answer, results = [] } = (output ?? {}) as SearchToolOutput;
+    return (
+      <div className="flex max-w-sm flex-col gap-1">
+        {answer && <p className="line-clamp-6 px-1 text-muted-foreground">{answer}</p>}
+        {results.map((result) => (
+          <SourceLink key={result.url} url={result.url} title={result.title} />
+        ))}
+        {results.length === 0 && !answer && <p className="px-1 text-muted-foreground">No results.</p>}
+      </div>
+    );
+  }
+
+  const { results = [], failedResults = [] } = (output ?? {}) as ExtractToolOutput;
+  return (
+    <div className="flex max-w-sm flex-col gap-1">
+      {results.map((result) => (
+        <SourceLink key={result.url} url={result.url} title={result.title} />
+      ))}
+      {failedResults.map((result) => (
+        <span key={result.url} className="flex items-center gap-1.5 px-1 text-destructive">
+          <CircleAlert className="size-3 shrink-0" />
+          <span className="truncate">{hostname(result.url)}</span>
+        </span>
+      ))}
+      {results.length === 0 && failedResults.length === 0 && <p className="px-1 text-muted-foreground">No content.</p>}
+    </div>
+  );
+}
+
+function WebToolChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
+  const [open, setOpen] = useState(false);
+  const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
+  const failed = part.state === "output-error" || part.state === "output-denied";
+  const done = part.state === "output-available";
+  const Icon = name === "web_search" ? Search : FileText;
+
+  const input = part.input as { query?: string; urls?: string[] } | undefined;
+  const summary =
+    name === "web_search"
+      ? input?.query
+      : input?.urls?.length
+        ? `${input.urls.length} ${input.urls.length === 1 ? "page" : "pages"}`
+        : undefined;
+
+  const canExpand = done && !failed;
+
+  return (
+    <div className="w-fit max-w-full overflow-hidden rounded-md border bg-muted/50 text-xs">
+      <button
+        type="button"
+        disabled={!canExpand}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex w-full items-center gap-1.5 px-2 py-1 text-muted-foreground",
+          canExpand && "hover:text-foreground",
+        )}
+      >
+        {failed ? (
+          <CircleAlert className="size-3 shrink-0 text-destructive" />
+        ) : done ? (
+          <Icon className="size-3 shrink-0" />
+        ) : (
+          <Loader2 className="size-3 shrink-0 animate-spin" />
+        )}
+        <span className="font-mono">{name}</span>
+        {summary && <span className="min-w-0 truncate text-muted-foreground/80">{summary}</span>}
+        {canExpand && <ChevronDown className={cn("size-3 shrink-0 transition-transform", open && "rotate-180")} />}
+      </button>
+      {open && canExpand && (
+        <div className="border-t px-2 py-1.5">
+          <WebToolDetails name={name} output={part.output} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChartErrorChip() {
   return (
     <div className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
@@ -168,6 +285,9 @@ function MessageParts({ message, conversationId }: { message: UIMessage; convers
       const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
       if (name === "saveDownload" && part.state === "output-available" && part.output) {
         return <DownloadFileChip key={i} conversationId={conversationId} file={part.output as UploadedWorkspaceFile} />;
+      }
+      if (name === "web_search" || name === "web_extract") {
+        return <WebToolChip key={i} part={part} />;
       }
       // The chart spec is the tool input; render it once the call has resolved.
       if (name === "renderChart" && part.state === "output-available") {

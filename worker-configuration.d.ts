@@ -12,6 +12,7 @@ interface __BaseEnv_Env {
 	VITE_APP_URL: string;
 	CLOUDFLARE_EMAIL_SENDER: string;
 	OPENROUTER_API_KEY: string;
+	TAVILY_API_KEY: string;
 	UserDbServer: DurableObjectNamespace<import("./src/server").UserDbServer>;
 	AssistantAgent: DurableObjectNamespace<import("./src/server").AssistantAgent>;
 }

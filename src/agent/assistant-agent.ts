@@ -1,8 +1,9 @@
 import { createWorkspaceStateBackend, type WorkspaceFsLike } from "@cloudflare/shell";
 import { type ChatResponseResult, type StepContext, Think, type TurnConfig, type TurnContext } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
-import { createOpenRouter, type OpenRouterProvider } from "@openrouter/ai-sdk-provider";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
+import { tavilyExtract, tavilySearch } from "@tavily/ai-sdk";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { z } from "zod";
@@ -35,8 +36,6 @@ type WorkspaceDownloadFile = {
   bytes: ArrayBuffer;
 };
 
-// Directory the agent writes user-downloadable artifacts to. Only files under
-// this prefix may be served by the download endpoint.
 export const DOWNLOAD_DIR = "/outputs";
 
 const MEDIA_TYPE_BY_EXTENSION: Record<string, string> = {
@@ -151,6 +150,8 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       "Inside execute, state.* is also available for temporary workspace files and multi-step scratch work.",
       "When the user wants a file to download (CSV, JSON, report, etc.), first write it with the execute tool's state.* API, then call saveDownload with that file's path to make it downloadable from the chat.",
       "To visualize data, call the renderChart tool. Aggregate and group the data first (with queryDb or execute) and embed only the final summarized points in the spec — keep the number of points and series small. Never sum or compare amounts across different currencies: group by currency or convert via the currency_rate table before charting. After rendering a chart, briefly describe what it shows in text; do not also paste the full underlying data as a table.",
+      "Use the web_search tool for current events, external facts, prices, or anything outside the user's own data — never for the user's notes/accounts/transactions, which live in the database. Search only when the answer genuinely depends on up-to-date or external information. When you rely on a search result, cite it inline as a markdown link; if the user asks for sources, list the relevant URLs.",
+      "Use the web_extract tool to read the full content of specific URLs — for example to go deeper on a promising web_search result or a link the user provides.",
       "Be concise and direct. Use markdown when it improves readability.",
     ].join("\n");
   }
@@ -167,7 +168,18 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
 
     return {
       ...dbTools,
+      web_search: tavilySearch({
+        apiKey: this.env.TAVILY_API_KEY,
+        searchDepth: "basic",
+        includeAnswer: true,
+        maxResults: 5,
+      }),
+      web_extract: tavilyExtract({
+        apiKey: this.env.TAVILY_API_KEY,
+        extractDepth: "basic",
+      }),
       execute: createExecuteTool({
+        ctx: this.ctx,
         tools: codeDbTools,
         state: createWorkspaceStateBackend(this.workspace as WorkspaceFsLike),
         loader: this.env.LOADER,
@@ -211,15 +223,12 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           "Keep the data compact: aggregate, group, and limit with queryDb/execute before calling this.",
         ].join("\n"),
         inputSchema: ChartSpecSchema,
-        // The spec is the input; the client renders from it. Return a small ack
-        // to keep output tokens minimal.
         execute: async (spec) => ({ rendered: true, type: spec.type, title: spec.title ?? null }),
       }),
     };
   }
 
   private async getUserDbStub() {
-    // Agent instances are named `${userDbName}:${conversationId}` (see the guard in server.ts).
     const separatorIndex = this.name.indexOf(":");
     if (separatorIndex === -1) {
       throw new Error(`Unexpected agent name without a user-db prefix: ${this.name}`);
@@ -285,8 +294,6 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
 
     const filename = sanitizeWorkspaceFilename(input.filename || sourcePath.split("/").at(-1) || "download");
     const mediaType = stat.mimeType || guessMediaType(filename);
-    // One directory per file keeps the basename clean (no collision prefixes)
-    // so the download lands with the name the agent chose.
     const dir = `${DOWNLOAD_DIR}/${crypto.randomUUID()}`;
     const path = `${dir}/${filename}`;
 
