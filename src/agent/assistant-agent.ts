@@ -1,7 +1,7 @@
 import { createWorkspaceStateBackend, type WorkspaceFsLike } from "@cloudflare/shell";
 import { type ChatResponseResult, type StepContext, Think, type TurnConfig, type TurnContext } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createOpenRouter, type OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";

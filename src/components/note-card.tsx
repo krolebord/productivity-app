@@ -1,12 +1,24 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Trash2 } from "lucide-react";
 import { NoteMarkdown } from "@/components/note-markdown";
+import { parseTags } from "@/lib/tags";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { cn } from "@/lib/utils";
 import type { NoteItem } from "@/user-db/migrations";
 import { useDb } from "@/user-db/user-db";
 
-export function NoteCardContent({ note }: { note: NoteItem }) {
+export function NoteCardContent({
+  note,
+  onTagClick,
+  activeTags,
+}: {
+  note: NoteItem;
+  onTagClick?: (tag: string) => void;
+  activeTags?: string[];
+}) {
+  const tags = parseTags(note.tags);
+  const active = new Set(activeTags);
+
   return (
     <div className="px-4 py-3">
       {note.title && <p className="mb-1 line-clamp-2 font-medium text-sm leading-snug">{note.title}</p>}
@@ -16,7 +28,38 @@ export function NoteCardContent({ note }: { note: NoteItem }) {
           className="max-h-72 overflow-hidden text-muted-foreground text-sm leading-relaxed"
         />
       ) : (
-        !note.title && <p className="text-muted-foreground/50 text-sm italic">Empty note</p>
+        !note.title && !tags.length && <p className="text-muted-foreground/50 text-sm italic">Empty note</p>
+      )}
+      {tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {tags.map((tag) => {
+            const isActive = active.has(tag);
+            const baseClass = "inline-flex items-center rounded-full px-2 py-0.5 font-medium text-[11px]";
+            const toneClass = isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground";
+            return onTagClick ? (
+              <button
+                key={tag}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTagClick(tag);
+                }}
+                className={cn(
+                  baseClass,
+                  toneClass,
+                  "transition-colors",
+                  isActive ? "hover:bg-primary/90" : "hover:bg-accent hover:text-accent-foreground",
+                )}
+              >
+                #{tag}
+              </button>
+            ) : (
+              <span key={tag} className={cn(baseClass, toneClass)}>
+                #{tag}
+              </span>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -25,11 +68,14 @@ export function NoteCardContent({ note }: { note: NoteItem }) {
 type NoteCardProps = {
   note: NoteItem;
   onOpen: () => void;
+  onTagClick?: (tag: string) => void;
+  activeTags?: string[];
+  disabled?: boolean;
 };
 
-export function NoteCard({ note, onOpen }: NoteCardProps) {
-  const draggable = useDraggable({ id: note.id });
-  const droppable = useDroppable({ id: note.id });
+export function NoteCard({ note, onOpen, onTagClick, activeTags, disabled }: NoteCardProps) {
+  const draggable = useDraggable({ id: note.id, disabled });
+  const droppable = useDroppable({ id: note.id, disabled });
 
   const db = useDb();
   const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
@@ -70,7 +116,7 @@ export function NoteCard({ note, onOpen }: NoteCardProps) {
           className={cn("select-none", isContextKeyHeld ? "cursor-copy" : "cursor-pointer")}
           onClick={isContextKeyHeld ? getAttachClickHandler(attachRef) : onOpen}
         >
-          <NoteCardContent note={note} />
+          <NoteCardContent note={note} onTagClick={onTagClick} activeTags={activeTags} />
         </div>
       </div>
     </div>

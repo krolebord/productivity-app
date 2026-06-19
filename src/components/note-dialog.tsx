@@ -2,9 +2,11 @@ import { generateId } from "@sqlite-sync/core";
 import { useCallback, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
+import { parseTags, serializeTags } from "@/lib/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@/lib/use-debounced-callback";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { NoteEditor, type NoteEditorHandle } from "./note-editor";
+import { TagInput } from "./tag-input";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 
@@ -48,6 +50,7 @@ export function useCreateNote() {
           content: "",
           order: maxOrder + 1,
           createdAt,
+          tags: "[]",
           tombstone: false,
         }),
       );
@@ -57,29 +60,48 @@ export function useCreateNote() {
   }, [db, openNoteDialog]);
 }
 
+type NoteFields = { title?: string; content?: string; tags?: string };
+
 function NoteDialogContent({
   noteId,
   saveNote,
   onClose,
 }: {
   noteId: string;
-  saveNote: DebouncedCallback<[{ title?: string; content?: string }]>;
+  saveNote: DebouncedCallback<[NoteFields]>;
   onClose: () => void;
 }) {
   const {
     data: [note],
   } = useDbQuery((q) => q.selectFrom("item").selectAll().where("id", "=", noteId));
 
-  const [title, setTitle] = useState(note?.title ?? "");
-  const editorRef = useRef<NoteEditorHandle>(null);
-  // Latest values live in a ref so every save carries both fields,
-  // regardless of which input triggered it.
-  const fieldsRef = useRef({ title: note?.title ?? "", content: note?.content ?? "" });
+  // Distinct tags across all notes, for autocomplete.
+  const { data: tagSuggestions } = useDbQuery((q) => q.selectFrom("item").select(["tags"]).where("type", "=", "note"), {
+    mapData: (rows) => {
+      const set = new Set<string>();
+      for (const row of rows) {
+        for (const tag of parseTags(row.tags)) set.add(tag);
+      }
+      return Array.from(set).sort();
+    },
+  });
 
-  const updateNote = (fields: { title?: string; content?: string }) => {
+  const [title, setTitle] = useState(note?.title ?? "");
+  const [tags, setTags] = useState<string[]>(() => parseTags(note?.tags));
+  const editorRef = useRef<NoteEditorHandle>(null);
+  // Latest values live in a ref so every save carries all fields,
+  // regardless of which input triggered it.
+  const fieldsRef = useRef({ title: note?.title ?? "", content: note?.content ?? "", tags: note?.tags ?? "[]" });
+
+  const updateNote = (fields: NoteFields) => {
     if (fields.title !== undefined) setTitle(fields.title);
     fieldsRef.current = { ...fieldsRef.current, ...fields };
     saveNote({ ...fieldsRef.current });
+  };
+
+  const handleTagsChange = (next: string[]) => {
+    setTags(next);
+    updateNote({ tags: serializeTags(next) });
   };
 
   const isNew = !note?.title?.trim() && !note?.content?.trim();
@@ -102,6 +124,7 @@ function NoteDialogContent({
           }}
           className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
         />
+        <TagInput value={tags} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder="Add tags..." />
         <NoteEditor
           ref={editorRef}
           initialContent={note?.content ?? ""}
@@ -123,7 +146,7 @@ export function NoteDialog() {
   const openRevision = useNoteDialogStore((x) => x.openRevision);
   const closeDialog = useNoteDialogStore((x) => x.close);
 
-  const saveNote = useDebounceCallback((fields: { title?: string; content?: string }) => {
+  const saveNote = useDebounceCallback((fields: NoteFields) => {
     db.db.executeKysely((q) => q.updateTable("item").set(fields).where("id", "=", noteId));
   }, 1000);
 

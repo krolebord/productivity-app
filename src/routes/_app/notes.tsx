@@ -1,19 +1,27 @@
 import type { CollisionDetection, DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
 import { closestCenter, DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
-import { createFileRoute } from "@tanstack/react-router";
-import { PlusIcon, StickyNote } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { PlusIcon, StickyNote, XIcon } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 import { useMasonryLayout } from "@/components/masonry-grid";
 import { NoteCard, NoteCardContent } from "@/components/note-card";
 import { useCreateNote, useNoteDialogStore } from "@/components/note-dialog";
 import { Button } from "@/components/ui/button";
 import { NEW_NOTE_HOTKEY } from "@/lib/hotkeys";
+import { parseTags } from "@/lib/tags";
+import { cn } from "@/lib/utils";
 import type { NoteItem } from "@/user-db/migrations";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 
+const notesSearchSchema = z.object({
+  tags: z.array(z.string()).optional(),
+});
+
 export const Route = createFileRoute("/_app/notes")({
   component: NotesPage,
+  validateSearch: notesSearchSchema,
 });
 
 const noteKey = (note: NoteItem) => note.id;
@@ -27,8 +35,29 @@ function arrayMove<T>(array: T[], from: number, to: number): T[] {
 
 function NotesPage() {
   const db = useDb();
+  const navigate = useNavigate();
+  const search = Route.useSearch();
+  const selectedTags = useMemo(() => search.tags ?? [], [search.tags]);
   const createNote = useCreateNote();
   const openNoteDialog = useNoteDialogStore((s) => s.open);
+
+  const toggleTag = useCallback(
+    (tag: string) => {
+      navigate({
+        to: "/notes",
+        search: (prev) => {
+          const current = prev.tags ?? [];
+          const next = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag];
+          return { tags: next.length > 0 ? next : undefined };
+        },
+      });
+    },
+    [navigate],
+  );
+
+  const clearTags = useCallback(() => {
+    navigate({ to: "/notes", search: {} });
+  }, [navigate]);
 
   const { data: list } = useDbQuery(
     (db) => db.selectFrom("item").selectAll().where("type", "=", "note").orderBy("order", "asc"),
@@ -50,23 +79,51 @@ function NotesPage() {
 
   const notes = list.timestamp > optimisticList.timestamp ? list.notes : optimisticList.notes;
 
+  const isFiltering = selectedTags.length > 0;
+
+  // A note matches when it carries every selected tag (AND semantics).
+  const visibleNotes = useMemo(() => {
+    if (!isFiltering) return notes;
+    return notes.filter((note) => {
+      const tags = parseTags(note.tags);
+      return selectedTags.every((tag) => tags.includes(tag));
+    });
+  }, [notes, selectedTags, isFiltering]);
+
+  // Filter bar facets: tags present on the currently matching notes, with
+  // counts. Because filtering is AND, this only surfaces tags that co-occur
+  // with the selection — adding any of them keeps results non-empty. Selected
+  // tags are always kept so they remain removable even if nothing matches.
+  const availableTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const note of visibleNotes) {
+      for (const tag of parseTags(note.tags)) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    for (const tag of selectedTags) {
+      if (!counts.has(tag)) counts.set(tag, 0);
+    }
+    return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [visibleNotes, selectedTags]);
+
   // While a drag is in progress the order lives here, updated on every
   // drag-over so the grid reflows live under the pointer.
   const [dragIds, setDragIds] = useState<string[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const orderedNotes = useMemo(() => {
-    if (!dragIds) return notes;
-    const byId = new Map(notes.map((note) => [note.id, note]));
+    if (!dragIds) return visibleNotes;
+    const byId = new Map(visibleNotes.map((note) => [note.id, note]));
     const ordered = dragIds.flatMap((id) => byId.get(id) ?? []);
-    if (ordered.length < notes.length) {
+    if (ordered.length < visibleNotes.length) {
       const seen = new Set(dragIds);
-      ordered.push(...notes.filter((note) => !seen.has(note.id)));
+      ordered.push(...visibleNotes.filter((note) => !seen.has(note.id)));
     }
     return ordered;
-  }, [notes, dragIds]);
+  }, [visibleNotes, dragIds]);
 
-  const activeNote = useMemo(() => notes.find((note) => note.id === activeId), [notes, activeId]);
+  const activeNote = useMemo(() => visibleNotes.find((note) => note.id === activeId), [visibleNotes, activeId]);
 
   const masonry = useMasonryLayout({
     items: orderedNotes,
@@ -218,6 +275,40 @@ function NotesPage() {
         </Button>
       </div>
 
+      {availableTags.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          {availableTags.map(([tag, count]) => {
+            const active = selectedTags.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleTag(tag)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-medium text-xs transition-colors",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
+              >
+                #{tag}
+                <span
+                  className={cn("tabular-nums", active ? "text-primary-foreground/70" : "text-muted-foreground/60")}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+          {isFiltering && (
+            <Button onClick={clearTags} variant="ghost" size="sm" className="h-7 px-2 text-xs">
+              <XIcon className="size-3.5" />
+              Clear
+            </Button>
+          )}
+        </div>
+      )}
+
       {notes.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card px-6 py-14 text-center">
           <StickyNote className="size-8 text-muted-foreground" />
@@ -228,6 +319,20 @@ function NotesPage() {
           <Button onClick={createNote} variant="outline">
             <PlusIcon />
             New note
+          </Button>
+        </div>
+      )}
+
+      {notes.length > 0 && visibleNotes.length === 0 && (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card px-6 py-14 text-center">
+          <StickyNote className="size-8 text-muted-foreground" />
+          <div>
+            <p className="font-medium">No notes match these tags</p>
+            <p className="text-muted-foreground text-sm">Try removing a tag to widen the results.</p>
+          </div>
+          <Button onClick={clearTags} variant="outline">
+            <XIcon />
+            Clear filters
           </Button>
         </div>
       )}
@@ -248,6 +353,9 @@ function NotesPage() {
                 <div key={note.id} ref={itemProps.ref} style={itemProps.style}>
                   <NoteCard
                     note={note}
+                    disabled={isFiltering}
+                    onTagClick={toggleTag}
+                    activeTags={selectedTags}
                     onOpen={() => {
                       if (!recentlyDraggedRef.current) openNoteDialog(note.id);
                     }}

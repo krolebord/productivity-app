@@ -131,6 +131,15 @@ const migrations = createMigrations((b) => ({
       build: (col) => col.notNull(),
     }),
   ],
+  8: [
+    b.addColumn({
+      table: "_item",
+      column: "tags",
+      type: "text",
+      defaultValue: "[]",
+      build: (col) => col.notNull(),
+    }),
+  ],
 }));
 
 const currencyColumn = () => t.real().nullable();
@@ -148,6 +157,10 @@ export const syncDbSchema = defineSyncSchema({
           .default("")
           .describe("Note body as markdown. Can be long — avoid selecting it unless needed."),
         order: t.real().nullable().default(0).describe("Manual sort position, ascending."),
+        tags: t
+          .text()
+          .default("[]")
+          .describe('JSON array of normalized tag strings, e.g. ["work","idea"]. Defaults to "[]".'),
       })
       .describe("The user's notes."),
     currency_rate: t
