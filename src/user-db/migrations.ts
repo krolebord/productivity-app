@@ -140,7 +140,21 @@ const migrations = createMigrations((b) => ({
       build: (col) => col.notNull(),
     }),
   ],
+  9: [
+    b.createTable("_memory", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("content", "text", (col) => col.notNull())
+        .addColumn("source", "text", (col) => col.notNull().defaultTo("user"))
+        .addColumn("enabled", "boolean", (col) => col.notNull().defaultTo(true))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+  ],
 }));
+
+export const MEMORY_INJECTION_LIMIT = 50;
 
 const currencyColumn = () => t.real().nullable();
 
@@ -272,6 +286,27 @@ export const syncDbSchema = defineSyncSchema({
           .describe("Cumulative total tokens used across all turns in this conversation."),
       })
       .describe("Index of the user's conversations with this assistant (titles, timestamps, and usage totals)."),
+    memory: t
+      .table({
+        content: t.text().describe("A short, durable fact or preference about the user, in plain language."),
+        source: t
+          .enum(["user", "assistant"])
+          .default("user")
+          .describe('Who created the memory: "user" (added by the user) or "assistant".'),
+        enabled: t
+          .boolean()
+          .default(true)
+          .describe("When false the memory is muted: kept but not shown to the assistant."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "Small, durable notes the assistant keeps about the user (preferences, recurring facts, rules).",
+          "Every enabled memory is injected into the assistant's context each turn, so keep them short and",
+          "general. Manage them with the remember/update_memory/forget tools rather than writing here directly.",
+        ].join(" "),
+      ),
   },
   migrations,
 });
@@ -281,6 +316,7 @@ export type CurrencyRateItem = typeof syncDbSchema.tables.currency_rate.$row;
 export type AccountItem = typeof syncDbSchema.tables.account.$row;
 export type TransactionEntryItem = typeof syncDbSchema.tables.transaction_entry.$row;
 export type ConversationItem = typeof syncDbSchema.tables.conversation.$row;
+export type MemoryItem = typeof syncDbSchema.tables.memory.$row;
 
 export type UserDb = (typeof syncDbSchema)["~clientSchema"];
 

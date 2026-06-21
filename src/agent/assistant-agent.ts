@@ -2,11 +2,12 @@ import { createWorkspaceStateBackend, type WorkspaceFsLike } from "@cloudflare/s
 import { type ChatResponseResult, type StepContext, Think, type TurnConfig, type TurnContext } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
+import { type AiMutationResult, type AiQueryResult, createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
 import { tavilyExtract, tavilySearch } from "@tavily/ai-sdk";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { z } from "zod";
+import { MEMORY_INJECTION_LIMIT } from "../user-db/migrations";
 import { ChartSpecSchema } from "./chart-spec";
 import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId } from "./models";
 
@@ -98,8 +99,26 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     return openrouter.chat(modelId, { usage: { include: true } });
   }
 
-  beforeTurn(ctx: TurnContext): TurnConfig {
-    return { model: this.getModel(resolveAssistantModelId(ctx.body?.model)) };
+  async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
+    const model = this.getModel(resolveAssistantModelId(ctx.body?.model));
+    const memories = await this.getMemoriesBlock();
+    return memories ? { model, system: `${ctx.system}\n\n${memories}` } : { model };
+  }
+
+  private async getMemoriesBlock(): Promise<string | null> {
+    const stub = await this.getUserDbStub();
+    const result = (await stub.query({
+      sql: "SELECT id, content FROM memory WHERE enabled = 1 ORDER BY createdAt DESC LIMIT ?",
+      parameters: [MEMORY_INJECTION_LIMIT],
+    })) as AiQueryResult;
+    if ("error" in result || result.rows.length === 0) {
+      return null;
+    }
+    const lines = result.rows.map((row) => `- [${String(row.id)}] ${String(row.content)}`);
+    return [
+      "What you remember about the user (persists across all chats). Revise with update_memory or forget, referencing the bracketed id:",
+      ...lines,
+    ].join("\n");
   }
 
   onStepFinish(ctx: StepContext): void {
@@ -139,6 +158,44 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     });
   }
 
+  private async createMemory(content: string): Promise<{ id: string | null; content: string }> {
+    const stub = await this.getUserDbStub();
+    const now = Date.now();
+    const result = (await stub.mutate({
+      events: [
+        {
+          type: "item-created",
+          dataset: "_memory",
+          payload: { content, source: "assistant", enabled: true, createdAt: now, updatedAt: now },
+        },
+      ],
+    })) as AiMutationResult;
+    const id = "createdIds" in result ? (result.createdIds[0] ?? null) : null;
+    return { id, content };
+  }
+
+  private async updateMemory(
+    id: string,
+    fields: { content?: string; enabled?: boolean },
+  ): Promise<{ id: string; updated: true }> {
+    const stub = await this.getUserDbStub();
+    const payload: Record<string, unknown> = { updatedAt: Date.now() };
+    if (fields.content !== undefined) {
+      payload.content = fields.content;
+    }
+    if (fields.enabled !== undefined) {
+      payload.enabled = fields.enabled;
+    }
+    await stub.mutate({ events: [{ type: "item-updated", dataset: "_memory", item_id: id, payload }] });
+    return { id, updated: true };
+  }
+
+  private async forgetMemory(id: string): Promise<{ id: string; forgotten: true }> {
+    const stub = await this.getUserDbStub();
+    await stub.mutate({ events: [{ type: "item-deleted", dataset: "_memory", item_id: id }] });
+    return { id, forgotten: true };
+  }
+
   getSystemPrompt() {
     return [
       "You are the built-in assistant of a personal productivity app with notes, accounts, and transactions.",
@@ -152,6 +209,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       "To visualize data, call the renderChart tool. Aggregate and group the data first (with queryDb or execute) and embed only the final summarized points in the spec — keep the number of points and series small. Never sum or compare amounts across different currencies: group by currency or convert via the currency_rate table before charting. After rendering a chart, briefly describe what it shows in text; do not also paste the full underlying data as a table.",
       "Use the web_search tool for current events, external facts, prices, or anything outside the user's own data — never for the user's notes/accounts/transactions, which live in the database. Search only when the answer genuinely depends on up-to-date or external information. When you rely on a search result, cite it inline as a markdown link; if the user asks for sources, list the relevant URLs.",
       "Use the web_extract tool to read the full content of specific URLs — for example to go deeper on a promising web_search result or a link the user provides.",
+      "You keep durable memories about the user across all conversations. When the user states a lasting preference, rule, or fact worth recalling later (a budget, a recurring categorization rule, how they like answers formatted), call remember with a short note. Do not remember one-off or trivial details, data already in the database, or secrets. Avoid duplicates: if a similar memory already exists in your remembered context, revise it with update_memory instead of adding another. Use forget when the user no longer wants something remembered.",
       "Be concise and direct. Use markdown when it improves readability.",
     ].join("\n");
   }
@@ -177,6 +235,36 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       web_extract: tavilyExtract({
         apiKey: this.env.TAVILY_API_KEY,
         extractDepth: "basic",
+      }),
+      remember: tool({
+        description: [
+          "Save a small, durable memory about the user that persists across all conversations.",
+          "Use for lasting preferences, rules, or facts — not one-off details, data already in the database, or secrets.",
+          "Keep it short and general. Check your remembered context first; revise an existing memory with update_memory instead of duplicating.",
+        ].join("\n"),
+        inputSchema: z.object({
+          content: z.string().min(1).describe("The fact or preference to remember, in one short sentence."),
+        }),
+        execute: async ({ content }) => this.createMemory(content),
+      }),
+      update_memory: tool({
+        description: [
+          "Update an existing memory by id (the bracketed id shown in your remembered context).",
+          "Change its content and/or toggle whether it is enabled.",
+        ].join("\n"),
+        inputSchema: z.object({
+          id: z.string().min(1).describe("Id of the memory to update."),
+          content: z.string().min(1).optional().describe("New content for the memory."),
+          enabled: z.boolean().optional().describe("Set false to mute the memory without deleting it."),
+        }),
+        execute: async ({ id, content, enabled }) => this.updateMemory(id, { content, enabled }),
+      }),
+      forget: tool({
+        description: "Delete a memory by id (the bracketed id shown in your remembered context).",
+        inputSchema: z.object({
+          id: z.string().min(1).describe("Id of the memory to forget."),
+        }),
+        execute: async ({ id }) => this.forgetMemory(id),
       }),
       execute: createExecuteTool({
         ctx: this.ctx,

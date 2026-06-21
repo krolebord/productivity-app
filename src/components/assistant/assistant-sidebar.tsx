@@ -1,11 +1,13 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { generateId } from "@sqlite-sync/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
+import { Link } from "@tanstack/react-router";
 import { useAgent } from "agents/react";
 import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
 import { getToolName, isToolUIPart } from "ai";
 import {
   ArrowDown,
+  Brain,
   Check,
   ChevronDown,
   CircleAlert,
@@ -266,6 +268,33 @@ function WebToolChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   );
 }
 
+function MemoryChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
+  const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
+  const failed = part.state === "output-error" || part.state === "output-denied";
+  const done = part.state === "output-available";
+  const input = part.input as { content?: string } | undefined;
+  const label = name === "forget" ? "Forgot a memory" : name === "update_memory" ? "Updated a memory" : "Remembered";
+
+  return (
+    <Link
+      to="/memories"
+      className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+    >
+      {failed ? (
+        <CircleAlert className="size-3 shrink-0 text-destructive" />
+      ) : done ? (
+        <Brain className="size-3 shrink-0" />
+      ) : (
+        <Loader2 className="size-3 shrink-0 animate-spin" />
+      )}
+      <span className="shrink-0">{label}</span>
+      {name !== "forget" && input?.content && (
+        <span className="min-w-0 truncate text-muted-foreground/80">{input.content}</span>
+      )}
+    </Link>
+  );
+}
+
 function ChartErrorChip() {
   return (
     <div className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
@@ -288,6 +317,9 @@ function MessageParts({ message, conversationId }: { message: UIMessage; convers
       }
       if (name === "web_search" || name === "web_extract") {
         return <WebToolChip key={i} part={part} />;
+      }
+      if (name === "remember" || name === "update_memory" || name === "forget") {
+        return <MemoryChip key={i} part={part} />;
       }
       // The chart spec is the tool input; render it once the call has resolved.
       if (name === "renderChart" && part.state === "output-available") {

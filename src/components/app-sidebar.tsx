@@ -12,6 +12,7 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { Link, useMatches, useNavigate, useRouter } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 import {
+  Brain,
   ChevronDown,
   ChevronsUpDown,
   Coins,
@@ -57,6 +58,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 const navItems = [
   { to: "/", label: "Dashboard", icon: Home },
   { to: "/notes", label: "Notes", icon: StickyNote },
+  { to: "/memories", label: "Memories", icon: Brain },
 ] as const;
 
 const remoteStateConfig = {

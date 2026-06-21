@@ -16,6 +16,7 @@ import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AuthMagicLinkVerifyRouteImport } from './routes/_auth/magic-link-verify'
 import { Route as AppTransactionsRouteImport } from './routes/_app/transactions'
 import { Route as AppNotesRouteImport } from './routes/_app/notes'
+import { Route as AppMemoriesRouteImport } from './routes/_app/memories'
 import { Route as AppCurrenciesRouteImport } from './routes/_app/currencies'
 import { Route as AppAccountsRouteImport } from './routes/_app/accounts'
 
@@ -52,6 +53,11 @@ const AppNotesRoute = AppNotesRouteImport.update({
   path: '/notes',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppMemoriesRoute = AppMemoriesRouteImport.update({
+  id: '/memories',
+  path: '/memories',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppCurrenciesRoute = AppCurrenciesRouteImport.update({
   id: '/currencies',
   path: '/currencies',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/accounts': typeof AppAccountsRoute
   '/currencies': typeof AppCurrenciesRoute
+  '/memories': typeof AppMemoriesRoute
   '/notes': typeof AppNotesRoute
   '/transactions': typeof AppTransactionsRoute
   '/magic-link-verify': typeof AuthMagicLinkVerifyRoute
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/accounts': typeof AppAccountsRoute
   '/currencies': typeof AppCurrenciesRoute
+  '/memories': typeof AppMemoriesRoute
   '/notes': typeof AppNotesRoute
   '/transactions': typeof AppTransactionsRoute
   '/magic-link-verify': typeof AuthMagicLinkVerifyRoute
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_app/accounts': typeof AppAccountsRoute
   '/_app/currencies': typeof AppCurrenciesRoute
+  '/_app/memories': typeof AppMemoriesRoute
   '/_app/notes': typeof AppNotesRoute
   '/_app/transactions': typeof AppTransactionsRoute
   '/_auth/magic-link-verify': typeof AuthMagicLinkVerifyRoute
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/currencies'
+    | '/memories'
     | '/notes'
     | '/transactions'
     | '/magic-link-verify'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/currencies'
+    | '/memories'
     | '/notes'
     | '/transactions'
     | '/magic-link-verify'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_app/accounts'
     | '/_app/currencies'
+    | '/_app/memories'
     | '/_app/notes'
     | '/_app/transactions'
     | '/_auth/magic-link-verify'
@@ -181,6 +193,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotesRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/memories': {
+      id: '/_app/memories'
+      path: '/memories'
+      fullPath: '/memories'
+      preLoaderRoute: typeof AppMemoriesRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/currencies': {
       id: '/_app/currencies'
       path: '/currencies'
@@ -201,6 +220,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteRouteChildren {
   AppAccountsRoute: typeof AppAccountsRoute
   AppCurrenciesRoute: typeof AppCurrenciesRoute
+  AppMemoriesRoute: typeof AppMemoriesRoute
   AppNotesRoute: typeof AppNotesRoute
   AppTransactionsRoute: typeof AppTransactionsRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -209,6 +229,7 @@ interface AppRouteRouteChildren {
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppAccountsRoute: AppAccountsRoute,
   AppCurrenciesRoute: AppCurrenciesRoute,
+  AppMemoriesRoute: AppMemoriesRoute,
   AppNotesRoute: AppNotesRoute,
   AppTransactionsRoute: AppTransactionsRoute,
   AppIndexRoute: AppIndexRoute,
