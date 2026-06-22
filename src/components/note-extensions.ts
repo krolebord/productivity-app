@@ -1,7 +1,59 @@
+import { generateId } from "@sqlite-sync/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Markdown, MarkdownManager } from "@tiptap/markdown";
-import type { JSONContent } from "@tiptap/react";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { type JSONContent, ReactNodeViewRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { TaskItemView } from "./task-item-view";
+
+const dragIdPluginKey = new PluginKey("taskItemDragId");
+
+/**
+ * TaskItem augmented with a transient `dragId` (a stable handle for dnd-kit
+ * reordering) and a React node view that renders the drag handle. The id is
+ * never written to the DOM or markdown — it only needs to stay stable for the
+ * lifetime of an editing session.
+ */
+const DraggableTaskItem = TaskItem.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      dragId: { default: null, rendered: false, parseHTML: () => null, renderHTML: () => ({}) },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(TaskItemView);
+  },
+  addProseMirrorPlugins() {
+    return [
+      ...(this.parent?.() ?? []),
+      // Keep every task item's dragId unique. Splitting an item (pressing
+      // Enter) copies its attributes, so new items inherit the parent's
+      // dragId — reassign anything missing or already seen, not just nulls.
+      new Plugin({
+        key: dragIdPluginKey,
+        appendTransaction: (_transactions, _oldState, newState) => {
+          const { tr, doc } = newState;
+          const seen = new Set<string>();
+          let modified = false;
+          doc.descendants((child, pos) => {
+            if (child.type.name !== "taskItem") return;
+            const id = child.attrs.dragId as string | null;
+            if (!id || seen.has(id)) {
+              const fresh = generateId();
+              tr.setNodeAttribute(pos, "dragId", fresh);
+              seen.add(fresh);
+              modified = true;
+            } else {
+              seen.add(id);
+            }
+          });
+          return modified ? tr : null;
+        },
+      }),
+    ];
+  },
+});
 
 /**
  * Shared between the note editor and the static card preview so both
@@ -11,7 +63,7 @@ export const noteExtensions = [
   // Underline is excluded: it has no markdown representation.
   StarterKit.configure({ underline: false }),
   TaskList,
-  TaskItem.configure({ nested: true }),
+  DraggableTaskItem.configure({ nested: true }),
   Markdown.configure({ markedOptions: { gfm: true } }),
 ];
 
@@ -22,7 +74,18 @@ const markdownManager = new MarkdownManager({
 
 export function parseNoteMarkdown(markdown: string): JSONContent {
   const doc = markdownManager.parse(markdown);
-  return { ...doc, content: splitMisparsedTaskItems(doc.content ?? []) };
+  return { ...doc, content: stampDragIds(splitMisparsedTaskItems(doc.content ?? [])) };
+}
+
+/** Give every task item a stable dragId up front (the editor reorders by it). */
+function stampDragIds(nodes: JSONContent[]): JSONContent[] {
+  return nodes.map((node) => {
+    const content = node.content ? stampDragIds(node.content) : node.content;
+    if (node.type === "taskItem") {
+      return { ...node, attrs: { ...node.attrs, dragId: node.attrs?.dragId ?? generateId() }, content };
+    }
+    return content ? { ...node, content } : node;
+  });
 }
 
 const EMPTY_TASK_RE = /^\[([ xX])\]$/;

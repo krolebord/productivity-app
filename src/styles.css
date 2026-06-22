@@ -332,6 +332,12 @@
     padding-left: 0;
   }
 
+  /* Each task item is wrapped in a React node-view container; collapse it so
+     the <li> rows lay out directly under the list. */
+  .note-prose ul[data-type="taskList"] > .react-renderer {
+    display: contents;
+  }
+
   .note-prose ul[data-type="taskList"] li {
     display: flex;
     gap: 0.5rem;
@@ -362,6 +368,42 @@
   /* Checkboxes are inert in the static card preview (the editor is .tiptap) */
   .note-prose:not(.tiptap) input[type="checkbox"] {
     pointer-events: none;
+  }
+
+  /* Drag handle for reordering checklist rows (custom task-item node view).
+     Hidden until row hover on pointer devices; always faintly visible on
+     touch, where there is no hover to reveal it. */
+  .note-task-drag-handle {
+    flex-shrink: 0;
+    align-self: flex-start;
+    padding-top: 0.3125rem;
+    color: var(--color-muted-foreground);
+    cursor: grab;
+    opacity: 0;
+    touch-action: none;
+    transition: opacity 0.12s ease;
+  }
+  .note-task-item:hover .note-task-drag-handle {
+    opacity: 0.5;
+  }
+  .note-task-drag-handle:hover {
+    opacity: 1;
+  }
+  .note-task-drag-handle:active {
+    cursor: grabbing;
+  }
+  /* Keep the pointer target on the button itself: if events land on the svg,
+     ProseMirror handles them and preventDefault()s, which cancels the drag. */
+  .note-task-drag-handle * {
+    pointer-events: none;
+  }
+  .note-task-item.is-dragging {
+    opacity: 0.4;
+  }
+  @media (hover: none) {
+    .note-task-drag-handle {
+      opacity: 0.45;
+    }
   }
 
   /* Editor placeholder (Tiptap Placeholder extension) */
