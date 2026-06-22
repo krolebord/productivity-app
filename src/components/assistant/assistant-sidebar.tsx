@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { useAgent } from "agents/react";
 import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
 import { getToolName, isToolUIPart } from "ai";
+import { sql } from "kysely";
 import {
   ArrowDown,
   Brain,
@@ -717,7 +718,6 @@ function ConversationView({
   const db = useDb();
   const setOpen = useAssistantStore((s) => s.setOpen);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
-  const createConversation = useAssistantStore((s) => s.createConversation);
   // The draft lives in the store so off-screen rows can append context tokens to it.
   const input = useAssistantStore((s) => s.inputDraft);
   const setInput = useAssistantStore((s) => s.setInputDraft);
@@ -778,7 +778,8 @@ function ConversationView({
   function deleteConversation(target: ConversationRow) {
     db.db.executeKysely((q) => q.deleteFrom("conversation").where("id", "=", target.id));
     if (target.id === conversation.id) {
-      setActiveConversation(null);
+      const next = conversations.find((c) => c.id !== target.id);
+      setActiveConversation(next ? next.id : null);
     }
   }
 
@@ -810,7 +811,7 @@ function ConversationView({
         totalTokens: 0,
       }),
     );
-    createConversation(id);
+    setActiveConversation(id);
   }
 
   async function uploadSelectedFiles() {
@@ -1097,36 +1098,25 @@ function ConversationView({
 export function AssistantSidebar() {
   const db = useDb();
   const activeConversationId = useAssistantStore((s) => s.activeConversationId);
-  const pendingConversationId = useAssistantStore((s) => s.pendingConversationId);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
-  const createConversation = useAssistantStore((s) => s.createConversation);
   const preferredModel = useAssistantStore((s) => s.model);
 
   const { data: conversations } = useDbQuery((db) =>
     db
       .selectFrom("conversation")
-      .select(["id", "title", "createdAt", "updatedAt", "model", "totalCost", "totalTokens"])
+      .selectAll()
+      .where(sql<boolean>`${activeConversationId ?? ""} is not null`)
       .orderBy("updatedAt", "desc"),
   );
 
-  const found = activeConversationId ? conversations.find((c) => c.id === activeConversationId) : undefined;
-  // The active id isn't in the snapshot, but it's one we just created and are waiting for the
-  // query to re-emit — show nothing rather than falling back to the previous conversation.
-  const awaitingNew = !found && activeConversationId !== null && activeConversationId === pendingConversationId;
-  const active = found ?? (awaitingNew ? undefined : conversations[0]);
+  const active = conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
 
   const creatingRef = useRef(false);
   useEffect(() => {
-    if (active) {
+    if (conversations.length > 0) {
       creatingRef.current = false;
-      if (active.id !== activeConversationId) {
-        setActiveConversation(active.id);
-      }
       return;
     }
-    // Wait for a freshly created conversation to sync in; only auto-create on a genuinely empty DB.
-    if (awaitingNew) return;
-    if (conversations.length > 0) return;
     if (creatingRef.current) return;
     creatingRef.current = true;
     const id = generateId();
@@ -1143,17 +1133,8 @@ export function AssistantSidebar() {
         totalTokens: 0,
       }),
     );
-    createConversation(id);
-  }, [
-    active,
-    activeConversationId,
-    awaitingNew,
-    conversations,
-    db,
-    setActiveConversation,
-    createConversation,
-    preferredModel,
-  ]);
+    setActiveConversation(id);
+  }, [conversations, db, setActiveConversation, preferredModel]);
 
   if (!active) {
     return (

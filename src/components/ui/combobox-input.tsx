@@ -97,15 +97,15 @@ export function ComboboxInput({
         autoComplete="off"
       />
       {showDropdown && (
-        <div className="absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-md border bg-popover shadow-md">
+        <div className="absolute top-full left-0 z-50 mt-1 w-max min-w-full max-w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border bg-popover shadow-md">
           <CommandPrimitive loop shouldFilter={false}>
-            <CommandPrimitive.List className="max-h-48 scroll-py-1 overflow-y-auto p-1">
+            <CommandPrimitive.List className="max-h-72 scroll-py-1 overflow-y-auto p-1">
               {filtered.map((option) => (
                 <CommandPrimitive.Item
                   key={option}
                   value={option}
                   onSelect={handleSelect}
-                  className="relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+                  className="relative flex cursor-default select-none items-center gap-2 truncate rounded-sm px-2 py-1.5 text-sm outline-hidden data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
                 >
                   <CheckIcon className={cn("size-3.5 shrink-0", value === option ? "opacity-100" : "opacity-0")} />
                   {option}
