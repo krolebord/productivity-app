@@ -21,6 +21,7 @@ import {
 } from "@/components/transaction-dialog";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { ComboboxInput } from "@/components/ui/combobox-input";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -244,6 +245,16 @@ function TransactionsPage() {
   }, [search.accountId, search.type, search.category, search.from, search.q, search.sort, search.to]);
 
   const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
+
+  const { data: categoryRows } = useDbQuery((db) =>
+    db
+      .selectFrom("transaction_entry")
+      .select("category")
+      .distinct()
+      .where("category", "!=", "")
+      .orderBy("category", "asc"),
+  );
+  const categories = categoryRows.map((row) => row.category);
 
   // Fetch one extra row beyond the limit so we can tell whether more remain.
   const { data: transactions } = useDbQuery((db) =>
@@ -500,10 +511,11 @@ function TransactionsPage() {
           <label htmlFor="transactions-category" className="text-muted-foreground text-xs uppercase tracking-wide">
             Category
           </label>
-          <Input
+          <ComboboxInput
             id="transactions-category"
             value={search.category ?? ""}
-            onChange={(event) => patchSearch({ category: event.currentTarget.value })}
+            onChange={(value) => patchSearch({ category: value })}
+            options={categories}
             placeholder="Filter category"
           />
         </div>

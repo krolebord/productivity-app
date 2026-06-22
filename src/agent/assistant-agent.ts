@@ -95,12 +95,19 @@ function sanitizeWorkspaceFilename(filename: string) {
 type AssistantUsageState = {
   totalCostUsd: number;
   totalTokens: number;
+  fileCounter: number;
 };
 
 type SkillCatalogRow = { id: string; name: string; whenToUse: string; updatedAt: number };
 
 export class AssistantAgent extends Think<Env, AssistantUsageState> {
-  initialState: AssistantUsageState = { totalCostUsd: 0, totalTokens: 0 };
+  initialState: AssistantUsageState = { totalCostUsd: 0, totalTokens: 0, fileCounter: 0 };
+
+  private reserveFileIndices(count: number): number {
+    const current = this.state.fileCounter ?? 0;
+    this.setState({ ...this.state, fileCounter: current + count });
+    return current + 1;
+  }
 
   getModel(modelId: AssistantModelId = DEFAULT_ASSISTANT_MODEL): LanguageModel {
     const openrouter = createOpenRouter({
@@ -203,6 +210,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       return;
     }
     this.setState({
+      ...this.state,
       totalCostUsd: this.state.totalCostUsd + cost,
       totalTokens: this.state.totalTokens + tokens,
     });
@@ -469,12 +477,13 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
 
   async uploadWorkspaceFiles(files: WorkspaceUploadInput[]): Promise<WorkspaceUploadResult[]> {
     const workspace = this.workspace as WorkspaceFsLike;
-    const uploadDir = `/uploads/${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID()}`;
+    const uploadDir = "/uploads";
     await workspace.mkdir(uploadDir, { recursive: true });
+    let index = this.reserveFileIndices(files.length);
 
     const uploaded: WorkspaceUploadResult[] = [];
-    for (const [index, file] of files.entries()) {
-      const filename = `${String(index + 1).padStart(2, "0")}-${sanitizeWorkspaceFilename(file.filename)}`;
+    for (const file of files) {
+      const filename = `${String(index++).padStart(2, "0")}-${sanitizeWorkspaceFilename(file.filename)}`;
       const path = `${uploadDir}/${filename}`;
       const bytes = new Uint8Array(file.bytes);
       await workspace.writeFileBytes(path, bytes, file.mediaType);
@@ -505,10 +514,10 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
 
     const filename = sanitizeWorkspaceFilename(input.filename || sourcePath.split("/").at(-1) || "download");
     const mediaType = stat.mimeType || guessMediaType(filename);
-    const dir = `${DOWNLOAD_DIR}/${crypto.randomUUID()}`;
-    const path = `${dir}/${filename}`;
+    await workspace.mkdir(DOWNLOAD_DIR, { recursive: true });
+    const index = this.reserveFileIndices(1);
+    const path = `${DOWNLOAD_DIR}/${String(index).padStart(2, "0")}-${filename}`;
 
-    await workspace.mkdir(dir, { recursive: true });
     await workspace.cp(sourcePath, path);
 
     return { filename, mediaType, size: stat.size, path };
@@ -524,7 +533,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       return null;
     }
     const stat = await workspace.stat(path);
-    const filename = path.split("/").at(-1) || "download";
+    const filename = (path.split("/").at(-1) || "download").replace(/^\d+-/, "");
     const mediaType = stat?.mimeType || guessMediaType(filename);
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     return { filename, mediaType, bytes: buffer };

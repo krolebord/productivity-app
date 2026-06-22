@@ -350,7 +350,9 @@ function ActivateSkillChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
       ) : (
         <Loader2 className="size-3 shrink-0 animate-spin" />
       )}
-      <span className="shrink-0">{done ? "Activated skill" : failed ? "Skill activation failed" : "Activating skill"}</span>
+      <span className="shrink-0">
+        {done ? "Activated skill" : failed ? "Skill activation failed" : "Activating skill"}
+      </span>
       {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
     </div>
   );
