@@ -98,7 +98,7 @@ function getPastedImageFiles(event: ClipboardEvent<HTMLTextAreaElement>) {
       const name =
         file.name && file.name !== "image.png"
           ? file.name
-          : `pasted-image-${new Date().toISOString().replace(/[:.]/g, "-")}-${index + 1}.${getExtensionForMediaType(mediaType)}`;
+          : `pasted-image-${index + 1}.${getExtensionForMediaType(mediaType)}`;
       return new File([file], name, { type: mediaType, lastModified: Date.now() });
     })
     .filter((file): file is File => file !== null);
