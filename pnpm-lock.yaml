@@ -93,20 +93,20 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@sqlite-sync/ai':
-        specifier: ^0.8.0
-        version: 0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(ai@6.0.208(zod@4.4.3))
+        specifier: ^0.8.1
+        version: 0.8.1(@sqlite-sync/core@0.8.1(kysely@0.28.17))(ai@6.0.208(zod@4.4.3))
       '@sqlite-sync/cloudflare':
-        specifier: ^0.8.0
-        version: 0.8.0(@cloudflare/workers-types@4.20260609.1)(@sqlite-sync/core@0.8.0(kysely@0.28.17))(kysely@0.28.17)
+        specifier: ^0.8.1
+        version: 0.8.1(@cloudflare/workers-types@4.20260609.1)(@sqlite-sync/core@0.8.1(kysely@0.28.17))(kysely@0.28.17)
       '@sqlite-sync/core':
-        specifier: ^0.8.0
-        version: 0.8.0(kysely@0.28.17)
+        specifier: ^0.8.1
+        version: 0.8.1(kysely@0.28.17)
       '@sqlite-sync/devtools':
-        specifier: ^0.8.0
-        version: 0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(react@19.2.7)
+        specifier: ^0.8.1
+        version: 0.8.1(@sqlite-sync/core@0.8.1(kysely@0.28.17))(react@19.2.7)
       '@sqlite-sync/react':
-        specifier: ^0.8.0
-        version: 0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(kysely@0.28.17)(react@19.2.7)
+        specifier: ^0.8.1
+        version: 0.8.1(@sqlite-sync/core@0.8.1(kysely@0.28.17))(kysely@0.28.17)(react@19.2.7)
       '@tailwindcss/vite':
         specifier: ^4.3.1
         version: 4.3.1(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
@@ -268,8 +268,8 @@ importers:
         specifier: ^8.0.16
         version: 8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
       vitest:
-        specifier: ^4.1.8
-        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        specifier: ^4.1.9
+        version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       wrangler:
         specifier: ^4.101.0
         version: 4.101.0(@cloudflare/workers-types@4.20260609.1)
@@ -2386,34 +2386,34 @@ packages:
   '@speed-highlight/core@1.2.16':
     resolution: {integrity: sha512-yNm/fYEcnpRjYduLMaddTK9XKYil6xB88+qFg79ZdZhHu1PadfoQmFW7pVTx7FZqMBNcUuThiAhxhENgtAO2/w==}
 
-  '@sqlite-sync/ai@0.8.0':
-    resolution: {integrity: sha512-Nh0Y7f9KfjcnZjjPaUGwSjJBNwlEz8I228hIJ5T3R6rWVRNHOSXhSiAbsr9r/gd3Uq7F8xdqPbdKOTNaKE7p2g==}
+  '@sqlite-sync/ai@0.8.1':
+    resolution: {integrity: sha512-DFmZ0hE3qilrVr0mjdU6ckhE36gYnbqKHkzTAb5+DkjQojGRWgOpqxjO/wd+GtUDcaeUHitJO/oN18SvmsNyew==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.8.0
+      '@sqlite-sync/core': ^0.8.1
       ai: ^6.0.0
 
-  '@sqlite-sync/cloudflare@0.8.0':
-    resolution: {integrity: sha512-VgwvfcPbjTZUArpc7zLl2GyhwJNzxfGuLmMxX9NmbRKNxTaVXSvuQ5ze4uAYlYgNOGqv4mKq9rCP3FVumenYbw==}
+  '@sqlite-sync/cloudflare@0.8.1':
+    resolution: {integrity: sha512-xPQ9SDALDtSV1SKIyHeWmW1dy6X5pyMx7Rwz7ShnOFLKUltxUafnrth2wsqodnA4VOv8TDcLVSawEyKV+D5G8g==}
     peerDependencies:
       '@cloudflare/workers-types': ^4.0.0
-      '@sqlite-sync/core': ^0.8.0
+      '@sqlite-sync/core': ^0.8.1
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/core@0.8.0':
-    resolution: {integrity: sha512-UjBn5hJ7kXU9klNSkv51SBwBSzVgAqfLMPUxsPugYqG+m5ahFZTLt4Yg7lt/eivs237NtcBbqfHreLFDP4qWHw==}
+  '@sqlite-sync/core@0.8.1':
+    resolution: {integrity: sha512-HOUqioq13DjMzAZrUDa/OfUGGc3GqPKC73SOwjnzOKV0WEg79rZoPKbajyHFbKDby/dzS3EsEvd9YByovELCdw==}
     peerDependencies:
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/devtools@0.8.0':
-    resolution: {integrity: sha512-wr2x332vbLd5uN/h3Dl5+X+36v9YFICn2gZL5Udr0/g9Ur6wCbIdtZo6wX3VvFsqCdkmMEPgS2sv2G8onSYkCg==}
+  '@sqlite-sync/devtools@0.8.1':
+    resolution: {integrity: sha512-i7asKdoxUOa4O4lCJtnjAQjCqkGEPLUwyuNbhMx8dFne5F2OvYKmgeaH1qUggUF0iujguXMBEI/aiGSas+lXyA==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.8.0
+      '@sqlite-sync/core': ^0.8.1
       react: ^18.0.0 || ^19.0.0
 
-  '@sqlite-sync/react@0.8.0':
-    resolution: {integrity: sha512-Y7H1Qd/JeUCnirSWz1COq/qc6loLXrk1bbvT5a/aKMFLRU60FcAradSv5Dwd2yg/aTCymQHCmiFXLCEwgv/oLg==}
+  '@sqlite-sync/react@0.8.1':
+    resolution: {integrity: sha512-26z6pzWLbkXgqLTpGpXE34YuL+n0KIHrohUXeDsmkBW8qwaaB4SSjoSdSlHQCLjPoxM/wCZaNxhUH+1PnuYmqw==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.8.0
+      '@sqlite-sync/core': ^0.8.1
       kysely: ^0.28.0 || ^0.29.0
       react: ^18.0.0 || ^19.0.0
 
@@ -3033,11 +3033,11 @@ packages:
       babel-plugin-react-compiler:
         optional: true
 
-  '@vitest/expect@4.1.8':
-    resolution: {integrity: sha512-h3nDO677RDLEGlBxyQ5CW8RlMThSKSRLUePLOx09gNIWRL40edgA1GCZSZgf1W55MFAG6/Sw14KeaAnqv0NKdQ==}
+  '@vitest/expect@4.1.9':
+    resolution: {integrity: sha512-vl/rYsUKcBr3SnQn166+XR5ZQcgMx3DQhFWdfli/cWpLnLUmbxZvyrJZotLFUryib+LtArYMSTJ5RbQ57ZqrlA==}
 
-  '@vitest/mocker@4.1.8':
-    resolution: {integrity: sha512-LEiN/xe4OSIbKe9HQIp5OC24agGD9J5CnmMgsLohVVoOPWL9a2sBoR6VBx43jQZb7Kr1l4RCuyCJzcAa0+dojw==}
+  '@vitest/mocker@4.1.9':
+    resolution: {integrity: sha512-EVkXzBjrPGM+cK8/ANWgBrkUCfJfb38/EfTSO8h7pWvKkyPkpWxvR7BkD2MyItMF62C97zAEoqdpUixwR/e+Rw==}
     peerDependencies:
       msw: ^2.4.9
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
@@ -3047,20 +3047,20 @@ packages:
       vite:
         optional: true
 
-  '@vitest/pretty-format@4.1.8':
-    resolution: {integrity: sha512-9GasEBxpZ1VYIpqHf/0+YGg121uSNwCKOJqIrTwWP/TB7DmFCiaBpNl3aPZzoLWfWkuqhbH8vJIVobZkvdo2cA==}
+  '@vitest/pretty-format@4.1.9':
+    resolution: {integrity: sha512-s0iufns3iIFitdgm+YR7g1whCAaGtXz459VS9/PqyKDEEFgYIhsHOQmXgIgDuYCt7DeQmiZT0Qe2OA2p4ZPu5A==}
 
-  '@vitest/runner@4.1.8':
-    resolution: {integrity: sha512-EmVxeBAfMJvycdjd6Hm+RbFBbA9fKvo0Kx37hNpBYoYeavH3RNsBXWDooR1mgD52dCrxIIuP7UotpfiwOikvcg==}
+  '@vitest/runner@4.1.9':
+    resolution: {integrity: sha512-KXLMDtc7oe70+3mJfGrPUWPesswH+3sTxAMAMl8DG7I8IUQT4XW718dY5ID3vPUcmlu27CcKfY4P3h3I29SLJg==}
 
-  '@vitest/snapshot@4.1.8':
-    resolution: {integrity: sha512-acfZboRmAIf05DEKcBQy33VXojFJjtUdLyo7oOmV9kebb2xdU01UknNiPuPZoJZQyO7DF0gZdTGTpeAzET9QPQ==}
+  '@vitest/snapshot@4.1.9':
+    resolution: {integrity: sha512-Jc7RKGNBo8Z28WYIm0Niej4xdSPByRf6mU58VpHQkd6Zh05rlnA+twjbK5HyeIGHxrzsc3mJgS43uM0CZKzaIA==}
 
-  '@vitest/spy@4.1.8':
-    resolution: {integrity: sha512-6EevtBp6OZOPF7bmz36HrGMeP3txgVSrgebWxHOafDXGkhIzfXK14f8KF6MuFfgXXUeHxmpD3BQxkV00/3s5mA==}
+  '@vitest/spy@4.1.9':
+    resolution: {integrity: sha512-fHpsS6mIi+PiEW+vcRVOMkX1oSaPKne3VOclSFICPcGOmfKgXPU5iAah+wcNcj2xPrCCmfq99IDGf+EojhhvhA==}
 
-  '@vitest/utils@4.1.8':
-    resolution: {integrity: sha512-uOJamYALNhfJ6iolExyQM40yIQwDqYnkKtQ5VCiSe17E33H0aQ/u+1GlRuz4LZBk6Mm3sg90G9hEbmEt37C1Zg==}
+  '@vitest/utils@4.1.9':
+    resolution: {integrity: sha512-A51o8ymO5PpqlWNnBP9ZHPXDIpuMtTLlGSjN7la4US+LJzoUMyhwjA5QXlm39JexgwHKW4Xjs8Z2d3dLCXOeuA==}
 
   '@workflow/serde@4.1.0-beta.2':
     resolution: {integrity: sha512-8kkeoQKLDaKXefjV5dbhBj2aErfKp1Mc4pb6tj8144cF+Em5SPbyMbyLCHp+BVrFfFVCBluCtMx+jjvaFVZGww==}
@@ -4639,8 +4639,8 @@ packages:
     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
     engines: {node: '>= 0.4'}
 
-  obug@2.1.2:
-    resolution: {integrity: sha512-AWGB9WFcRXOQs48Z/udjI5ZcZMHXwX8XPByNpOydgcGsDLIzjGizhoMWJyKAWze7AVW/2W1i+/gPX4YtKe5cyg==}
+  obug@2.1.3:
+    resolution: {integrity: sha512-9miFgM2OFba7hB+pRgvtV84pYTBaoTHohvmIgiRt6dRIzbwEOIaNaP+dIlGs2fNFoB0SeISs0Jz5WFVRid6Xyg==}
     engines: {node: '>=12.20.0'}
 
   on-finished@2.4.1:
@@ -5486,20 +5486,20 @@ packages:
       yaml:
         optional: true
 
-  vitest@4.1.8:
-    resolution: {integrity: sha512-flY6ScbCIt9HThs+C5HS7jvGOB560DJtk/Z15IQROTA6zEy49Nh8T/dofWTQL+n3vswqn87sbJNiuqw1SDp5Ig==}
+  vitest@4.1.9:
+    resolution: {integrity: sha512-nE3/LEyc0z87uHYLZebqCUOaJr2hdtuPp7BQ4BosVFnfltxgAvMG08NyrSGlPpOUWvR27c5flSmYFTNr78L9GQ==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
     hasBin: true
     peerDependencies:
       '@edge-runtime/vm': '*'
       '@opentelemetry/api': ^1.9.0
       '@types/node': ^20.0.0 || ^22.0.0 || >=24.0.0
-      '@vitest/browser-playwright': 4.1.8
-      '@vitest/browser-preview': 4.1.8
-      '@vitest/browser-webdriverio': 4.1.8
-      '@vitest/coverage-istanbul': 4.1.8
-      '@vitest/coverage-v8': 4.1.8
-      '@vitest/ui': 4.1.8
+      '@vitest/browser-playwright': 4.1.9
+      '@vitest/browser-preview': 4.1.9
+      '@vitest/browser-webdriverio': 4.1.9
+      '@vitest/coverage-istanbul': 4.1.9
+      '@vitest/coverage-v8': 4.1.9
+      '@vitest/ui': 4.1.9
       happy-dom: '*'
       jsdom: '*'
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
@@ -7429,18 +7429,18 @@ snapshots:
 
   '@speed-highlight/core@1.2.16': {}
 
-  '@sqlite-sync/ai@0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(ai@6.0.208(zod@4.4.3))':
+  '@sqlite-sync/ai@0.8.1(@sqlite-sync/core@0.8.1(kysely@0.28.17))(ai@6.0.208(zod@4.4.3))':
     dependencies:
-      '@sqlite-sync/core': 0.8.0(kysely@0.28.17)
+      '@sqlite-sync/core': 0.8.1(kysely@0.28.17)
       ai: 6.0.208(zod@4.4.3)
 
-  '@sqlite-sync/cloudflare@0.8.0(@cloudflare/workers-types@4.20260609.1)(@sqlite-sync/core@0.8.0(kysely@0.28.17))(kysely@0.28.17)':
+  '@sqlite-sync/cloudflare@0.8.1(@cloudflare/workers-types@4.20260609.1)(@sqlite-sync/core@0.8.1(kysely@0.28.17))(kysely@0.28.17)':
     dependencies:
       '@cloudflare/workers-types': 4.20260609.1
-      '@sqlite-sync/core': 0.8.0(kysely@0.28.17)
+      '@sqlite-sync/core': 0.8.1(kysely@0.28.17)
       kysely: 0.28.17
 
-  '@sqlite-sync/core@0.8.0(kysely@0.28.17)':
+  '@sqlite-sync/core@0.8.1(kysely@0.28.17)':
     dependencies:
       '@sqlite.org/sqlite-wasm': 3.53.0-build1
       idb-keyval: 6.2.5
@@ -7448,14 +7448,14 @@ snapshots:
       xxhash-wasm: 1.1.0
       zod: 4.4.3
 
-  '@sqlite-sync/devtools@0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(react@19.2.7)':
+  '@sqlite-sync/devtools@0.8.1(@sqlite-sync/core@0.8.1(kysely@0.28.17))(react@19.2.7)':
     dependencies:
-      '@sqlite-sync/core': 0.8.0(kysely@0.28.17)
+      '@sqlite-sync/core': 0.8.1(kysely@0.28.17)
       react: 19.2.7
 
-  '@sqlite-sync/react@0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(kysely@0.28.17)(react@19.2.7)':
+  '@sqlite-sync/react@0.8.1(@sqlite-sync/core@0.8.1(kysely@0.28.17))(kysely@0.28.17)(react@19.2.7)':
     dependencies:
-      '@sqlite-sync/core': 0.8.0(kysely@0.28.17)
+      '@sqlite-sync/core': 0.8.1(kysely@0.28.17)
       kysely: 0.28.17
       react: 19.2.7
 
@@ -8110,44 +8110,44 @@ snapshots:
     optionalDependencies:
       '@rolldown/plugin-babel': 0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.0.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  '@vitest/expect@4.1.8':
+  '@vitest/expect@4.1.9':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/chai': 5.2.3
-      '@vitest/spy': 4.1.8
-      '@vitest/utils': 4.1.8
+      '@vitest/spy': 4.1.9
+      '@vitest/utils': 4.1.9
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.8(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
+  '@vitest/mocker@4.1.9(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
-      '@vitest/spy': 4.1.8
+      '@vitest/spy': 4.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
       vite: 8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
 
-  '@vitest/pretty-format@4.1.8':
+  '@vitest/pretty-format@4.1.9':
     dependencies:
       tinyrainbow: 3.1.0
 
-  '@vitest/runner@4.1.8':
+  '@vitest/runner@4.1.9':
     dependencies:
-      '@vitest/utils': 4.1.8
+      '@vitest/utils': 4.1.9
       pathe: 2.0.3
 
-  '@vitest/snapshot@4.1.8':
+  '@vitest/snapshot@4.1.9':
     dependencies:
-      '@vitest/pretty-format': 4.1.8
-      '@vitest/utils': 4.1.8
+      '@vitest/pretty-format': 4.1.9
+      '@vitest/utils': 4.1.9
       magic-string: 0.30.21
       pathe: 2.0.3
 
-  '@vitest/spy@4.1.8': {}
+  '@vitest/spy@4.1.9': {}
 
-  '@vitest/utils@4.1.8':
+  '@vitest/utils@4.1.9':
     dependencies:
-      '@vitest/pretty-format': 4.1.8
+      '@vitest/pretty-format': 4.1.9
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
@@ -10009,7 +10009,7 @@ snapshots:
 
   object-inspect@1.13.4: {}
 
-  obug@2.1.2: {}
+  obug@2.1.3: {}
 
   on-finished@2.4.1:
     dependencies:
@@ -11017,19 +11017,19 @@ snapshots:
       tsx: 4.22.4
       yaml: 2.9.0
 
-  vitest@4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
+  vitest@4.1.9(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
-      '@vitest/expect': 4.1.8
-      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-      '@vitest/pretty-format': 4.1.8
-      '@vitest/runner': 4.1.8
-      '@vitest/snapshot': 4.1.8
-      '@vitest/spy': 4.1.8
-      '@vitest/utils': 4.1.8
+      '@vitest/expect': 4.1.9
+      '@vitest/mocker': 4.1.9(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.9
+      '@vitest/runner': 4.1.9
+      '@vitest/snapshot': 4.1.9
+      '@vitest/spy': 4.1.9
+      '@vitest/utils': 4.1.9
       es-module-lexer: 2.1.0
       expect-type: 1.3.0
       magic-string: 0.30.21
-      obug: 2.1.2
+      obug: 2.1.3
       pathe: 2.0.3
       picomatch: 4.0.4
       std-env: 4.1.0
