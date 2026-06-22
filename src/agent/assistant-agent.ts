@@ -1,7 +1,4 @@
-import {
-  createWorkspaceStateBackend,
-  type WorkspaceFsLike,
-} from "@cloudflare/shell";
+import { createWorkspaceStateBackend, type WorkspaceFsLike } from "@cloudflare/shell";
 import {
   type ChatResponseResult,
   type Session,
@@ -13,26 +10,14 @@ import {
 } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import {
-  type AiMutationResult,
-  type AiQueryResult,
-  createDbTools,
-  type DbToolsAccess,
-} from "@sqlite-sync/ai";
+import { type AiMutationResult, type AiQueryResult, createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
 import { tavilyExtract, tavilySearch } from "@tavily/ai-sdk";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { z } from "zod";
-import {
-  MEMORY_INJECTION_LIMIT,
-  SKILL_CATALOG_LIMIT,
-} from "../user-db/migrations";
+import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
 import { ChartSpecSchema } from "./chart-spec";
-import {
-  type AssistantModelId,
-  DEFAULT_ASSISTANT_MODEL,
-  resolveAssistantModelId,
-} from "./models";
+import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId } from "./models";
 
 type WorkspaceUploadInput = {
   filename: string;
@@ -83,10 +68,7 @@ function guessMediaType(filename: string) {
 
 export function isDownloadPath(path: unknown): path is string {
   return (
-    typeof path === "string" &&
-    path.startsWith(`${DOWNLOAD_DIR}/`) &&
-    !path.includes("..") &&
-    !path.includes("\0")
+    typeof path === "string" && path.startsWith(`${DOWNLOAD_DIR}/`) && !path.includes("..") && !path.includes("\0")
   );
 }
 
@@ -146,9 +128,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
     const model = this.getModel(resolveAssistantModelId(ctx.body?.model));
     const memories = await this.getMemoriesBlock();
-    return memories
-      ? { model, system: `${ctx.system}\n\n${memories}` }
-      : { model };
+    return memories ? { model, system: `${ctx.system}\n\n${memories}` } : { model };
   }
 
   configureSession(session: Session): Session {
@@ -178,9 +158,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     };
     const loadStub = () => this.getUserDbStub();
     const describe = (row: { name: string; whenToUse: string }) =>
-      row.whenToUse
-        ? `${row.name} — ${row.whenToUse}`
-        : row.name || "Untitled skill";
+      row.whenToUse ? `${row.name} — ${row.whenToUse}` : row.name || "Untitled skill";
 
     let cache: SkillCatalogRow[] = [];
     let fingerprint = "";
@@ -192,9 +170,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       },
       async refresh() {
         cache = await fetchActive();
-        fingerprint = cache
-          .map((row) => `${row.id}:${row.updatedAt}`)
-          .join(",");
+        fingerprint = cache.map((row) => `${row.id}:${row.updatedAt}`).join(",");
       },
       async list() {
         const rows = cache.length > 0 ? cache : await fetchActive();
@@ -247,9 +223,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     if ("error" in result || result.rows.length === 0) {
       return null;
     }
-    const lines = result.rows.map(
-      (row) => `- [${String(row.id)}] ${String(row.content)}`,
-    );
+    const lines = result.rows.map((row) => `- [${String(row.id)}] ${String(row.content)}`);
     return [
       "What you remember about the user (persists across all chats). Revise with update_memory or forget, referencing the bracketed id:",
       ...lines,
@@ -258,9 +232,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
 
   onStepFinish(ctx: StepContext): void {
     const usage = (
-      ctx.providerMetadata as
-        | { openrouter?: { usage?: { cost?: number; totalTokens?: number } } }
-        | undefined
+      ctx.providerMetadata as { openrouter?: { usage?: { cost?: number; totalTokens?: number } } } | undefined
     )?.openrouter?.usage;
     const cost = usage?.cost ?? 0;
     const tokens = usage?.totalTokens ?? ctx.usage?.totalTokens ?? 0;
@@ -296,9 +268,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     });
   }
 
-  private async createMemory(
-    content: string,
-  ): Promise<{ id: string | null; content: string }> {
+  private async createMemory(content: string): Promise<{ id: string | null; content: string }> {
     const stub = await this.getUserDbStub();
     const now = Date.now();
     const result = (await stub.mutate({
@@ -333,16 +303,12 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       payload.enabled = fields.enabled;
     }
     await stub.mutate({
-      events: [
-        { type: "item-updated", dataset: "_memory", item_id: id, payload },
-      ],
+      events: [{ type: "item-updated", dataset: "_memory", item_id: id, payload }],
     });
     return { id, updated: true };
   }
 
-  private async forgetMemory(
-    id: string,
-  ): Promise<{ id: string; forgotten: true }> {
+  private async forgetMemory(id: string): Promise<{ id: string; forgotten: true }> {
     const stub = await this.getUserDbStub();
     await stub.mutate({
       events: [{ type: "item-deleted", dataset: "_memory", item_id: id }],
@@ -428,12 +394,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           "Keep it short and general. Check your remembered context first; revise an existing memory with update_memory instead of duplicating.",
         ].join("\n"),
         inputSchema: z.object({
-          content: z
-            .string()
-            .min(1)
-            .describe(
-              "The fact or preference to remember, in one short sentence.",
-            ),
+          content: z.string().min(1).describe("The fact or preference to remember, in one short sentence."),
         }),
         execute: async ({ content }) => this.createMemory(content),
       }),
@@ -444,22 +405,13 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
         ].join("\n"),
         inputSchema: z.object({
           id: z.string().min(1).describe("Id of the memory to update."),
-          content: z
-            .string()
-            .min(1)
-            .optional()
-            .describe("New content for the memory."),
-          enabled: z
-            .boolean()
-            .optional()
-            .describe("Set false to mute the memory without deleting it."),
+          content: z.string().min(1).optional().describe("New content for the memory."),
+          enabled: z.boolean().optional().describe("Set false to mute the memory without deleting it."),
         }),
-        execute: async ({ id, content, enabled }) =>
-          this.updateMemory(id, { content, enabled }),
+        execute: async ({ id, content, enabled }) => this.updateMemory(id, { content, enabled }),
       }),
       forget: tool({
-        description:
-          "Delete a memory by id (the bracketed id shown in your remembered context).",
+        description: "Delete a memory by id (the bracketed id shown in your remembered context).",
         inputSchema: z.object({
           id: z.string().min(1).describe("Id of the memory to forget."),
         }),
@@ -477,15 +429,11 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           whenToUse: z
             .string()
             .min(1)
-            .describe(
-              "One sentence on when this skill applies, used to match future requests.",
-            ),
+            .describe("One sentence on when this skill applies, used to match future requests."),
           instructions: z
             .string()
             .min(1)
-            .describe(
-              "Ordered step-by-step instructions in markdown, written generically.",
-            ),
+            .describe("Ordered step-by-step instructions in markdown, written generically."),
         }),
         execute: async (input) => this.createSkill(input),
       }),
@@ -517,21 +465,13 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           "Do not paste file contents here; pass only the path. The file is copied into the downloads area and returned as a downloadable link.",
         ].join("\n"),
         inputSchema: z.object({
-          path: z
-            .string()
-            .min(1)
-            .describe(
-              "Workspace path of an existing file to publish, e.g. /report.csv",
-            ),
+          path: z.string().min(1).describe("Workspace path of an existing file to publish, e.g. /report.csv"),
           filename: z
             .string()
             .optional()
-            .describe(
-              "Download file name including extension. Defaults to the source file's name.",
-            ),
+            .describe("Download file name including extension. Defaults to the source file's name."),
         }),
-        execute: async ({ path, filename }) =>
-          this.saveDownloadFile({ path, filename }),
+        execute: async ({ path, filename }) => this.saveDownloadFile({ path, filename }),
       }),
       renderChart: tool({
         description: [
@@ -554,9 +494,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   private async getUserDbStub() {
     const separatorIndex = this.name.indexOf(":");
     if (separatorIndex === -1) {
-      throw new Error(
-        `Unexpected agent name without a user-db prefix: ${this.name}`,
-      );
+      throw new Error(`Unexpected agent name without a user-db prefix: ${this.name}`);
     }
     const userDbName = this.name.slice(0, separatorIndex);
     return await getServerByName(this.env.UserDbServer, userDbName, {
@@ -567,9 +505,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   private getConversationId(): string {
     const separatorIndex = this.name.indexOf(":");
     if (separatorIndex === -1) {
-      throw new Error(
-        `Unexpected agent name without a conversation suffix: ${this.name}`,
-      );
+      throw new Error(`Unexpected agent name without a conversation suffix: ${this.name}`);
     }
     return this.name.slice(separatorIndex + 1);
   }
@@ -583,9 +519,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     };
   }
 
-  async uploadWorkspaceFiles(
-    files: WorkspaceUploadInput[],
-  ): Promise<WorkspaceUploadResult[]> {
+  async uploadWorkspaceFiles(files: WorkspaceUploadInput[]): Promise<WorkspaceUploadResult[]> {
     const workspace = this.workspace as WorkspaceFsLike;
     const uploadDir = "/uploads";
     await workspace.mkdir(uploadDir, { recursive: true });
@@ -608,10 +542,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     return uploaded;
   }
 
-  async saveDownloadFile(input: {
-    path: string;
-    filename?: string;
-  }): Promise<WorkspaceDownloadResult> {
+  async saveDownloadFile(input: { path: string; filename?: string }): Promise<WorkspaceDownloadResult> {
     const workspace = this.workspace as WorkspaceFsLike;
     const sourcePath = normalizeWorkspacePath(input.path);
     if (sourcePath.includes("\0")) {
@@ -625,9 +556,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       );
     }
 
-    const filename = sanitizeWorkspaceFilename(
-      input.filename || sourcePath.split("/").at(-1) || "download",
-    );
+    const filename = sanitizeWorkspaceFilename(input.filename || sourcePath.split("/").at(-1) || "download");
     const mediaType = stat.mimeType || guessMediaType(filename);
     await workspace.mkdir(DOWNLOAD_DIR, { recursive: true });
     const index = this.reserveFileIndices(1);
@@ -648,15 +577,9 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       return null;
     }
     const stat = await workspace.stat(path);
-    const filename = (path.split("/").at(-1) || "download").replace(
-      /^\d+-/,
-      "",
-    );
+    const filename = (path.split("/").at(-1) || "download").replace(/^\d+-/, "");
     const mediaType = stat?.mimeType || guessMediaType(filename);
-    const buffer = bytes.buffer.slice(
-      bytes.byteOffset,
-      bytes.byteOffset + bytes.byteLength,
-    ) as ArrayBuffer;
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     return { filename, mediaType, bytes: buffer };
   }
 }

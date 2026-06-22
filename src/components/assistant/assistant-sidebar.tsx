@@ -38,7 +38,9 @@ import {
   ASSISTANT_MODELS,
   ASSISTANT_MODELS_BY_PRICE,
   type AssistantModel,
+  type AssistantModelId,
   type AssistantModelInputModality,
+  resolveAssistantModelId,
 } from "@/agent/models";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
@@ -57,6 +59,7 @@ type ConversationRow = {
   title: string;
   createdAt: number;
   updatedAt: number;
+  model: string | null;
   totalCost: number;
   totalTokens: number;
 };
@@ -619,10 +622,33 @@ function ModelModalityIcons({ modalities }: { modalities: AssistantModelInputMod
   );
 }
 
-function ModelSelect() {
-  const model = useAssistantStore((s) => s.model);
-  const setModel = useAssistantStore((s) => s.setModel);
+function ModelSelect({
+  model,
+  locked,
+  onSelect,
+}: {
+  model: AssistantModelId;
+  locked: boolean;
+  onSelect: (model: AssistantModelId) => void;
+}) {
   const active = ASSISTANT_MODELS.find((m) => m.id === model) ?? ASSISTANT_MODELS[0];
+
+  // Once the conversation has a message the model is fixed — show the locked
+  // model without an interactive dropdown.
+  if (locked) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs">
+            <Cpu className="size-3.5 shrink-0" />
+            <span className="truncate">{active.label}</span>
+            <ModelModalityIcons modalities={active.inputModalities} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Model is fixed once the conversation starts</TooltipContent>
+      </Tooltip>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -645,7 +671,7 @@ function ModelSelect() {
       </Tooltip>
       <DropdownMenuContent align="start" className="w-72">
         {ASSISTANT_MODELS_BY_PRICE.map((m) => (
-          <DropdownMenuItem key={m.id} className="items-start gap-2 py-2" onClick={() => setModel(m.id)}>
+          <DropdownMenuItem key={m.id} className="items-start gap-2 py-2" onClick={() => onSelect(m.id)}>
             <Cpu className="mt-0.5 size-3.5 shrink-0" />
             <span className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="flex min-w-0 items-center gap-2">
@@ -714,7 +740,11 @@ function ConversationView({
     return () => cancelAnimationFrame(frame);
   }, [composerFocusNonce]);
 
-  const model = useAssistantStore((s) => s.model);
+  // The model belongs to the conversation. The store value is just the preferred
+  // default carried into the next new chat.
+  const preferredModel = useAssistantStore((s) => s.model);
+  const setPreferredModel = useAssistantStore((s) => s.setModel);
+  const model = resolveAssistantModelId(conversation.model);
   const modelRef = useRef(model);
   modelRef.current = model;
 
@@ -724,6 +754,12 @@ function ConversationView({
     // Read from a ref so the selected model is always current without re-creating the chat.
     body: () => ({ model: modelRef.current }),
   });
+
+  function selectModel(next: AssistantModelId) {
+    // Persist on the conversation and remember it as the default for new chats.
+    setPreferredModel(next);
+    db.db.executeKysely((q) => q.updateTable("conversation").set({ model: next }).where("id", "=", conversation.id));
+  }
   const isWorking = uploading || status === "submitted" || status === "streaming" || isServerStreaming;
 
   function deleteConversation(target: ConversationRow) {
@@ -741,9 +777,16 @@ function ConversationView({
     const id = generateId();
     const now = Date.now();
     db.db.executeKysely((q) =>
-      q
-        .insertInto("conversation")
-        .values({ id, title: "", createdAt: now, updatedAt: now, tombstone: false, totalCost: 0, totalTokens: 0 }),
+      q.insertInto("conversation").values({
+        id,
+        title: "",
+        createdAt: now,
+        updatedAt: now,
+        model: preferredModel,
+        tombstone: false,
+        totalCost: 0,
+        totalTokens: 0,
+      }),
     );
     setActiveConversation(id);
   }
@@ -960,7 +1003,7 @@ function ConversationView({
           </div>
         )}
         <div className="flex items-center justify-between gap-2">
-          <ModelSelect />
+          <ModelSelect model={model} locked={messages.length > 0} onSelect={selectModel} />
           <ConversationCost conversation={conversation} />
         </div>
         <div className="flex min-w-0 items-end gap-2">
@@ -1016,11 +1059,12 @@ export function AssistantSidebar() {
   const db = useDb();
   const activeConversationId = useAssistantStore((s) => s.activeConversationId);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+  const preferredModel = useAssistantStore((s) => s.model);
 
   const { data: conversations } = useDbQuery((db) =>
     db
       .selectFrom("conversation")
-      .select(["id", "title", "createdAt", "updatedAt", "totalCost", "totalTokens"])
+      .select(["id", "title", "createdAt", "updatedAt", "model", "totalCost", "totalTokens"])
       .orderBy("updatedAt", "desc"),
   );
 
@@ -1040,12 +1084,19 @@ export function AssistantSidebar() {
     const id = generateId();
     const now = Date.now();
     db.db.executeKysely((q) =>
-      q
-        .insertInto("conversation")
-        .values({ id, title: "", createdAt: now, updatedAt: now, tombstone: false, totalCost: 0, totalTokens: 0 }),
+      q.insertInto("conversation").values({
+        id,
+        title: "",
+        createdAt: now,
+        updatedAt: now,
+        model: preferredModel,
+        tombstone: false,
+        totalCost: 0,
+        totalTokens: 0,
+      }),
     );
     setActiveConversation(id);
-  }, [active, activeConversationId, db, setActiveConversation]);
+  }, [active, activeConversationId, db, setActiveConversation, preferredModel]);
 
   if (!active) {
     return (

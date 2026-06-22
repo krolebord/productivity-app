@@ -167,6 +167,14 @@ const migrations = createMigrations((b) => ({
         .addColumn("updatedAt", "integer", (col) => col.notNull()),
     ),
   ],
+  11: [
+    b.addColumn({
+      table: "_conversation",
+      column: "model",
+      type: "text",
+      defaultValue: null,
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -292,6 +300,11 @@ export const syncDbSchema = defineSyncSchema({
         title: t.text().default(""),
         createdAt: t.integer(),
         updatedAt: t.integer(),
+        model: t
+          .text()
+          .nullable()
+          .default(null)
+          .describe("Model id used for this conversation; fixed once the first message is sent."),
         totalCost: t
           .real()
           .default(0)
