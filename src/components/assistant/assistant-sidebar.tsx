@@ -12,6 +12,7 @@ import {
   ChevronDown,
   CircleAlert,
   CircleStop,
+  Copy,
   Cpu,
   Download,
   ExternalLink,
@@ -716,6 +717,7 @@ function ConversationView({
   const db = useDb();
   const setOpen = useAssistantStore((s) => s.setOpen);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+  const createConversation = useAssistantStore((s) => s.createConversation);
   // The draft lives in the store so off-screen rows can append context tokens to it.
   const input = useAssistantStore((s) => s.inputDraft);
   const setInput = useAssistantStore((s) => s.setInputDraft);
@@ -724,7 +726,9 @@ function ConversationView({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const composerFocusNonce = useAssistantStore((s) => s.composerFocusNonce);
+  const [agentIdCopied, setAgentIdCopied] = useState(false);
 
   // Pull focus back to the composer when something requests it (e.g. attaching
   // context from a card elsewhere on the page). rAF lets the sidebar mount first.
@@ -740,6 +744,14 @@ function ConversationView({
     return () => cancelAnimationFrame(frame);
   }, [composerFocusNonce]);
 
+  useEffect(() => {
+    return () => {
+      if (copyAgentIdResetRef.current) {
+        clearTimeout(copyAgentIdResetRef.current);
+      }
+    };
+  }, []);
+
   // The model belongs to the conversation. The store value is just the preferred
   // default carried into the next new chat.
   const preferredModel = useAssistantStore((s) => s.model);
@@ -748,7 +760,8 @@ function ConversationView({
   const modelRef = useRef(model);
   modelRef.current = model;
 
-  const agent = useAgent({ agent: "assistant-agent", name: `user-${auth.userId}:${conversation.id}` });
+  const agentId = `user-${auth.userId}:${conversation.id}`;
+  const agent = useAgent({ agent: "assistant-agent", name: agentId });
   const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({
     agent,
     // Read from a ref so the selected model is always current without re-creating the chat.
@@ -771,6 +784,15 @@ function ConversationView({
 
   const deleteActive = useInlineConfirm({ onConfirm: () => deleteConversation(conversation) });
 
+  async function copyAgentId() {
+    await navigator.clipboard.writeText(agentId);
+    setAgentIdCopied(true);
+    if (copyAgentIdResetRef.current) {
+      clearTimeout(copyAgentIdResetRef.current);
+    }
+    copyAgentIdResetRef.current = setTimeout(() => setAgentIdCopied(false), 1500);
+  }
+
   function newConversation() {
     // An empty active conversation already is a "new" one — just stay on it.
     if (messages.length === 0) return;
@@ -788,7 +810,7 @@ function ConversationView({
         totalTokens: 0,
       }),
     );
-    setActiveConversation(id);
+    createConversation(id);
   }
 
   async function uploadSelectedFiles() {
@@ -889,6 +911,23 @@ function ConversationView({
           </TooltipTrigger>
           <TooltipContent side="bottom">New conversation</TooltipContent>
         </Tooltip>
+        {auth.userRole === "admin" && (
+          <Tooltip open={agentIdCopied || undefined}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label="Copy agent id"
+                onClick={copyAgentId}
+              >
+                {agentIdCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{agentIdCopied ? "Copied agent id" : "Copy agent id"}</TooltipContent>
+          </Tooltip>
+        )}
         <Tooltip open={deleteActive.armed || undefined}>
           <TooltipTrigger asChild>
             <Button
@@ -1058,7 +1097,9 @@ function ConversationView({
 export function AssistantSidebar() {
   const db = useDb();
   const activeConversationId = useAssistantStore((s) => s.activeConversationId);
+  const pendingConversationId = useAssistantStore((s) => s.pendingConversationId);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+  const createConversation = useAssistantStore((s) => s.createConversation);
   const preferredModel = useAssistantStore((s) => s.model);
 
   const { data: conversations } = useDbQuery((db) =>
@@ -1068,7 +1109,11 @@ export function AssistantSidebar() {
       .orderBy("updatedAt", "desc"),
   );
 
-  const active = activeConversationId ? conversations.find((c) => c.id === activeConversationId) : conversations[0];
+  const found = activeConversationId ? conversations.find((c) => c.id === activeConversationId) : undefined;
+  // The active id isn't in the snapshot, but it's one we just created and are waiting for the
+  // query to re-emit — show nothing rather than falling back to the previous conversation.
+  const awaitingNew = !found && activeConversationId !== null && activeConversationId === pendingConversationId;
+  const active = found ?? (awaitingNew ? undefined : conversations[0]);
 
   const creatingRef = useRef(false);
   useEffect(() => {
@@ -1079,6 +1124,8 @@ export function AssistantSidebar() {
       }
       return;
     }
+    // Wait for a freshly created conversation to sync in; only auto-create on a genuinely empty DB.
+    if (awaitingNew) return;
     if (conversations.length > 0) return;
     if (creatingRef.current) return;
     creatingRef.current = true;
@@ -1096,8 +1143,17 @@ export function AssistantSidebar() {
         totalTokens: 0,
       }),
     );
-    setActiveConversation(id);
-  }, [active, activeConversationId, conversations, db, setActiveConversation, preferredModel]);
+    createConversation(id);
+  }, [
+    active,
+    activeConversationId,
+    awaitingNew,
+    conversations,
+    db,
+    setActiveConversation,
+    createConversation,
+    preferredModel,
+  ]);
 
   if (!active) {
     return (

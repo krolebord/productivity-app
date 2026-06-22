@@ -5,6 +5,13 @@ import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId
 interface AssistantStore {
   open: boolean;
   activeConversationId: string | null;
+  /**
+   * Id of a conversation we just inserted locally and switched to, before useDbQuery has
+   * re-emitted with its row. Distinguishes "active id not in the snapshot yet because it's
+   * still syncing in" (wait for it) from "active id points at a row that's gone" (fall back).
+   * Transient — never persisted.
+   */
+  pendingConversationId: string | null;
   model: AssistantModelId;
   /**
    * Draft text for the message composer. Lifted into the store (rather than local
@@ -21,6 +28,7 @@ interface AssistantStore {
   toggle: () => void;
   setOpen: (open: boolean) => void;
   setActiveConversation: (id: string | null) => void;
+  createConversation: (id: string) => void;
   setModel: (model: AssistantModelId) => void;
   setInputDraft: (value: string) => void;
   appendToInput: (text: string) => void;
@@ -32,12 +40,14 @@ export const useAssistantStore = create<AssistantStore>()(
     (set) => ({
       open: false,
       activeConversationId: null,
+      pendingConversationId: null,
       model: DEFAULT_ASSISTANT_MODEL,
       inputDraft: "",
       composerFocusNonce: 0,
       toggle: () => set((s) => ({ open: !s.open })),
       setOpen: (open) => set({ open }),
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+      setActiveConversation: (id) => set({ activeConversationId: id, pendingConversationId: null }),
+      createConversation: (id) => set({ activeConversationId: id, pendingConversationId: id }),
       setModel: (model) => set({ model }),
       setInputDraft: (inputDraft) => set({ inputDraft }),
       appendToInput: (text) =>
