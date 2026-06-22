@@ -1,11 +1,12 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { AccountDialog } from "@/components/account-dialog";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
 import { CommandPalette } from "@/components/command-palette";
+import { Devtools } from "@/components/devtools";
 import { NoteDialog } from "@/components/note-dialog";
 import { SyncStatusMonitor } from "@/components/sync-status-monitor";
 import { TransactionDialog } from "@/components/transaction-dialog";
@@ -13,8 +14,6 @@ import { useAssistantStore } from "@/lib/assistant-store";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { orpc } from "@/orpc/orpc-client";
 import { DbProvider, initUserDb } from "@/user-db/user-db";
-
-const SQLiteSyncDevtools = lazy(() => import("@sqlite-sync/devtools").then((m) => ({ default: m.SQLiteSyncDevtools })));
 
 let cachedDb: { userId: string; db: Awaited<ReturnType<typeof initUserDb>> } | null = null;
 
@@ -44,7 +43,6 @@ function RouteComponent() {
   const isDesktop = useIsDesktop();
   const assistantEnabled = auth.assistantEnabled;
   const showAssistant = assistantEnabled && assistantOpen && isDesktop;
-  const showDevtools = import.meta.env.DEV || auth.userRole === "admin";
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "assistant-layout" });
 
   return (
@@ -100,11 +98,7 @@ function RouteComponent() {
       <NoteDialog />
       <AccountDialog />
       <TransactionDialog />
-      {showDevtools && (
-        <Suspense>
-          <SQLiteSyncDevtools />
-        </Suspense>
-      )}
+      <Devtools />
     </DbProvider>
   );
 }

@@ -8,6 +8,7 @@ await startDbWorker({
   workerConfig,
   syncDbSchema,
   verifySchema: import.meta.env.DEV,
+  storageVersion: "1",
   createRemoteSource: createWsRemoteSource({
     createWebSocket: () =>
       new PartySocket({

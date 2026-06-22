@@ -152,9 +152,25 @@ const migrations = createMigrations((b) => ({
         .addColumn("updatedAt", "integer", (col) => col.notNull()),
     ),
   ],
+  10: [
+    b.createTable("_skill", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("name", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("whenToUse", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("instructions", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("source", "text", (col) => col.notNull().defaultTo("user"))
+        .addColumn("status", "text", (col) => col.notNull().defaultTo("pending"))
+        .addColumn("lastUsedAt", "integer")
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
+export const SKILL_CATALOG_LIMIT = 50;
 
 const currencyColumn = () => t.real().nullable();
 
@@ -307,6 +323,30 @@ export const syncDbSchema = defineSyncSchema({
           "general. Manage them with the remember/update_memory/forget tools rather than writing here directly.",
         ].join(" "),
       ),
+    skill: t
+      .table({
+        name: t.text().default("").describe("Short title of the skill."),
+        whenToUse: t
+          .text()
+          .default("")
+          .describe("Short description of when this skill applies; used to match future requests."),
+        instructions: t.text().default("").describe("Step-by-step playbook in markdown for the assistant to follow."),
+        source: t.enum(["user", "assistant"]).default("user").describe('Who created the skill: "user" or "assistant".'),
+        status: t
+          .enum(["pending", "active", "disabled"])
+          .default("pending")
+          .describe('"active" skills are offered to the assistant; "pending" awaits user review; "disabled" is muted.'),
+        lastUsedAt: t.integer().nullable().default(null).describe("Epoch ms the skill was last invoked, or null."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "Reusable multi-step playbooks the assistant can follow for recurring tasks. Only `active` skills are",
+          "offered to the assistant as loadable skills. New assistant-created skills start as `pending` until the",
+          "user reviews and activates them.",
+        ].join(" "),
+      ),
   },
   migrations,
 });
@@ -317,6 +357,7 @@ export type AccountItem = typeof syncDbSchema.tables.account.$row;
 export type TransactionEntryItem = typeof syncDbSchema.tables.transaction_entry.$row;
 export type ConversationItem = typeof syncDbSchema.tables.conversation.$row;
 export type MemoryItem = typeof syncDbSchema.tables.memory.$row;
+export type SkillItem = typeof syncDbSchema.tables.skill.$row;
 
 export type UserDb = (typeof syncDbSchema)["~clientSchema"];
 

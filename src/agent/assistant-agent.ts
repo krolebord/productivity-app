@@ -1,5 +1,13 @@
 import { createWorkspaceStateBackend, type WorkspaceFsLike } from "@cloudflare/shell";
-import { type ChatResponseResult, type StepContext, Think, type TurnConfig, type TurnContext } from "@cloudflare/think";
+import {
+  type ChatResponseResult,
+  type Session,
+  type SkillSource,
+  type StepContext,
+  Think,
+  type TurnConfig,
+  type TurnContext,
+} from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { type AiMutationResult, type AiQueryResult, createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
@@ -7,7 +15,7 @@ import { tavilyExtract, tavilySearch } from "@tavily/ai-sdk";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { z } from "zod";
-import { MEMORY_INJECTION_LIMIT } from "../user-db/migrations";
+import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
 import { ChartSpecSchema } from "./chart-spec";
 import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId } from "./models";
 
@@ -89,6 +97,8 @@ type AssistantUsageState = {
   totalTokens: number;
 };
 
+type SkillCatalogRow = { id: string; name: string; whenToUse: string; updatedAt: number };
+
 export class AssistantAgent extends Think<Env, AssistantUsageState> {
   initialState: AssistantUsageState = { totalCostUsd: 0, totalTokens: 0 };
 
@@ -103,6 +113,68 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     const model = this.getModel(resolveAssistantModelId(ctx.body?.model));
     const memories = await this.getMemoriesBlock();
     return memories ? { model, system: `${ctx.system}\n\n${memories}` } : { model };
+  }
+
+  configureSession(session: Session): Session {
+    return session.withContext("instructions", {
+      description: "Base assistant instructions",
+      provider: { get: async () => this.buildInstructions() },
+    });
+  }
+
+  getSkills(): SkillSource[] {
+    return [this.skillSource()];
+  }
+
+  // The user's active skills, read live from the synced `skill` table. Think renders list()
+  // into the system-prompt catalog and exposes the body via load_context; fingerprint drives
+  // the framework's per-turn refresh when the active set changes.
+  private skillSource(): SkillSource {
+    const fetchActive = async (): Promise<SkillCatalogRow[]> => {
+      const stub = await this.getUserDbStub();
+      const result = (await stub.query({
+        sql: "SELECT id, name, whenToUse, updatedAt FROM skill WHERE status = 'active' ORDER BY lastUsedAt DESC, createdAt DESC LIMIT ?",
+        parameters: [SKILL_CATALOG_LIMIT],
+      })) as AiQueryResult;
+      return "error" in result ? [] : (result.rows as SkillCatalogRow[]);
+    };
+    const loadStub = () => this.getUserDbStub();
+    const describe = (row: { name: string; whenToUse: string }) =>
+      row.whenToUse ? `${row.name} — ${row.whenToUse}` : row.name || "Untitled skill";
+
+    let cache: SkillCatalogRow[] = [];
+    let fingerprint = "";
+
+    return {
+      id: "user-skills",
+      get fingerprint() {
+        return fingerprint;
+      },
+      async refresh() {
+        cache = await fetchActive();
+        fingerprint = cache.map((row) => `${row.id}:${row.updatedAt}`).join(",");
+      },
+      async list() {
+        const rows = cache.length > 0 ? cache : await fetchActive();
+        return rows.map((row) => ({ name: row.id, description: describe(row) }));
+      },
+      async load(name) {
+        const stub = await loadStub();
+        const result = (await stub.query({
+          sql: "SELECT id, name, whenToUse, instructions FROM skill WHERE id = ? AND status = 'active' LIMIT 1",
+          parameters: [name],
+        })) as AiQueryResult;
+        if ("error" in result || result.rows.length === 0) {
+          return null;
+        }
+        const row = result.rows[0] as { id: string; name: string; whenToUse: string; instructions: string };
+        await stub.mutate({
+          events: [{ type: "item-updated", dataset: "_skill", item_id: row.id, payload: { lastUsedAt: Date.now() } }],
+        });
+        const header = row.whenToUse ? `When to use: ${row.whenToUse}\n\n` : "";
+        return { name: row.id, description: describe(row), body: `# ${row.name}\n\n${header}${row.instructions}` };
+      },
+    };
   }
 
   private async getMemoriesBlock(): Promise<string | null> {
@@ -196,7 +268,36 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     return { id, forgotten: true };
   }
 
-  getSystemPrompt() {
+  private async createSkill(input: {
+    name: string;
+    whenToUse: string;
+    instructions: string;
+  }): Promise<{ id: string | null; name: string; status: "pending" }> {
+    const stub = await this.getUserDbStub();
+    const now = Date.now();
+    const result = (await stub.mutate({
+      events: [
+        {
+          type: "item-created",
+          dataset: "_skill",
+          payload: {
+            name: input.name,
+            whenToUse: input.whenToUse,
+            instructions: input.instructions,
+            source: "assistant",
+            status: "pending",
+            lastUsedAt: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+      ],
+    })) as AiMutationResult;
+    const id = "createdIds" in result ? (result.createdIds[0] ?? null) : null;
+    return { id, name: input.name, status: "pending" };
+  }
+
+  private buildInstructions() {
     return [
       "You are the built-in assistant of a personal productivity app with notes, accounts, and transactions.",
       "Help the user think through their notes, finances, and plans.",
@@ -210,6 +311,8 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       "Use the web_search tool for current events, external facts, prices, or anything outside the user's own data — never for the user's notes/accounts/transactions, which live in the database. Search only when the answer genuinely depends on up-to-date or external information. When you rely on a search result, cite it inline as a markdown link; if the user asks for sources, list the relevant URLs.",
       "Use the web_extract tool to read the full content of specific URLs — for example to go deeper on a promising web_search result or a link the user provides.",
       "You keep durable memories about the user across all conversations. When the user states a lasting preference, rule, or fact worth recalling later (a budget, a recurring categorization rule, how they like answers formatted), call remember with a short note. Do not remember one-off or trivial details, data already in the database, or secrets. Avoid duplicates: if a similar memory already exists in your remembered context, revise it with update_memory instead of adding another. Use forget when the user no longer wants something remembered.",
+      "Your available skills are reusable playbooks for recurring tasks, each with a name and when-to-use. When a request matches one, load it with activate_skill before acting, then follow its steps, adapting to the situation.",
+      "When the user asks to save what you just did as a reusable skill, call create_skill with a name, a whenToUse trigger, and generalized step-by-step instructions (no hard-coded ids or one-off values). It is saved as pending for the user to review and activate.",
       "Be concise and direct. Use markdown when it improves readability.",
     ].join("\n");
   }
@@ -265,6 +368,26 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           id: z.string().min(1).describe("Id of the memory to forget."),
         }),
         execute: async ({ id }) => this.forgetMemory(id),
+      }),
+      create_skill: tool({
+        description: [
+          "Save a reusable skill (a step-by-step playbook) for a recurring multi-step task.",
+          "Use when the user asks to save what you just did so future chats can repeat it.",
+          "Generalize from the conversation: write clear ordered steps with no hard-coded ids or one-off values.",
+          "The skill is saved as pending until the user reviews and activates it.",
+        ].join("\n"),
+        inputSchema: z.object({
+          name: z.string().min(1).describe("Short title for the skill."),
+          whenToUse: z
+            .string()
+            .min(1)
+            .describe("One sentence on when this skill applies, used to match future requests."),
+          instructions: z
+            .string()
+            .min(1)
+            .describe("Ordered step-by-step instructions in markdown, written generically."),
+        }),
+        execute: async (input) => this.createSkill(input),
       }),
       execute: createExecuteTool({
         ctx: this.ctx,

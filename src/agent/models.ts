@@ -72,6 +72,12 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
   },
 ];
 
+export const ASSISTANT_MODELS_BY_PRICE = [...ASSISTANT_MODELS].sort(
+  (a, b) =>
+    a.pricing.inputPerMillion - b.pricing.inputPerMillion ||
+    a.pricing.outputPerMillion - b.pricing.outputPerMillion,
+);
+
 export const DEFAULT_ASSISTANT_MODEL: AssistantModelId = "openai/gpt-5.5";
 
 export function isAssistantModelId(value: unknown): value is AssistantModelId {

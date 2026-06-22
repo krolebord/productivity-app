@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, type ErrorComponentProps, Link, Outlet } from "@tanstack/react-router";
 import { AlertTriangle, FileQuestion } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Devtools } from "@/components/devtools";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -50,6 +51,7 @@ function ErrorPage({ error, reset }: ErrorComponentProps) {
           </Button>
         </div>
       </div>
+      <Devtools />
     </div>
   );
 }

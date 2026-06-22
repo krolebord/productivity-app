@@ -93,20 +93,20 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@sqlite-sync/ai':
-        specifier: ^0.7.2
-        version: 0.7.2(@sqlite-sync/core@0.7.2(kysely@0.28.17))(ai@6.0.208(zod@4.4.3))
+        specifier: ^0.8.0
+        version: 0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(ai@6.0.208(zod@4.4.3))
       '@sqlite-sync/cloudflare':
-        specifier: ^0.7.2
-        version: 0.7.2(@cloudflare/workers-types@4.20260609.1)(@sqlite-sync/core@0.7.2(kysely@0.28.17))(kysely@0.28.17)
+        specifier: ^0.8.0
+        version: 0.8.0(@cloudflare/workers-types@4.20260609.1)(@sqlite-sync/core@0.8.0(kysely@0.28.17))(kysely@0.28.17)
       '@sqlite-sync/core':
-        specifier: ^0.7.2
-        version: 0.7.2(kysely@0.28.17)
+        specifier: ^0.8.0
+        version: 0.8.0(kysely@0.28.17)
       '@sqlite-sync/devtools':
-        specifier: ^0.7.2
-        version: 0.7.2(@sqlite-sync/core@0.7.2(kysely@0.28.17))(react@19.2.7)
+        specifier: ^0.8.0
+        version: 0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(react@19.2.7)
       '@sqlite-sync/react':
-        specifier: ^0.7.2
-        version: 0.7.2(@sqlite-sync/core@0.7.2(kysely@0.28.17))(kysely@0.28.17)(react@19.2.7)
+        specifier: ^0.8.0
+        version: 0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(kysely@0.28.17)(react@19.2.7)
       '@tailwindcss/vite':
         specifier: ^4.3.1
         version: 4.3.1(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
@@ -2386,34 +2386,34 @@ packages:
   '@speed-highlight/core@1.2.16':
     resolution: {integrity: sha512-yNm/fYEcnpRjYduLMaddTK9XKYil6xB88+qFg79ZdZhHu1PadfoQmFW7pVTx7FZqMBNcUuThiAhxhENgtAO2/w==}
 
-  '@sqlite-sync/ai@0.7.2':
-    resolution: {integrity: sha512-toBfE8HJZhuxWED/9dMJYRWQnyOBVYCZqKUVX3RC7DKymmoXKYOBbmRTikj6uMk1LQX+no0UUq34oVjdYMwGEg==}
+  '@sqlite-sync/ai@0.8.0':
+    resolution: {integrity: sha512-Nh0Y7f9KfjcnZjjPaUGwSjJBNwlEz8I228hIJ5T3R6rWVRNHOSXhSiAbsr9r/gd3Uq7F8xdqPbdKOTNaKE7p2g==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.7.2
+      '@sqlite-sync/core': ^0.8.0
       ai: ^6.0.0
 
-  '@sqlite-sync/cloudflare@0.7.2':
-    resolution: {integrity: sha512-iZcZxWUQDuZMGaXXbJQIh6Dm64FfQSux1QjlVlcU6qKVuAt1G9yQVVzJulLu0yIZJ24m0int8hXqMXFlc8KwJQ==}
+  '@sqlite-sync/cloudflare@0.8.0':
+    resolution: {integrity: sha512-VgwvfcPbjTZUArpc7zLl2GyhwJNzxfGuLmMxX9NmbRKNxTaVXSvuQ5ze4uAYlYgNOGqv4mKq9rCP3FVumenYbw==}
     peerDependencies:
       '@cloudflare/workers-types': ^4.0.0
-      '@sqlite-sync/core': ^0.7.2
+      '@sqlite-sync/core': ^0.8.0
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/core@0.7.2':
-    resolution: {integrity: sha512-vy2qSuiKT68uRsoqso3lRp+xexXVk3bSDLzNB66CGpeaC5BYCIlWxu2i2ljPqXOg1WsqiyxnAzVhUVGKsvLIjg==}
+  '@sqlite-sync/core@0.8.0':
+    resolution: {integrity: sha512-UjBn5hJ7kXU9klNSkv51SBwBSzVgAqfLMPUxsPugYqG+m5ahFZTLt4Yg7lt/eivs237NtcBbqfHreLFDP4qWHw==}
     peerDependencies:
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/devtools@0.7.2':
-    resolution: {integrity: sha512-+Mhk20sGhge0zvPpHM9xEjqGUw0EDcesiRddRDyVViwsQY10KRV3laJcbhljFi2X4bTF/3uvFx0De7UJ8KgfZg==}
+  '@sqlite-sync/devtools@0.8.0':
+    resolution: {integrity: sha512-wr2x332vbLd5uN/h3Dl5+X+36v9YFICn2gZL5Udr0/g9Ur6wCbIdtZo6wX3VvFsqCdkmMEPgS2sv2G8onSYkCg==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.7.2
+      '@sqlite-sync/core': ^0.8.0
       react: ^18.0.0 || ^19.0.0
 
-  '@sqlite-sync/react@0.7.2':
-    resolution: {integrity: sha512-gpm5b0/OMKHcSrVwm/7d5zMov9TkecPDXiqweuc9wFnP++6f12/9TVevS8zYhhNvE5zu1KAQlddoTxVXQMAbcA==}
+  '@sqlite-sync/react@0.8.0':
+    resolution: {integrity: sha512-Y7H1Qd/JeUCnirSWz1COq/qc6loLXrk1bbvT5a/aKMFLRU60FcAradSv5Dwd2yg/aTCymQHCmiFXLCEwgv/oLg==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.7.2
+      '@sqlite-sync/core': ^0.8.0
       kysely: ^0.28.0 || ^0.29.0
       react: ^18.0.0 || ^19.0.0
 
@@ -7429,18 +7429,18 @@ snapshots:
 
   '@speed-highlight/core@1.2.16': {}
 
-  '@sqlite-sync/ai@0.7.2(@sqlite-sync/core@0.7.2(kysely@0.28.17))(ai@6.0.208(zod@4.4.3))':
+  '@sqlite-sync/ai@0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(ai@6.0.208(zod@4.4.3))':
     dependencies:
-      '@sqlite-sync/core': 0.7.2(kysely@0.28.17)
+      '@sqlite-sync/core': 0.8.0(kysely@0.28.17)
       ai: 6.0.208(zod@4.4.3)
 
-  '@sqlite-sync/cloudflare@0.7.2(@cloudflare/workers-types@4.20260609.1)(@sqlite-sync/core@0.7.2(kysely@0.28.17))(kysely@0.28.17)':
+  '@sqlite-sync/cloudflare@0.8.0(@cloudflare/workers-types@4.20260609.1)(@sqlite-sync/core@0.8.0(kysely@0.28.17))(kysely@0.28.17)':
     dependencies:
       '@cloudflare/workers-types': 4.20260609.1
-      '@sqlite-sync/core': 0.7.2(kysely@0.28.17)
+      '@sqlite-sync/core': 0.8.0(kysely@0.28.17)
       kysely: 0.28.17
 
-  '@sqlite-sync/core@0.7.2(kysely@0.28.17)':
+  '@sqlite-sync/core@0.8.0(kysely@0.28.17)':
     dependencies:
       '@sqlite.org/sqlite-wasm': 3.53.0-build1
       idb-keyval: 6.2.5
@@ -7448,14 +7448,14 @@ snapshots:
       xxhash-wasm: 1.1.0
       zod: 4.4.3
 
-  '@sqlite-sync/devtools@0.7.2(@sqlite-sync/core@0.7.2(kysely@0.28.17))(react@19.2.7)':
+  '@sqlite-sync/devtools@0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(react@19.2.7)':
     dependencies:
-      '@sqlite-sync/core': 0.7.2(kysely@0.28.17)
+      '@sqlite-sync/core': 0.8.0(kysely@0.28.17)
       react: 19.2.7
 
-  '@sqlite-sync/react@0.7.2(@sqlite-sync/core@0.7.2(kysely@0.28.17))(kysely@0.28.17)(react@19.2.7)':
+  '@sqlite-sync/react@0.8.0(@sqlite-sync/core@0.8.0(kysely@0.28.17))(kysely@0.28.17)(react@19.2.7)':
     dependencies:
-      '@sqlite-sync/core': 0.7.2(kysely@0.28.17)
+      '@sqlite-sync/core': 0.8.0(kysely@0.28.17)
       kysely: 0.28.17
       react: 19.2.7
 

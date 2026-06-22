@@ -12,6 +12,7 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { Link, useMatches, useNavigate, useRouter } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 import {
+  Bot,
   Brain,
   ChevronDown,
   ChevronsUpDown,
@@ -29,6 +30,7 @@ import {
   Wallet,
   Wifi,
   WifiOff,
+  Workflow,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAssistantStore } from "@/lib/assistant-store";
@@ -58,7 +60,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 const navItems = [
   { to: "/", label: "Dashboard", icon: Home },
   { to: "/notes", label: "Notes", icon: StickyNote },
+] as const;
+
+const agentNavItems = [
   { to: "/memories", label: "Memories", icon: Brain },
+  { to: "/skills", label: "Skills", icon: Workflow },
 ] as const;
 
 const remoteStateConfig = {
@@ -256,20 +262,21 @@ function SidebarContent({
             />
           ))}
           <AccountsNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
+          <SidebarNavLink
+            to="/currencies"
+            label="Currencies"
+            icon={Coins}
+            isActive={currentPath === "/currencies"}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
+          <AgentsNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
         </nav>
       </div>
 
       <Separator />
 
       <div className={cn("flex p-2", collapsed ? "flex-col items-center gap-1" : "flex-col gap-1")}>
-        <SidebarNavLink
-          to="/currencies"
-          label="Currencies"
-          icon={Coins}
-          isActive={currentPath === "/currencies"}
-          collapsed={collapsed}
-          onNavigate={onNavigate}
-        />
         {onToggleCollapse && (
           <>
             <AssistantToggle collapsed={collapsed} />
@@ -548,6 +555,79 @@ function AccountsNavItem({
             </div>
           </SortableContext>
         </DndContext>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function AgentsNavItem({
+  currentPath,
+  collapsed,
+  onNavigate,
+}: {
+  currentPath: string | undefined;
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const isActive = agentNavItems.some((item) => currentPath === item.to);
+
+  if (collapsed) {
+    return (
+      <SidebarNavLink
+        to="/memories"
+        label="Agents"
+        icon={Bot}
+        isActive={isActive}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+
+  return (
+    <Collapsible defaultOpen>
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-md font-medium text-sm transition-colors",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+        )}
+      >
+        <Link to="/memories" viewTransition onClick={onNavigate} className="flex flex-1 items-center gap-2 px-3 py-2">
+          <Bot className="size-4 shrink-0" />
+          Agents
+        </Link>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
+            aria-label="Toggle agents list"
+          >
+            <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
+          </button>
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent>
+        <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-sidebar-border/50 border-l pl-3">
+          {agentNavItems.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              viewTransition
+              onClick={onNavigate}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                currentPath === item.to
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70",
+              )}
+            >
+              <item.icon className="size-3.5 shrink-0" />
+              <span className="flex-1 truncate text-left">{item.label}</span>
+            </Link>
+          ))}
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );

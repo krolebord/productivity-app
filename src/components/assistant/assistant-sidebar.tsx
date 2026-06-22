@@ -27,13 +27,19 @@ import {
   Trash2,
   Type,
   Video,
+  Workflow,
   X,
 } from "lucide-react";
 import { type ClipboardEvent, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
-import { ASSISTANT_MODELS, type AssistantModel, type AssistantModelInputModality } from "@/agent/models";
+import {
+  ASSISTANT_MODELS,
+  ASSISTANT_MODELS_BY_PRICE,
+  type AssistantModel,
+  type AssistantModelInputModality,
+} from "@/agent/models";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
@@ -295,6 +301,135 @@ function MemoryChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
   );
 }
 
+function resourceFilename(path: string) {
+  const normalized = path.replaceAll("\\", "/");
+  return normalized.split("/").at(-1) || path;
+}
+
+function ReadFileChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
+  const failed = part.state === "output-error" || part.state === "output-denied";
+  const done = part.state === "output-available";
+  const input = part.input as { path?: string } | undefined;
+  const filename = input?.path ? resourceFilename(input.path) : undefined;
+
+  return (
+    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
+      {failed ? (
+        <CircleAlert className="size-3 shrink-0 text-destructive" />
+      ) : done ? (
+        <FileText className="size-3 shrink-0" />
+      ) : (
+        <Loader2 className="size-3 shrink-0 animate-spin" />
+      )}
+      <span className="shrink-0">{done ? "Read file" : failed ? "Read failed" : "Reading file"}</span>
+      {filename && <span className="min-w-0 truncate text-muted-foreground/80">{filename}</span>}
+    </div>
+  );
+}
+
+function ActivateSkillChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
+  const failed = part.state === "output-error" || part.state === "output-denied";
+  const done = part.state === "output-available";
+  const input = part.input as { name?: string } | undefined;
+  const skillId = input?.name;
+  const { data: skills } = useDbQuery((db) =>
+    db
+      .selectFrom("skill")
+      .select(["id", "name"])
+      .where("id", "=", skillId ?? "")
+      .limit(1),
+  );
+  const name = skills[0] ? skills[0].name || "Untitled skill" : skillId;
+
+  return (
+    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
+      {failed ? (
+        <CircleAlert className="size-3 shrink-0 text-destructive" />
+      ) : done ? (
+        <Workflow className="size-3 shrink-0" />
+      ) : (
+        <Loader2 className="size-3 shrink-0 animate-spin" />
+      )}
+      <span className="shrink-0">{done ? "Activated skill" : failed ? "Skill activation failed" : "Activating skill"}</span>
+      {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
+    </div>
+  );
+}
+
+function SkillChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
+  const failed = part.state === "output-error" || part.state === "output-denied";
+  const done = part.state === "output-available";
+  const input = part.input as { name?: string } | undefined;
+  const output = part.output as { id?: string | null; name?: string } | undefined;
+  const name = output?.name ?? input?.name;
+  const id = output?.id ?? null;
+
+  return (
+    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
+      {failed ? (
+        <CircleAlert className="size-3 shrink-0 text-destructive" />
+      ) : done ? (
+        <Workflow className="size-3 shrink-0" />
+      ) : (
+        <Loader2 className="size-3 shrink-0 animate-spin" />
+      )}
+      <span className="shrink-0">Drafted skill</span>
+      {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
+      {done && id && (
+        <Link
+          to="/skills"
+          search={{ selected: id }}
+          className="shrink-0 rounded-sm border px-1.5 py-0.5 font-medium transition-colors hover:bg-accent hover:text-foreground"
+        >
+          Review
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function NewChatSkills() {
+  const db = useDb();
+  const appendToInput = useAssistantStore((s) => s.appendToInput);
+  const requestComposerFocus = useAssistantStore((s) => s.requestComposerFocus);
+  const { data: skills } = useDbQuery((db) =>
+    db
+      .selectFrom("skill")
+      .select(["id", "name", "whenToUse"])
+      .where("status", "=", "active")
+      .orderBy("lastUsedAt", "desc")
+      .orderBy("createdAt", "desc"),
+  );
+
+  if (skills.length === 0) return null;
+
+  function pick(skill: { id: string; name: string }) {
+    db.db.executeKysely((q) => q.updateTable("skill").set({ lastUsedAt: Date.now() }).where("id", "=", skill.id));
+    appendToInput(`Use the "${skill.name || "Untitled"}" skill.`);
+    requestComposerFocus();
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-sm flex-col gap-1.5">
+      <p className="text-muted-foreground text-xs">Or start from a skill</p>
+      {skills.map((skill) => (
+        <button
+          key={skill.id}
+          type="button"
+          onClick={() => pick(skill)}
+          className="flex w-full items-start gap-2 rounded-md border bg-card p-2 text-left transition-colors hover:bg-accent"
+        >
+          <Workflow className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-sm">{skill.name || "Untitled skill"}</span>
+            {skill.whenToUse && <span className="block truncate text-muted-foreground text-xs">{skill.whenToUse}</span>}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ChartErrorChip() {
   return (
     <div className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
@@ -320,6 +455,15 @@ function MessageParts({ message, conversationId }: { message: UIMessage; convers
       }
       if (name === "remember" || name === "update_memory" || name === "forget") {
         return <MemoryChip key={i} part={part} />;
+      }
+      if (name === "read" || name === "read_skill_resource") {
+        return <ReadFileChip key={i} part={part} />;
+      }
+      if (name === "activate_skill") {
+        return <ActivateSkillChip key={i} part={part} />;
+      }
+      if (name === "create_skill") {
+        return <SkillChip key={i} part={part} />;
       }
       // The chart spec is the tool input; render it once the call has resolved.
       if (name === "renderChart" && part.state === "output-available") {
@@ -498,7 +642,7 @@ function ModelSelect() {
         <TooltipContent side="bottom">{formatModelPricing(active)}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="w-72">
-        {ASSISTANT_MODELS.map((m) => (
+        {ASSISTANT_MODELS_BY_PRICE.map((m) => (
           <DropdownMenuItem key={m.id} className="items-start gap-2 py-2" onClick={() => setModel(m.id)}>
             <Cpu className="mt-0.5 size-3.5 shrink-0" />
             <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -738,9 +882,12 @@ function ConversationView({
       <StickToBottom className="relative min-h-0 flex-1 overflow-y-auto" resize="smooth" initial="instant">
         <StickToBottom.Content className="flex flex-col gap-4 p-3">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
-              <Sparkles className="size-6" />
-              <p className="text-sm">Ask anything about your notes, accounts, or plans.</p>
+            <div className="flex flex-col items-center gap-4 py-12">
+              <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
+                <Sparkles className="size-6" />
+                <p className="text-sm">Ask anything about your notes, accounts, or plans.</p>
+              </div>
+              <NewChatSkills />
             </div>
           )}
           {messages.map((message) => (
