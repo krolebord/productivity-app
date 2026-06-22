@@ -1068,9 +1068,7 @@ export function AssistantSidebar() {
       .orderBy("updatedAt", "desc"),
   );
 
-  const active = activeConversationId
-    ? conversations.find((c) => c.id === activeConversationId)
-    : conversations[0];
+  const active = activeConversationId ? conversations.find((c) => c.id === activeConversationId) : conversations[0];
 
   const creatingRef = useRef(false);
   useEffect(() => {
