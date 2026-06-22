@@ -1068,7 +1068,9 @@ export function AssistantSidebar() {
       .orderBy("updatedAt", "desc"),
   );
 
-  const active = conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
+  const active = activeConversationId
+    ? conversations.find((c) => c.id === activeConversationId)
+    : conversations[0];
 
   const creatingRef = useRef(false);
   useEffect(() => {
@@ -1079,6 +1081,7 @@ export function AssistantSidebar() {
       }
       return;
     }
+    if (conversations.length > 0) return;
     if (creatingRef.current) return;
     creatingRef.current = true;
     const id = generateId();
@@ -1096,7 +1099,7 @@ export function AssistantSidebar() {
       }),
     );
     setActiveConversation(id);
-  }, [active, activeConversationId, db, setActiveConversation, preferredModel]);
+  }, [active, activeConversationId, conversations, db, setActiveConversation, preferredModel]);
 
   if (!active) {
     return (
