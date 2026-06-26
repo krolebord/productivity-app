@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { endOfDay, format, startOfDay, startOfYear, subDays } from "date-fns";
+import { endOfDay, format, isToday, isYesterday, startOfDay, startOfYear, subDays } from "date-fns";
 import { type SelectQueryBuilder, sql } from "kysely";
 import {
   ArrowDownLeftIcon,
@@ -210,6 +210,18 @@ function renderCurrencyBreakdown(summaryByCurrency: Map<string, number>) {
   );
 }
 
+function formatDayHeader(timestamp: number) {
+  if (isToday(timestamp)) {
+    return "Today";
+  }
+
+  if (isYesterday(timestamp)) {
+    return "Yesterday";
+  }
+
+  return format(timestamp, "EEEE, MMM d, yyyy");
+}
+
 function formatTimeRangeLabel(from?: number, to?: number) {
   if (from && to) {
     return `${format(from, "MMM d, yyyy")} - ${format(to, "MMM d, yyyy")}`;
@@ -278,6 +290,24 @@ function TransactionsPage() {
 
   const hasMore = transactions.length > limit;
   const visibleTransactions = hasMore ? transactions.slice(0, limit) : transactions;
+
+  // Day headers only make sense while the list is ordered by date; under other
+  // sorts the days would be interleaved and the headers would repeat noisily.
+  const groupByDay = sort === "date_desc" || sort === "date_asc";
+  const dayGroups: { key: string; label: string; transactions: typeof visibleTransactions }[] = [];
+  if (groupByDay) {
+    for (const transaction of visibleTransactions) {
+      const key = format(transaction.effectiveAt, "yyyy-MM-dd");
+      const lastGroup = dayGroups.at(-1);
+      if (lastGroup?.key === key) {
+        lastGroup.transactions.push(transaction);
+      } else {
+        dayGroups.push({ key, label: formatDayHeader(transaction.effectiveAt), transactions: [transaction] });
+      }
+    }
+  } else {
+    dayGroups.push({ key: "__all__", label: "", transactions: visibleTransactions });
+  }
 
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
   const selectedAccount = search.accountId ? accountMap.get(search.accountId) : undefined;
@@ -546,97 +576,108 @@ function TransactionsPage() {
           </Button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
-          <div className="divide-y">
-            {visibleTransactions.map((transaction) => {
-              const primaryAccount = accountMap.get(transaction.accountId);
-              const secondaryAccount = transaction.counterpartyAccountId
-                ? accountMap.get(transaction.counterpartyAccountId)
-                : undefined;
-              const display = getDisplayAmountForAccount(transaction, search.accountId);
-              const isTransfer = transaction.type === "transfer";
-              const typeStyle = TYPE_STYLE[transaction.type as TransactionType] ?? TYPE_STYLE.expense;
-              const title =
-                transaction.title ||
-                (transaction.type === "expense"
-                  ? "Expense"
-                  : transaction.type === "income"
-                    ? "Income"
-                    : transaction.type === "adjustment"
-                      ? "Adjustment"
-                      : "Transfer");
+        <div className="flex flex-col gap-4">
+          {dayGroups.map((group) => (
+            <div key={group.key} className="space-y-2">
+              {group.label ? (
+                <div className="px-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                  {group.label}
+                </div>
+              ) : null}
+              <div className="divide-y overflow-hidden rounded-lg border bg-card shadow-xs">
+                {group.transactions.map((transaction) => {
+                  const primaryAccount = accountMap.get(transaction.accountId);
+                  const secondaryAccount = transaction.counterpartyAccountId
+                    ? accountMap.get(transaction.counterpartyAccountId)
+                    : undefined;
+                  const display = getDisplayAmountForAccount(transaction, search.accountId);
+                  const isTransfer = transaction.type === "transfer";
+                  const typeStyle = TYPE_STYLE[transaction.type as TransactionType] ?? TYPE_STYLE.expense;
+                  const title =
+                    transaction.title ||
+                    (transaction.type === "expense"
+                      ? "Expense"
+                      : transaction.type === "income"
+                        ? "Income"
+                        : transaction.type === "adjustment"
+                          ? "Adjustment"
+                          : "Transfer");
 
-              return (
-                <button
-                  key={transaction.id}
-                  type="button"
-                  onClick={
-                    isContextKeyHeld
-                      ? getAttachClickHandler({ table: "transaction_entry", id: transaction.id })
-                      : () => openEdit(transaction.id)
-                  }
-                  className={cn(
-                    "flex w-full flex-col gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 sm:flex-row sm:items-center",
-                    isContextKeyHeld && "cursor-copy",
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate font-medium">{title}</span>
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-[11px] uppercase tracking-wide",
-                          typeStyle.badge,
-                        )}
-                      >
-                        <span className={cn("size-1.5 rounded-full", typeStyle.dot)} />
-                        {transaction.type}
-                      </span>
-                      {transaction.category ? (
-                        <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
-                          {transaction.category}
-                        </span>
-                      ) : null}
-                    </div>
+                  return (
+                    <button
+                      key={transaction.id}
+                      type="button"
+                      onClick={
+                        isContextKeyHeld
+                          ? getAttachClickHandler({ table: "transaction_entry", id: transaction.id })
+                          : () => openEdit(transaction.id)
+                      }
+                      className={cn(
+                        "flex w-full flex-col gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 sm:flex-row sm:items-center",
+                        isContextKeyHeld && "cursor-copy",
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate font-medium">{title}</span>
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-[11px] uppercase tracking-wide",
+                              typeStyle.badge,
+                            )}
+                          >
+                            <span className={cn("size-1.5 rounded-full", typeStyle.dot)} />
+                            {transaction.type}
+                          </span>
+                          {transaction.category ? (
+                            <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+                              {transaction.category}
+                            </span>
+                          ) : null}
+                        </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
-                      <span>{formatDateTimeDisplay(transaction.effectiveAt)}</span>
-                      <span>
-                        {primaryAccount?.labelText || "Untitled"}
-                        {isTransfer && secondaryAccount ? ` \u2192 ${secondaryAccount.labelText || "Untitled"}` : null}
-                      </span>
-                    </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
+                          <span>{formatDateTimeDisplay(transaction.effectiveAt)}</span>
+                          <span>
+                            {primaryAccount?.labelText || "Untitled"}
+                            {isTransfer && secondaryAccount
+                              ? ` \u2192 ${secondaryAccount.labelText || "Untitled"}`
+                              : null}
+                          </span>
+                        </div>
 
-                    {transaction.notes ? (
-                      <p className="mt-1 line-clamp-2 text-muted-foreground text-sm">{transaction.notes}</p>
-                    ) : null}
-                  </div>
-
-                  <div className="shrink-0 text-right">
-                    {isTransfer && !search.accountId ? (
-                      <div className="space-y-1">
-                        <p className="font-medium font-mono tabular-nums">
-                          {formatBalance(transaction.amount, transaction.accountCurrency)}
-                        </p>
-                        {transaction.counterpartyAmount !== null ? (
-                          <p className="font-mono text-muted-foreground text-sm tabular-nums">
-                            {formatBalance(transaction.counterpartyAmount, transaction.counterpartyCurrency)}
-                          </p>
+                        {transaction.notes ? (
+                          <p className="mt-1 line-clamp-2 text-muted-foreground text-sm">{transaction.notes}</p>
                         ) : null}
                       </div>
-                    ) : (
-                      <p className={cn("font-medium font-mono tabular-nums", summaryAmountClass(display.amount))}>
-                        {formatBalance(display.amount, display.currency)}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+
+                      <div className="shrink-0 text-right">
+                        {isTransfer && !search.accountId ? (
+                          <div className="space-y-1">
+                            <p className="font-medium font-mono tabular-nums">
+                              {formatBalance(transaction.amount, transaction.accountCurrency)}
+                            </p>
+                            {transaction.counterpartyAmount !== null ? (
+                              <p className="font-mono text-muted-foreground text-sm tabular-nums">
+                                {formatBalance(transaction.counterpartyAmount, transaction.counterpartyCurrency)}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <p className={cn("font-medium font-mono tabular-nums", summaryAmountClass(display.amount))}>
+                            {formatBalance(display.amount, display.currency)}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
           {hasMore ? (
-            <div className="border-t p-3 text-center">
+            <div className="p-3 text-center">
               <Button onClick={() => setLimit((current) => current + DEFAULT_LIMIT)} variant="outline" size="sm">
                 Load more
               </Button>
