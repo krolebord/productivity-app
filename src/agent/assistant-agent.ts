@@ -106,6 +106,8 @@ type SkillCatalogRow = {
 };
 
 export class AssistantAgent extends Think<Env, AssistantUsageState> {
+  maxSteps = 20;
+
   initialState: AssistantUsageState = {
     totalCostUsd: 0,
     totalTokens: 0,
@@ -352,7 +354,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       "The user's data lives in a synced SQLite database. Use the getDbSchema tool to learn how it is structured before reasoning about the user's data.",
       "The user can attach specific rows to a message as `@<table>:<id>` reference tokens (e.g. `@item:abc123` for a note, `@account:abc123`, `@transaction_entry:abc123`). Treat each as an explicit reference to that row; query the matching table by id with queryDb to load it before reasoning about it.",
       "Use mutateDb for requested changes to notes, accounts, transactions, or other synced data. Query first when updating or deleting existing rows. For create events, omit ids; mutateDb generates them and returns createdIds.",
-      "For multi-step analysis or coordinated changes, use the execute tool to write JavaScript that calls codemode.getDbSchema(), codemode.queryDb(), and codemode.mutateDb().",
+      "For multi-step analysis or coordinated changes, use the execute tool to write JavaScript that calls tools.getDbSchema(), tools.queryDb(), and tools.mutateDb().",
       "Inside execute, state.* is also available for temporary workspace files and multi-step scratch work.",
       "When the user wants a file to download (CSV, JSON, report, etc.), first write it with the execute tool's state.* API, then call saveDownload with that file's path to make it downloadable from the chat.",
       "To visualize data, call the renderChart tool. Aggregate and group the data first (with queryDb or execute) and embed only the final summarized points in the spec — keep the number of points and series small. Never sum or compare amounts across different currencies: group by currency or convert via the currency_rate table before charting. After rendering a chart, briefly describe what it shows in text; do not also paste the full underlying data as a table.",
@@ -448,9 +450,9 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           "Available typed functions:",
           "{{types}}",
           "The state.* workspace API is also available for temporary files, intermediate artifacts, and coordinated multi-step work.",
-          "Call codemode.getDbSchema() before querying unfamiliar tables.",
-          "Use codemode.queryDb({ sql, parameters }) for read-only SELECT/WITH/VALUES SQL.",
-          "Use codemode.mutateDb({ events }) for writes. Query first when updating or deleting existing rows.",
+          "Call tools.getDbSchema() before querying unfamiliar tables.",
+          "Use tools.queryDb({ sql, parameters }) for read-only SELECT/WITH/VALUES SQL.",
+          "Use tools.mutateDb({ events }) for writes. Query first when updating or deleting existing rows.",
           "Create events must omit ids: do not provide item_id or payload.id, because mutateDb generates ids and returns createdIds.",
           "Codemode query results are capped at 1000 rows and 4000 characters per cell.",
           "Always use ? placeholders with parameters for values.",
