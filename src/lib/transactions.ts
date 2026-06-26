@@ -15,6 +15,8 @@ type TransactionBaseInput = {
   effectiveAt: number;
   notes?: string;
   title?: string;
+  providerType?: string | null;
+  providerId?: string | null;
 };
 
 export type ExpenseTransactionInput = TransactionBaseInput & {
@@ -204,6 +206,8 @@ export function createTransactionInTransaction(trx: SQLiteTransactionWrapper<Use
     q.insertInto("transaction_entry").values({
       id,
       ...transaction,
+      providerType: input.providerType ?? null,
+      providerId: input.providerId ?? null,
       createdAt,
       updatedAt: createdAt,
       tombstone: false,

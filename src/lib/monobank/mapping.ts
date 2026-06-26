@@ -43,6 +43,15 @@ export function mapStatementItemToTransaction(item: MonobankStatementItem): Mapp
   };
 }
 
+/** A mapped transaction plus the Monobank statement id, ready to display and import as-is. */
+export type MonobankImportEntry = MappedMonobankTransaction & { providerId: string };
+
+/** Map a statement item to an import entry, or `null` for items that should be skipped. */
+export function statementItemToImportEntry(item: MonobankStatementItem): MonobankImportEntry | null {
+  const mapped = mapStatementItemToTransaction(item);
+  return mapped ? { ...mapped, providerId: item.id } : null;
+}
+
 /**
  * Build the transaction notes from extra Monobank provider details. The statement `description`
  * is used as the transaction title, so it is deliberately not duplicated here. `Original MCC` is

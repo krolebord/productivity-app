@@ -1,9 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { PlusIcon, RefreshCwIcon, Unplug } from "lucide-react";
+import { DownloadIcon, PlusIcon, RefreshCwIcon, Unplug } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useCreateAccount } from "@/components/account-dialog";
+import { MonobankBackfillDialog } from "@/components/monobank-backfill-dialog";
 import { MonobankTokenDialog } from "@/components/monobank-token-dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -53,6 +54,7 @@ function MonobankAccountRow({
 }) {
   const db = useDb();
   const createAccount = useCreateAccount();
+  const [backfillOpen, setBackfillOpen] = useState(false);
 
   const options = accounts.filter(
     (account) =>
@@ -91,26 +93,48 @@ function MonobankAccountRow({
       {unsupported ? (
         <span className="text-muted-foreground text-xs">Cannot be linked</span>
       ) : (
-        <Select value={monoAccount.linkedAccountId || UNLINK_VALUE} onValueChange={handleChange}>
-          <SelectTrigger className="w-full sm:w-56">
-            <SelectValue placeholder="Not linked" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={UNLINK_VALUE}>Not linked</SelectItem>
-            {options.length > 0 ? <SelectSeparator /> : null}
-            {options.map((account) => (
-              <SelectItem key={account.id} value={account.id}>
-                {account.labelText || account.description || "Untitled account"}
+        <div className="flex items-center gap-2">
+          <Select value={monoAccount.linkedAccountId || UNLINK_VALUE} onValueChange={handleChange}>
+            <SelectTrigger className="w-full sm:w-56">
+              <SelectValue placeholder="Not linked" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNLINK_VALUE}>Not linked</SelectItem>
+              {options.length > 0 ? <SelectSeparator /> : null}
+              {options.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.labelText || account.description || "Untitled account"}
+                </SelectItem>
+              ))}
+              <SelectSeparator />
+              <SelectItem value={NEW_ACCOUNT_VALUE}>
+                <PlusIcon className="size-3.5" />
+                New account
               </SelectItem>
-            ))}
-            <SelectSeparator />
-            <SelectItem value={NEW_ACCOUNT_VALUE}>
-              <PlusIcon className="size-3.5" />
-              New account
-            </SelectItem>
-          </SelectContent>
-        </Select>
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Import recent transactions"
+            title={monoAccount.linkedAccountId ? "Import recent transactions" : "Link an account first"}
+            disabled={!monoAccount.linkedAccountId}
+            onClick={() => setBackfillOpen(true)}
+          >
+            <DownloadIcon />
+          </Button>
+        </div>
       )}
+
+      {monoAccount.linkedAccountId ? (
+        <MonobankBackfillDialog
+          open={backfillOpen}
+          onOpenChange={setBackfillOpen}
+          providerAccountId={monoAccount.providerAccountId}
+          currency={monoAccount.currency}
+        />
+      ) : null}
     </div>
   );
 }

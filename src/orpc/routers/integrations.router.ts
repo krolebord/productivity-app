@@ -3,11 +3,13 @@ import { db } from "@/lib/db";
 import {
   clearMonobankWebhook,
   fetchMonobankClientInfo,
+  fetchMonobankStatement,
   MonobankApiError,
   type MonobankClientInfo,
   setMonobankWebhook,
 } from "@/lib/monobank/api";
 import { getMonobankConnectionByUserId } from "@/lib/monobank/connection-store";
+import { statementItemToImportEntry } from "@/lib/monobank/mapping";
 import { buildMonobankWebhookUrl, getUserDbStub, mapClientAccountsToMetadata } from "@/lib/monobank/server";
 import type { MonobankWebhookStatus } from "@/lib/monobank/types";
 import { protectedProcedure } from "../common/procedure";
@@ -240,11 +242,43 @@ const disconnect = protectedProcedure.handler(async ({ context }) => {
   return { success: true as const };
 });
 
+// Best-effort backfill: fetch a single recent statement window for one account. Monobank caps the
+// range at 31 days and rate limits to one request per 60s, so this is "recent", not full history.
+const getRecentStatement = protectedProcedure
+  .input(
+    z.object({
+      providerAccountId: z.string(),
+      days: z.number().int().min(1).max(31).default(31),
+    }),
+  )
+  .handler(async ({ input, context, errors }) => {
+    const existing = await getMonobankConnectionByUserId(context.auth.userId);
+    if (!existing) {
+      throw errors.BAD_REQUEST({ message: "Connect Monobank first." });
+    }
+
+    const fromSeconds = Math.floor(Date.now() / 1000) - input.days * 24 * 60 * 60;
+    try {
+      const items = await fetchMonobankStatement(existing.token, input.providerAccountId, fromSeconds);
+      // Map to app transaction entries server-side (same as the webhook path), dropping held/zero
+      // items, so the client just displays and inserts.
+      const entries = items.map(statementItemToImportEntry).filter((entry) => entry !== null);
+      return { entries };
+    } catch (error) {
+      const message =
+        error instanceof MonobankApiError && error.status === 429
+          ? "Monobank is rate-limiting requests. Wait a minute and try again."
+          : "Could not fetch transactions from Monobank.";
+      throw errors.BAD_REQUEST({ message });
+    }
+  });
+
 export const integrationsRouter = {
   monobank: {
     connect,
     replaceToken,
     refreshAccounts,
     disconnect,
+    getRecentStatement,
   },
 };

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type MonobankStatementItem, monobankStatementItemSchema } from "./types";
 
 const MONOBANK_API_BASE_URL = "https://api.monobank.ua";
 
@@ -92,4 +93,19 @@ export async function clearMonobankWebhook(token: string): Promise<void> {
     method: "POST",
     body: { webHookUrl: "" },
   });
+}
+
+/**
+ * Fetch a statement window for an account. Monobank caps the range at 31 days + 1 hour and rate
+ * limits to one request per 60s (a 429 surfaces as a {@link MonobankApiError} with `status` 429).
+ */
+export async function fetchMonobankStatement(
+  token: string,
+  account: string,
+  fromSeconds: number,
+  toSeconds?: number,
+): Promise<MonobankStatementItem[]> {
+  const suffix = toSeconds === undefined ? "" : `/${toSeconds}`;
+  const json = await monobankRequest(token, `/personal/statement/${account}/${fromSeconds}${suffix}`);
+  return z.array(monobankStatementItemSchema).parse(json);
 }
