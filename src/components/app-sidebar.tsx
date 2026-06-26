@@ -578,12 +578,12 @@ function AgentsNavItem({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
-  const isActive = agentNavItems.some((item) => currentPath === item.to);
+  const isActive = currentPath === "/agents" || agentNavItems.some((item) => currentPath === item.to);
 
   if (collapsed) {
     return (
       <SidebarNavLink
-        to="/memories"
+        to="/agents"
         label="Agents"
         icon={Bot}
         isActive={isActive}
@@ -603,7 +603,7 @@ function AgentsNavItem({
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
         )}
       >
-        <Link to="/memories" viewTransition onClick={onNavigate} className="flex flex-1 items-center gap-2 px-3 py-2">
+        <Link to="/agents" viewTransition onClick={onNavigate} className="flex flex-1 items-center gap-2 px-3 py-2">
           <Bot className="size-4 shrink-0" />
           Agents
         </Link>
