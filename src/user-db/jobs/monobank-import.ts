@@ -24,6 +24,9 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
   .handler(async ({ input, context }) => {
     const parsed = monobankWebhookPayloadSchema.safeParse(input.payload);
     if (!parsed.success) {
+      console.warn("[monobank-import] dropping malformed webhook payload", {
+        providerConnectionId: input.providerConnectionId,
+      });
       return;
     }
 
@@ -40,6 +43,11 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
     ).rows;
 
     if (!monoAccount) {
+      console.log("[monobank-import] webhook for untracked account", {
+        providerConnectionId: input.providerConnectionId,
+        providerAccountId,
+        statementId: statementItem.id,
+      });
       return;
     }
 
@@ -90,6 +98,11 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
     });
 
     if (decision.action === "skip") {
+      console.log("[monobank-import] skipped", {
+        providerAccountId,
+        statementId: statementItem.id,
+        reason: decision.reason,
+      });
       if (decision.setError) {
         context.syncDb.enqueueEvent(
           context.syncDb.createEvent({
@@ -154,6 +167,13 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
         payload: { lastImportAt: now, lastError: "", updatedAt: now },
       }),
     );
+
+    console.log("[monobank-import] imported", {
+      providerAccountId,
+      statementId: statementItem.id,
+      accountId: linkedAccount.id,
+      amount: mapped.amount,
+    });
   });
 
 function skipReasonMessage(reason: string): string {
