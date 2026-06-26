@@ -138,6 +138,22 @@ function getDialogTitle(mode: "create" | "edit" | null, type: TransactionType | 
   }
 }
 
+function SwapButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="mb-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+    >
+      <ArrowLeftRightIcon />
+    </Button>
+  );
+}
+
 function TransactionDialogContent() {
   const db = useDb();
   const createAccount = useCreateAccount();
@@ -261,6 +277,20 @@ function TransactionDialogContent() {
     createAccount();
   }
 
+  function swapAccounts() {
+    const source = form.getFieldValue("accountId");
+    const destination = form.getFieldValue("counterpartyAccountId");
+    form.setFieldValue("accountId", destination);
+    form.setFieldValue("counterpartyAccountId", source);
+  }
+
+  function swapAmounts() {
+    const amount = form.getFieldValue("amount");
+    const counterpartyAmount = form.getFieldValue("counterpartyAmount");
+    form.setFieldValue("amount", counterpartyAmount);
+    form.setFieldValue("counterpartyAmount", amount);
+  }
+
   const typeConfig = TYPE_CONFIG[currentType];
 
   return (
@@ -324,26 +354,12 @@ function TransactionDialogContent() {
             )}
           </form.AppField>
 
-          <div className={canRenderTransfer ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
-            <form.AppField name="accountId">
-              {(field) => (
-                <field.FieldContainer labelText={currentType === "transfer" ? "Source account" : "Account"}>
-                  <field.FormSelect placeholder="Select account">
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.labelText || "Untitled"} ({account.currency})
-                      </SelectItem>
-                    ))}
-                  </field.FormSelect>
-                </field.FieldContainer>
-              )}
-            </form.AppField>
-
-            {canRenderTransfer && (
-              <form.AppField name="counterpartyAccountId">
+          <div className={canRenderTransfer ? "flex items-end gap-2" : "grid gap-3"}>
+            <div className="min-w-0 flex-1">
+              <form.AppField name="accountId">
                 {(field) => (
-                  <field.FieldContainer labelText="Destination account">
-                    <field.FormSelect placeholder="Select destination">
+                  <field.FieldContainer labelText={currentType === "transfer" ? "Source account" : "Account"}>
+                    <field.FormSelect placeholder="Select account">
                       {accounts.map((account) => (
                         <SelectItem key={account.id} value={account.id}>
                           {account.labelText || "Untitled"} ({account.currency})
@@ -353,44 +369,72 @@ function TransactionDialogContent() {
                   </field.FieldContainer>
                 )}
               </form.AppField>
+            </div>
+
+            {canRenderTransfer && (
+              <>
+                <SwapButton label="Swap accounts" onClick={swapAccounts} />
+                <div className="min-w-0 flex-1">
+                  <form.AppField name="counterpartyAccountId">
+                    {(field) => (
+                      <field.FieldContainer labelText="Destination account">
+                        <field.FormSelect placeholder="Select destination">
+                          {accounts.map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.labelText || "Untitled"} ({account.currency})
+                            </SelectItem>
+                          ))}
+                        </field.FormSelect>
+                      </field.FieldContainer>
+                    )}
+                  </form.AppField>
+                </div>
+              </>
             )}
           </div>
 
-          <div className={canRenderTransfer ? "grid gap-3 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2"}>
-            <form.AppField name="amount">
-              {(field) => (
-                <field.FieldContainer
-                  labelText={
-                    currentType === "adjustment"
-                      ? `Balance delta${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
-                      : `Amount${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
-                  }
-                >
-                  <field.FormInput
-                    type="number"
-                    step="0.01"
-                    placeholder={currentType === "adjustment" ? "-12.50 or 12.50" : "0.00"}
-                    className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                </field.FieldContainer>
-              )}
-            </form.AppField>
-
-            {canRenderTransfer ? (
-              <form.AppField name="counterpartyAmount">
+          <div className={canRenderTransfer ? "flex items-end gap-2" : "grid gap-3 sm:grid-cols-2"}>
+            <div className="min-w-0 flex-1">
+              <form.AppField name="amount">
                 {(field) => (
                   <field.FieldContainer
-                    labelText={`Received amount${destinationAccount ? ` (${destinationAccount.currency})` : ""}`}
+                    labelText={
+                      currentType === "adjustment"
+                        ? `Balance delta${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
+                        : `Amount${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
+                    }
                   >
                     <field.FormInput
                       type="number"
                       step="0.01"
-                      placeholder="0.00"
+                      placeholder={currentType === "adjustment" ? "-12.50 or 12.50" : "0.00"}
                       className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </field.FieldContainer>
                 )}
               </form.AppField>
+            </div>
+
+            {canRenderTransfer ? (
+              <>
+                <SwapButton label="Swap amounts" onClick={swapAmounts} />
+                <div className="min-w-0 flex-1">
+                  <form.AppField name="counterpartyAmount">
+                    {(field) => (
+                      <field.FieldContainer
+                        labelText={`Received amount${destinationAccount ? ` (${destinationAccount.currency})` : ""}`}
+                      >
+                        <field.FormInput
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                      </field.FieldContainer>
+                    )}
+                  </form.AppField>
+                </div>
+              </>
             ) : (
               <form.AppField name="effectiveAt">
                 {(field) => (
