@@ -175,6 +175,51 @@ const migrations = createMigrations((b) => ({
       defaultValue: null,
     }),
   ],
+  12: [
+    b.createTable("_monobank_connection", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("providerConnectionId", "text", (col) => col.notNull())
+        .addColumn("status", "text", (col) => col.notNull().defaultTo("connected"))
+        .addColumn("webhookStatus", "text", (col) => col.notNull().defaultTo("pending"))
+        .addColumn("displayName", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("lastError", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("connectedAt", "integer", (col) => col.notNull().defaultTo(0))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+    b.createTable("_monobank_account", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("providerConnectionId", "text", (col) => col.notNull())
+        .addColumn("providerAccountId", "text", (col) => col.notNull())
+        .addColumn("displayName", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("accountType", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("currency", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("maskedPan", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("linkedAccountId", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("enabled", "boolean", (col) => col.notNull().defaultTo(true))
+        .addColumn("lastWebhookAt", "integer")
+        .addColumn("lastImportAt", "integer")
+        .addColumn("lastError", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+    b.addColumn({
+      table: "_transaction_entry",
+      column: "providerType",
+      type: "text",
+      defaultValue: null,
+    }),
+    b.addColumn({
+      table: "_transaction_entry",
+      column: "providerId",
+      type: "text",
+      defaultValue: null,
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -284,6 +329,16 @@ export const syncDbSchema = defineSyncSchema({
           .describe("When the transaction happened — use this for date filtering, not createdAt."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
+        providerType: t
+          .text()
+          .nullable()
+          .default(null)
+          .describe('External provider that created this transaction, e.g. "monobank"; null for manual entries.'),
+        providerId: t
+          .text()
+          .nullable()
+          .default(null)
+          .describe("Provider-side id of the source transaction (for Monobank, the statementItem id); null otherwise."),
       })
       .describe(
         [
@@ -360,6 +415,52 @@ export const syncDbSchema = defineSyncSchema({
           "user reviews and activates them.",
         ].join(" "),
       ),
+    monobank_connection: t
+      .table({
+        providerConnectionId: t.text().describe("Id of the central-D1 Monobank connection row this mirrors."),
+        status: t.text().default("connected").describe("connected | disconnected | error."),
+        webhookStatus: t.text().default("pending").describe("pending | active | error."),
+        displayName: t.text().default("").describe("Client name reported by Monobank."),
+        lastError: t.text().default("").describe("Last connection-level error, empty when healthy."),
+        connectedAt: t.integer().default(0).describe("Epoch ms the connection was established."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "Display/status metadata for the user's Monobank connection. The secret token lives only in",
+          "central D1, never here. There is at most one active connection per user.",
+        ].join(" "),
+      ),
+    monobank_account: t
+      .table({
+        providerConnectionId: t.text().describe("References monobank_connection.providerConnectionId."),
+        providerAccountId: t.text().describe("Monobank account id."),
+        displayName: t.text().default("").describe("Human-readable label for the remote account."),
+        accountType: t.text().default("").describe("Monobank account type (e.g. black, white, fop)."),
+        currency: t.text().default("").describe('ISO 4217 alpha currency code, or "" when unsupported.'),
+        maskedPan: t.text().default("").describe("Masked card number(s); display string or JSON text."),
+        linkedAccountId: t
+          .text()
+          .default("")
+          .describe("References account.id this remote account imports into, or empty when unlinked."),
+        enabled: t.boolean().default(true).describe("Whether imports are enabled for this remote account."),
+        lastWebhookAt: t.integer().nullable().default(null).describe("Epoch ms of the last received webhook, or null."),
+        lastImportAt: t
+          .integer()
+          .nullable()
+          .default(null)
+          .describe("Epoch ms of the last imported transaction, or null."),
+        lastError: t.text().default("").describe("Last import/link error for this account, empty when healthy."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "Display/link metadata for the Monobank accounts exposed by the user's connection. Each remote",
+          "account links one-to-one to an in-app account via `linkedAccountId`. No balances are stored here.",
+        ].join(" "),
+      ),
   },
   migrations,
 });
@@ -371,6 +472,8 @@ export type TransactionEntryItem = typeof syncDbSchema.tables.transaction_entry.
 export type ConversationItem = typeof syncDbSchema.tables.conversation.$row;
 export type MemoryItem = typeof syncDbSchema.tables.memory.$row;
 export type SkillItem = typeof syncDbSchema.tables.skill.$row;
+export type MonobankConnectionMetaItem = typeof syncDbSchema.tables.monobank_connection.$row;
+export type MonobankAccountItem = typeof syncDbSchema.tables.monobank_account.$row;
 
 export type UserDb = (typeof syncDbSchema)["~clientSchema"];
 

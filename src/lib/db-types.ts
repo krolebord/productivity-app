@@ -14,6 +14,21 @@ export interface D1Migrations {
   name: string | null;
 }
 
+export interface MonobankConnection {
+  createdAt: string;
+  disconnectedAt: string | null;
+  id: string;
+  lastError: string | null;
+  lastValidatedAt: string | null;
+  lastWebhookSetAt: string | null;
+  status: Generated<string>;
+  token: string;
+  updatedAt: string;
+  userId: string;
+  webhookSecret: string;
+  webhookStatus: Generated<string>;
+}
+
 export interface Session {
   createdAt: string;
   expiresAt: string;
@@ -40,6 +55,7 @@ export interface Verification {
 
 export interface DB {
   d1_migrations: D1Migrations;
+  monobank_connection: MonobankConnection;
   session: Session;
   user: User;
   verification: Verification;

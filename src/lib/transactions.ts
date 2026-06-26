@@ -45,7 +45,10 @@ export type TransactionInput =
   | IncomeTransactionInput
   | TransferTransactionInput;
 
-type MaterializedTransaction = Omit<TransactionRow, "id" | "createdAt" | "updatedAt" | "tombstone">;
+type MaterializedTransaction = Omit<
+  TransactionRow,
+  "id" | "createdAt" | "updatedAt" | "tombstone" | "providerType" | "providerId"
+>;
 
 function requireFiniteAmount(amount: number, fieldName: string) {
   if (!Number.isFinite(amount)) {

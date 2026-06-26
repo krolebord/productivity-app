@@ -10,6 +10,7 @@ import {
   createKyselyExecutor,
   durableObjectAdapter,
   type RemoteHandler,
+  type ServerSyncDb,
   type TypedPersistedCrdtEvent,
 } from "@sqlite-sync/cloudflare";
 import { type JobRuntime, setupJobs } from "do-jobs";
@@ -17,7 +18,9 @@ import { type Connection, Server } from "partyserver";
 import { cleanupConversationAgentJob } from "./jobs/cleanup-conversation-agent";
 import { fetchCurrencyRatesJob } from "./jobs/fetch-currency-rates";
 import { jobs } from "./jobs/jobs";
-import { syncDbSchema } from "./migrations";
+import { type MonobankImportInput, monobankImportJob } from "./jobs/monobank-import";
+import { type MonobankMetadataInput, monobankMetadataJob } from "./jobs/monobank-metadata";
+import { syncDbSchema, type UserSyncDbSchema } from "./migrations";
 import { userDbSchemaDocContext } from "./schema-doc";
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
@@ -39,6 +42,8 @@ export class UserDbServer extends Server<Env> {
   private aiDbAccess: AiDbAccess = null!;
   // biome-ignore lint/style/noNonNullAssertion: initialize in onStart
   private codeAiDbAccess: AiDbAccess = null!;
+  // biome-ignore lint/style/noNonNullAssertion: initialize in onStart
+  private syncDb: ServerSyncDb<UserSyncDbSchema> = null!;
 
   async onStart() {
     const { syncDb, remoteHandler } = await durableObjectAdapter.createCrdtStorage({
@@ -52,6 +57,7 @@ export class UserDbServer extends Server<Env> {
     });
 
     this.remoteHandler = remoteHandler;
+    this.syncDb = syncDb;
 
     this.aiDbAccess = createAiDbAccess({
       executor: createKyselyExecutor(this.ctx.storage),
@@ -108,6 +114,26 @@ export class UserDbServer extends Server<Env> {
 
   queryForCode(input: AiQueryInput): AiQueryResult {
     return this.codeAiDbAccess.query(input);
+  }
+
+  async enqueueMonobankMetadata(input: MonobankMetadataInput): Promise<void> {
+    await this.jobRuntime.schedule(monobankMetadataJob, { input, at: Date.now() });
+  }
+
+  async enqueueMonobankImport(input: MonobankImportInput): Promise<void> {
+    await this.jobRuntime.schedule(monobankImportJob, { input, at: Date.now() });
+  }
+
+  async getMonobankLinkedAccountIds(providerConnectionId: string): Promise<string[]> {
+    return this.syncDb
+      .executeKysely((q) =>
+        q
+          .selectFrom("monobank_account")
+          .select(["providerAccountId"])
+          .where("providerConnectionId", "=", providerConnectionId)
+          .where("linkedAccountId", "!=", ""),
+      )
+      .rows.map((row) => row.providerAccountId);
   }
 
   private async onEventApplied(event: TypedPersistedCrdtEvent<typeof syncDbSchema>) {

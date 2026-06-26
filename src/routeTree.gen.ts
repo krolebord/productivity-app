@@ -18,6 +18,7 @@ import { Route as AppTransactionsRouteImport } from './routes/_app/transactions'
 import { Route as AppSkillsRouteImport } from './routes/_app/skills'
 import { Route as AppNotesRouteImport } from './routes/_app/notes'
 import { Route as AppMemoriesRouteImport } from './routes/_app/memories'
+import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
 import { Route as AppCurrenciesRouteImport } from './routes/_app/currencies'
 import { Route as AppAccountsRouteImport } from './routes/_app/accounts'
 
@@ -64,6 +65,11 @@ const AppMemoriesRoute = AppMemoriesRouteImport.update({
   path: '/memories',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppCurrenciesRoute = AppCurrenciesRouteImport.update({
   id: '/currencies',
   path: '/currencies',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/accounts': typeof AppAccountsRoute
   '/currencies': typeof AppCurrenciesRoute
+  '/integrations': typeof AppIntegrationsRoute
   '/memories': typeof AppMemoriesRoute
   '/notes': typeof AppNotesRoute
   '/skills': typeof AppSkillsRoute
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/accounts': typeof AppAccountsRoute
   '/currencies': typeof AppCurrenciesRoute
+  '/integrations': typeof AppIntegrationsRoute
   '/memories': typeof AppMemoriesRoute
   '/notes': typeof AppNotesRoute
   '/skills': typeof AppSkillsRoute
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_app/accounts': typeof AppAccountsRoute
   '/_app/currencies': typeof AppCurrenciesRoute
+  '/_app/integrations': typeof AppIntegrationsRoute
   '/_app/memories': typeof AppMemoriesRoute
   '/_app/notes': typeof AppNotesRoute
   '/_app/skills': typeof AppSkillsRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/currencies'
+    | '/integrations'
     | '/memories'
     | '/notes'
     | '/skills'
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/currencies'
+    | '/integrations'
     | '/memories'
     | '/notes'
     | '/skills'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_app/accounts'
     | '/_app/currencies'
+    | '/_app/integrations'
     | '/_app/memories'
     | '/_app/notes'
     | '/_app/skills'
@@ -219,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMemoriesRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/integrations': {
+      id: '/_app/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof AppIntegrationsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/currencies': {
       id: '/_app/currencies'
       path: '/currencies'
@@ -239,6 +258,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteRouteChildren {
   AppAccountsRoute: typeof AppAccountsRoute
   AppCurrenciesRoute: typeof AppCurrenciesRoute
+  AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppMemoriesRoute: typeof AppMemoriesRoute
   AppNotesRoute: typeof AppNotesRoute
   AppSkillsRoute: typeof AppSkillsRoute
@@ -249,6 +269,7 @@ interface AppRouteRouteChildren {
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppAccountsRoute: AppAccountsRoute,
   AppCurrenciesRoute: AppCurrenciesRoute,
+  AppIntegrationsRoute: AppIntegrationsRoute,
   AppMemoriesRoute: AppMemoriesRoute,
   AppNotesRoute: AppNotesRoute,
   AppSkillsRoute: AppSkillsRoute,

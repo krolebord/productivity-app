@@ -23,6 +23,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
   PlusIcon,
   Search,
   Sparkles,
@@ -267,6 +268,14 @@ function SidebarContent({
             label="Currencies"
             icon={Coins}
             isActive={currentPath === "/currencies"}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
+          <SidebarNavLink
+            to="/integrations"
+            label="Integrations"
+            icon={Plug}
+            isActive={currentPath === "/integrations"}
             collapsed={collapsed}
             onNavigate={onNavigate}
           />
