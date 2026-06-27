@@ -15,6 +15,9 @@
   "placement": {
     "mode": "smart"
   },
+  "triggers": {
+    "crons": ["17 * * * *"]
+  },
   // Dev defaults. The `deploy` script overrides MODE=production and the prod
   // VITE_APP_URL via `wrangler deploy --var` so deployments run in production mode.
   "vars": {

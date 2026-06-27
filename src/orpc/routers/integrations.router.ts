@@ -6,32 +6,16 @@ import {
   fetchMonobankStatement,
   MonobankApiError,
   type MonobankClientInfo,
-  setMonobankWebhook,
 } from "@/lib/monobank/api";
 import { getMonobankConnectionByUserId } from "@/lib/monobank/connection-store";
 import { statementItemToImportEntry } from "@/lib/monobank/mapping";
 import { buildMonobankWebhookUrl, getUserDbStub, mapClientAccountsToMetadata } from "@/lib/monobank/server";
-import type { MonobankWebhookStatus } from "@/lib/monobank/types";
+import { trySetMonobankWebhook } from "@/lib/monobank/webhook-renewal";
 import { protectedProcedure } from "../common/procedure";
 
 const tokenInput = z.object({
   token: z.string().trim().min(20, "That does not look like a valid Monobank token."),
 });
-
-type WebhookOutcome = { webhookStatus: MonobankWebhookStatus; lastError: string };
-
-/** Best-effort webhook (re)registration; never throws so the connection stays usable. */
-async function trySetWebhook(token: string, url: string): Promise<WebhookOutcome> {
-  try {
-    await setMonobankWebhook(token, url);
-    return { webhookStatus: "active", lastError: "" };
-  } catch (error) {
-    return {
-      webhookStatus: "error",
-      lastError: error instanceof Error ? error.message : "Failed to set the Monobank webhook.",
-    };
-  }
-}
 
 async function validateToken(
   token: string,
@@ -85,7 +69,7 @@ const connect = protectedProcedure.input(tokenInput).handler(async ({ input, con
       .execute();
   }
 
-  const outcome = await trySetWebhook(token, buildMonobankWebhookUrl(id, webhookSecret));
+  const outcome = await trySetMonobankWebhook(token, buildMonobankWebhookUrl(id, webhookSecret));
   await db
     .updateTable("monobank_connection")
     .set({ webhookStatus: outcome.webhookStatus, lastWebhookSetAt: now, lastError: outcome.lastError, updatedAt: now })
@@ -140,7 +124,7 @@ const replaceToken = protectedProcedure.input(tokenInput).handler(async ({ input
     .where("id", "=", existing.id)
     .execute();
 
-  const outcome = await trySetWebhook(token, buildMonobankWebhookUrl(existing.id, existing.webhookSecret));
+  const outcome = await trySetMonobankWebhook(token, buildMonobankWebhookUrl(existing.id, existing.webhookSecret));
   await db
     .updateTable("monobank_connection")
     .set({ webhookStatus: outcome.webhookStatus, lastWebhookSetAt: now, lastError: outcome.lastError, updatedAt: now })
@@ -176,7 +160,10 @@ const refreshAccounts = protectedProcedure.handler(async ({ context, errors }) =
   const info = validated.info;
 
   const now = new Date().toISOString();
-  const outcome = await trySetWebhook(existing.token, buildMonobankWebhookUrl(existing.id, existing.webhookSecret));
+  const outcome = await trySetMonobankWebhook(
+    existing.token,
+    buildMonobankWebhookUrl(existing.id, existing.webhookSecret),
+  );
   await db
     .updateTable("monobank_connection")
     .set({

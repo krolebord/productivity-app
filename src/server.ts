@@ -3,9 +3,17 @@ import { routePartykitRequest } from "partyserver";
 import { apiHandler } from "./api/api-handler";
 import { isAssistantAllowed } from "./lib/assistant-access";
 import { getAuthFromRequest, getUserIdFromRequest } from "./lib/auth-server";
+import { renewDueMonobankWebhooks } from "./lib/monobank/webhook-renewal";
 import { orpcHandler } from "./orpc/orpc-router";
 
 export default {
+  async scheduled(controller) {
+    const result = await renewDueMonobankWebhooks(controller.scheduledTime);
+    if (result.checked > 0) {
+      console.log("[monobank-webhook-renewal]", result);
+    }
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
 
