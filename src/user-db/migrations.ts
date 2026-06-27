@@ -1,4 +1,5 @@
 import { createMigrations, defineSyncSchema, t } from "@sqlite-sync/core";
+import { sql } from "kysely";
 
 export type UserDbProps = {
   userId: string;
@@ -219,6 +220,22 @@ const migrations = createMigrations((b) => ({
       type: "text",
       defaultValue: null,
     }),
+  ],
+  13: [
+    // Dedup lookup during Monobank import/backfill runs once per incoming
+    // transaction (import-client.ts / jobs/monobank-import.ts), so without this
+    // it is O(incoming * existing) full scans on the largest table.
+    b.createIndex("transaction_entry_provider", (idx) =>
+      idx.on("_transaction_entry").columns(["providerType", "providerId"]).where(sql.ref("tombstone"), "=", 0),
+    ),
+    // Account-detail transaction view: filters by accountId, sorts by effectiveAt.
+    b.createIndex("transaction_entry_account_effective", (idx) =>
+      idx.on("_transaction_entry").columns(["accountId", "effectiveAt"]).where(sql.ref("tombstone"), "=", 0),
+    ),
+    // Global recent-transactions sort (dashboard) with no account filter.
+    b.createIndex("transaction_entry_effective", (idx) =>
+      idx.on("_transaction_entry").columns(["effectiveAt"]).where(sql.ref("tombstone"), "=", 0),
+    ),
   ],
 }));
 
