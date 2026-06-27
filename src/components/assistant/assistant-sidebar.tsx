@@ -32,7 +32,7 @@ import {
   Workflow,
   X,
 } from "lucide-react";
-import { type ClipboardEvent, lazy, Suspense, useEffect, useRef, useState } from "react";
+import { type ClipboardEvent, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
@@ -1093,6 +1093,53 @@ function ConversationView({
       </form>
     </div>
   );
+}
+
+/**
+ * Opens the assistant on a fresh conversation. Reuses an existing blank
+ * conversation rather than piling up empty stubs (mirrors the guard in
+ * ConversationView.newConversation). Used by the command palette.
+ */
+export function useNewConversation() {
+  const db = useDb();
+  const setOpen = useAssistantStore((s) => s.setOpen);
+  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+  const preferredModel = useAssistantStore((s) => s.model);
+
+  return useCallback(() => {
+    setOpen(true);
+
+    const [empty] = db.db.executeKysely((q) =>
+      q
+        .selectFrom("conversation")
+        .select("id")
+        .where("tombstone", "=", false)
+        .where("title", "=", "")
+        .where("totalTokens", "=", 0)
+        .orderBy("updatedAt", "desc")
+        .limit(1),
+    ).rows;
+    if (empty) {
+      setActiveConversation(empty.id);
+      return;
+    }
+
+    const id = generateId();
+    const now = Date.now();
+    db.db.executeKysely((q) =>
+      q.insertInto("conversation").values({
+        id,
+        title: "",
+        createdAt: now,
+        updatedAt: now,
+        model: preferredModel,
+        tombstone: false,
+        totalCost: 0,
+        totalTokens: 0,
+      }),
+    );
+    setActiveConversation(id);
+  }, [db, setOpen, setActiveConversation, preferredModel]);
 }
 
 export function AssistantSidebar() {

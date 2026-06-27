@@ -5,14 +5,21 @@ import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
   ArrowUpRightIcon,
+  Bot,
+  Brain,
   CoinsIcon,
   Home,
+  MessageSquarePlusIcon,
+  Plug,
   PlusIcon,
+  RefreshCwIcon,
   StickyNote,
   Wallet,
+  Workflow,
 } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import { useCreateAccount } from "@/components/account-dialog";
+import { useCreateAccount, useRefreshAccountBalances } from "@/components/account-dialog";
+import { useNewConversation } from "@/components/assistant/assistant-sidebar";
 import { useCreateNote } from "@/components/note-dialog";
 import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/components/transaction-dialog";
 import { useCommandStore } from "@/lib/command-store";
@@ -23,6 +30,7 @@ import {
   NEW_NOTE_HOTKEY,
   NEW_TRANSFER_HOTKEY,
 } from "@/lib/hotkeys";
+import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import {
   CommandDialog,
   CommandEmpty,
@@ -54,6 +62,9 @@ export function CommandPalette() {
   const createExpense = useCreateExpense();
   const createIncome = useCreateIncome();
   const createTransfer = useCreateTransfer();
+  const refreshBalances = useRefreshAccountBalances();
+  const newConversation = useNewConversation();
+  const assistantEnabled = useAssistantEnabled();
 
   useHotkey("Mod+K", (e) => {
     e.preventDefault();
@@ -121,6 +132,16 @@ export function CommandPalette() {
             New account
             <CommandShortcut>{formatForDisplay(NEW_ACCOUNT_HOTKEY)}</CommandShortcut>
           </CommandItem>
+          {assistantEnabled && (
+            <CommandItem onSelect={() => runAndClose(newConversation)}>
+              <MessageSquarePlusIcon className="size-4" />
+              New conversation
+            </CommandItem>
+          )}
+          <CommandItem onSelect={() => runAndClose(refreshBalances)}>
+            <RefreshCwIcon className="size-4" />
+            Refresh account balances
+          </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Navigation">
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/" }))}>
@@ -142,6 +163,22 @@ export function CommandPalette() {
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/transactions" }))}>
             <ArrowLeftRightIcon className="size-4" />
             Transactions
+          </CommandItem>
+          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/integrations" }))}>
+            <Plug className="size-4" />
+            Integrations
+          </CommandItem>
+          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/memories" }))}>
+            <Brain className="size-4" />
+            Memories
+          </CommandItem>
+          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/skills" }))}>
+            <Workflow className="size-4" />
+            Skills
+          </CommandItem>
+          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/agents" }))}>
+            <Bot className="size-4" />
+            Agents
           </CommandItem>
         </CommandGroup>
       </CommandList>

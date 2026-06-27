@@ -1,12 +1,13 @@
 import { generateId } from "@sqlite-sync/core";
 import { useStore } from "@tanstack/react-form";
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 import { z } from "zod";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { CurrencySelect } from "@/components/currency-select";
 import { createDynamicValidationLogic, dynamicZodValidators, finiteAmountString } from "@/lib/form-schemas";
-import { createTransactionInTransaction } from "@/lib/transactions";
+import { createTransactionInTransaction, refreshAccountBalances } from "@/lib/transactions";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
@@ -52,6 +53,25 @@ export const useAccountDialogStore = create(
 export function useCreateAccount() {
   const openCreate = useAccountDialogStore((s) => s.openCreate);
   return useCallback(() => openCreate(), [openCreate]);
+}
+
+export function useRefreshAccountBalances() {
+  const db = useDb();
+  return useCallback(() => {
+    try {
+      const result = refreshAccountBalances(db.db);
+      toast.success(`Refreshed ${result.accountCount} account${result.accountCount === 1 ? "" : "s"}.`, {
+        description:
+          result.changedCount === 0
+            ? "All balances were already correct."
+            : `Updated ${result.changedCount} balance${result.changedCount === 1 ? "" : "s"}.`,
+      });
+    } catch (error) {
+      toast.error("Could not refresh balances.", {
+        description: error instanceof Error ? error.message : "Unknown error.",
+      });
+    }
+  }, [db]);
 }
 
 function AccountDialogContent() {
