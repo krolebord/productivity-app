@@ -3,7 +3,12 @@ import { CheckIcon } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
-import { Input } from "./input";
+
+const inputClassName = cn(
+  "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs outline-none transition-all selection:bg-primary/20 selection:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30",
+  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+  "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
+);
 
 type ComboboxInputProps = {
   value: string;
@@ -59,8 +64,7 @@ export function ComboboxInput({
 
   const showDropdown = open && filtered.length > 0;
 
-  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const next = e.target.value;
+  function handleValueChange(next: string) {
     setInputValue(next);
     onChange(next);
     setOpen(true);
@@ -81,24 +85,24 @@ export function ComboboxInput({
 
   return (
     <div ref={containerRef} className="relative">
-      <Input
-        ref={inputRef}
-        id={id}
-        value={inputValue}
-        onChange={handleInputChange}
-        onFocus={() => setOpen(true)}
-        onBlur={onBlur}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        className={className}
-        aria-describedby={ariaDescribedBy}
-        aria-invalid={ariaInvalid}
-        aria-labelledby={ariaLabelledBy}
-        autoComplete="off"
-      />
-      {showDropdown && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-max min-w-full max-w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border bg-popover shadow-md">
-          <CommandPrimitive loop shouldFilter={false}>
+      <CommandPrimitive loop shouldFilter={false}>
+        <CommandPrimitive.Input
+          ref={inputRef}
+          id={id}
+          value={inputValue}
+          onValueChange={handleValueChange}
+          onFocus={() => setOpen(true)}
+          onBlur={onBlur}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className={cn(inputClassName, className)}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
+          aria-labelledby={ariaLabelledBy}
+          autoComplete="off"
+        />
+        {showDropdown && (
+          <div className="absolute top-full left-0 z-50 mt-1 w-max min-w-full max-w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border bg-popover shadow-md">
             <CommandPrimitive.List className="max-h-72 scroll-py-1 overflow-y-auto p-1">
               {filtered.map((option) => (
                 <CommandPrimitive.Item
@@ -112,9 +116,9 @@ export function ComboboxInput({
                 </CommandPrimitive.Item>
               ))}
             </CommandPrimitive.List>
-          </CommandPrimitive>
-        </div>
-      )}
+          </div>
+        )}
+      </CommandPrimitive>
     </div>
   );
 }
