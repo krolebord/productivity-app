@@ -462,6 +462,16 @@ function TransactionDialogContent() {
             </p>
           )}
 
+          {currentType !== "transfer" && (
+            <form.AppField name="category">
+              {(field) => (
+                <field.FieldContainer labelText="Category">
+                  <field.FormComboboxInput options={categories} placeholder="Optional category" />
+                </field.FieldContainer>
+              )}
+            </form.AppField>
+          )}
+
           <form.AppField name="title">
             {(field) => (
               <field.FieldContainer labelText="Title">
@@ -479,16 +489,6 @@ function TransactionDialogContent() {
               </field.FieldContainer>
             )}
           </form.AppField>
-
-          {currentType !== "transfer" && (
-            <form.AppField name="category">
-              {(field) => (
-                <field.FieldContainer labelText="Category">
-                  <field.FormComboboxInput options={categories} placeholder="Optional category" />
-                </field.FieldContainer>
-              )}
-            </form.AppField>
-          )}
 
           <form.AppField name="notes">
             {(field) => (
