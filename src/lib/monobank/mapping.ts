@@ -19,15 +19,12 @@ export type MappedMonobankTransaction = {
 };
 
 /**
- * Map a Monobank statement item to the app transaction fields, or `null` when the event should
- * be skipped purely on its own shape (held authorization or zero amount). Linking/currency/dedupe
- * rules are enforced separately by the import job.
+ * Map a Monobank statement item to the app transaction fields, or `null` when the event should be
+ * skipped purely on its own shape (zero amount). Held authorizations are mapped normally — see
+ * `decideMonobankImport` for why holds are imported. Linking/currency/dedupe rules are enforced
+ * separately by the import job.
  */
 export function mapStatementItemToTransaction(item: MonobankStatementItem): MappedMonobankTransaction | null {
-  if (item.hold === true) {
-    return null;
-  }
-
   if (item.amount === 0) {
     return null;
   }

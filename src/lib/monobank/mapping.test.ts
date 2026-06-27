@@ -32,8 +32,11 @@ describe("mapStatementItemToTransaction", () => {
     expect(mapStatementItemToTransaction(statementItem({ amount: 0 }))).toBeNull();
   });
 
-  it("skips held authorizations", () => {
-    expect(mapStatementItemToTransaction(statementItem({ amount: -100, hold: true }))).toBeNull();
+  it("maps held authorizations (Monobank's real-time webhook arrives held)", () => {
+    const mapped = mapStatementItemToTransaction(statementItem({ amount: -100, hold: true }));
+    expect(mapped).not.toBeNull();
+    expect(mapped?.type).toBe("expense");
+    expect(mapped?.amount).toBe(-1);
   });
 });
 

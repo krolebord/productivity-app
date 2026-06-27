@@ -39,10 +39,13 @@ export type ImportDecision = { action: "import" } | { action: "skip"; reason: st
 /**
  * Decide whether a webhook statement event should be imported. `setError` indicates whether the
  * skip reflects a real configuration/validation problem worth surfacing on the account row (vs a
- * normal skip such as a held authorization, an unlinked account, or a duplicate event).
+ * normal skip such as a zero-amount, unlinked account, or duplicate event).
+ *
+ * Held authorizations are NOT skipped: Monobank's real-time webhook arrives while the transaction
+ * is still on hold, and a cleared (`hold:false`) follow-up is not reliably sent — skipping holds
+ * would import almost nothing. A later cleared event for the same id is absorbed by the dedupe.
  */
 export function decideMonobankImport(input: {
-  isHold: boolean;
   isZeroAmount: boolean;
   hasLink: boolean;
   linkedAccountExists: boolean;
@@ -50,9 +53,6 @@ export function decideMonobankImport(input: {
   uniqueLink: boolean;
   alreadyImported: boolean;
 }): ImportDecision {
-  if (input.isHold) {
-    return { action: "skip", reason: "held", setError: false };
-  }
   if (input.isZeroAmount) {
     return { action: "skip", reason: "zero-amount", setError: false };
   }

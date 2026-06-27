@@ -87,7 +87,6 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
       ).rows.length > 0;
 
     const decision = decideMonobankImport({
-      isHold: statementItem.hold === true,
       isZeroAmount: statementItem.amount === 0,
       hasLink,
       linkedAccountExists: Boolean(linkedAccount),

@@ -260,7 +260,7 @@ const getRecentStatement = protectedProcedure
     const fromSeconds = Math.floor(Date.now() / 1000) - input.days * 24 * 60 * 60;
     try {
       const items = await fetchMonobankStatement(existing.token, input.providerAccountId, fromSeconds);
-      // Map to app transaction entries server-side (same as the webhook path), dropping held/zero
+      // Map to app transaction entries server-side (same as the webhook path), dropping zero-amount
       // items, so the client just displays and inserts.
       const entries = items.map(statementItemToImportEntry).filter((entry) => entry !== null);
       return { entries };

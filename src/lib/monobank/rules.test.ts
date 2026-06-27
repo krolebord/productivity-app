@@ -41,7 +41,6 @@ describe("validateMonobankLink", () => {
 
 describe("decideMonobankImport", () => {
   const base = {
-    isHold: false,
     isZeroAmount: false,
     hasLink: true,
     linkedAccountExists: true,
@@ -59,8 +58,7 @@ describe("decideMonobankImport", () => {
     expect(decision).toEqual({ action: "skip", reason: "duplicate", setError: false });
   });
 
-  it("skips held and unlinked events without flagging an error", () => {
-    expect(decideMonobankImport({ ...base, isHold: true })).toMatchObject({ action: "skip", setError: false });
+  it("skips unlinked events without flagging an error", () => {
     expect(decideMonobankImport({ ...base, hasLink: false })).toMatchObject({ action: "skip", setError: false });
   });
 
