@@ -4,7 +4,7 @@
   "main": "./src/server.ts",
   "account_id": "1f507c7933d231cc8051d23050bda6ab",
   "compatibility_date": "2025-09-02",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "enable_ctx_exports"],
   "route": {
     "pattern": "productivity.krolebord.com",
     "custom_domain": true

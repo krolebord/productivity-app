@@ -69,5 +69,6 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+export { CodemodeRuntime } from "@cloudflare/codemode";
 export { AssistantAgent } from "./agent/assistant-agent";
 export { UserDbServer } from "./user-db/user-db-server";
