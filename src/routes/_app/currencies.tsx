@@ -7,35 +7,21 @@ import { CurrencySelect } from "@/components/currency-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getCurrencyOptions, getRate } from "@/lib/currency/convert";
 import { APP_CURRENCIES, type AppCurrencyCode } from "@/lib/currency/currencies";
 import { cn } from "@/lib/utils";
 import { orpc } from "@/orpc/orpc-client";
-import type { CurrencyRateItem } from "@/user-db/migrations";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 
 export const Route = createFileRoute("/_app/currencies")({
   component: CurrenciesPage,
 });
 
-type CurrencyRateRow = CurrencyRateItem;
 type RefreshRatesResult = {
   date: string;
   base: string;
   rates: Partial<Record<AppCurrencyCode, number>>;
 };
-
-function getRate(row: CurrencyRateRow, currency: AppCurrencyCode): number | null {
-  if (currency === row.baseCurrency) {
-    return 1;
-  }
-
-  const rate = row[currency];
-  return typeof rate === "number" && Number.isFinite(rate) ? rate : null;
-}
-
-function getCurrencyOptions(row: CurrencyRateRow): AppCurrencyCode[] {
-  return APP_CURRENCIES.filter((currency) => getRate(row, currency) !== null);
-}
 
 function formatNumber(value: number, maximumFractionDigits = 6): string {
   return new Intl.NumberFormat(undefined, {
