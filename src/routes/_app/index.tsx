@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { endOfDay, endOfMonth, format, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
+import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
@@ -14,6 +14,7 @@ import { Area, AreaChart, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, Pi
 import { formatBalance } from "@/components/account-card";
 import { useCreateAccount } from "@/components/account-dialog";
 import { CurrencySelect } from "@/components/currency-select";
+import { DashboardRangeSelect } from "@/components/dashboard-range-select";
 import {
   useCreateExpense,
   useCreateIncome,
@@ -32,6 +33,7 @@ import {
 import { useBaseCurrencyStore } from "@/lib/base-currency-store";
 import { convertAmount, getCurrencyOptions } from "@/lib/currency/convert";
 import { APP_CURRENCIES } from "@/lib/currency/currencies";
+import { resolveDashboardRange, useDashboardRangeStore } from "@/lib/dashboard-range-store";
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import { getDisplayAmountForAccount, type TransactionType } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
@@ -97,12 +99,26 @@ function DashboardPage() {
   const createTransfer = useCreateTransfer();
   const createAccount = useCreateAccount();
   const [activeChart, setActiveChart] = useState<ChartTab>("flow");
+  const rangeMode = useDashboardRangeStore((s) => s.mode);
+  const rangeDays = useDashboardRangeStore((s) => s.days);
+  const rangeCycleDay = useDashboardRangeStore((s) => s.cycleDay);
 
-  // Compute time boundaries once so the queries below stay stable across
-  // renders instead of refetching on every tick. `months` are the trailing
-  // buckets used by the trend charts, oldest first; the last entry is the
-  // current (partial) month.
-  const { rangeStart, rangeEnd, prevRangeStart, prevRangeEnd, rangeLabel, months, windowStart, nowTs } = useMemo(() => {
+  // Compute time boundaries so the queries below stay stable across renders
+  // (instead of refetching on every tick) and only recompute when the chosen
+  // range changes. `months` are the trailing buckets used by the trend charts,
+  // oldest first; the last entry is the current (partial) month.
+  const {
+    rangeStart,
+    rangeEnd,
+    prevRangeStart,
+    prevRangeEnd,
+    rangeLabel,
+    cardSuffix,
+    prevLabel,
+    months,
+    windowStart,
+    nowTs,
+  } = useMemo(() => {
     const now = new Date();
     const buckets = Array.from({ length: TREND_MONTHS }, (_, i) => {
       const d = subMonths(now, TREND_MONTHS - 1 - i);
@@ -112,19 +128,17 @@ function DashboardPage() {
         end: endOfMonth(d).getTime(),
       };
     });
+    // Summary cards + spending donut follow the user-selected range; the
+    // preceding window of equal shape drives the period-over-period delta.
+    const range = resolveDashboardRange({ mode: rangeMode, days: rangeDays, cycleDay: rangeCycleDay }, now);
     return {
-      // Trailing 30-day window for the summary cards, with the preceding 30 days
-      // used for the period-over-period delta.
-      rangeStart: startOfDay(subDays(now, 29)).getTime(),
-      rangeEnd: endOfDay(now).getTime(),
-      prevRangeStart: startOfDay(subDays(now, 59)).getTime(),
-      prevRangeEnd: endOfDay(subDays(now, 30)).getTime(),
-      rangeLabel: "Last 30 days",
+      ...range,
+      rangeLabel: range.label,
       months: buckets,
       windowStart: buckets[0].start,
       nowTs: now.getTime(),
     };
-  }, []);
+  }, [rangeMode, rangeDays, rangeCycleDay]);
 
   const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
 
@@ -324,7 +338,7 @@ function DashboardPage() {
       ? `Cash flow · last ${TREND_MONTHS} months`
       : activeChart === "networth"
         ? `Net worth · last ${TREND_MONTHS} months`
-        : "Spending by category · last 30 days";
+        : `Spending by category · ${rangeLabel.toLowerCase()}`;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
@@ -334,6 +348,7 @@ function DashboardPage() {
           <p className="text-muted-foreground text-sm">{rangeLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <DashboardRangeSelect />
           <span className="text-muted-foreground text-xs uppercase tracking-wide">Display in</span>
           <CurrencySelect
             value={baseCurrency}
@@ -372,7 +387,7 @@ function DashboardPage() {
         <div className="rounded-lg border bg-card p-4 shadow-xs">
           <div className="flex items-center gap-1.5">
             <span className="size-2 rounded-full bg-emerald-500" />
-            <p className="text-muted-foreground text-xs uppercase tracking-wide">Income (30d)</p>
+            <p className="text-muted-foreground text-xs uppercase tracking-wide">Income ({cardSuffix})</p>
           </div>
           <p className="mt-2 font-mono font-semibold text-2xl text-emerald-600 tabular-nums dark:text-emerald-400">
             {formatBalance(last30.income, baseCurrency)}
@@ -382,7 +397,7 @@ function DashboardPage() {
         <div className="rounded-lg border bg-card p-4 shadow-xs">
           <div className="flex items-center gap-1.5">
             <span className="size-2 rounded-full bg-rose-500" />
-            <p className="text-muted-foreground text-xs uppercase tracking-wide">Spent (30d)</p>
+            <p className="text-muted-foreground text-xs uppercase tracking-wide">Spent ({cardSuffix})</p>
           </div>
           <p className="mt-2 font-mono font-semibold text-2xl text-rose-600 tabular-nums dark:text-rose-400">
             {formatBalance(last30.expense, baseCurrency)}
@@ -392,14 +407,14 @@ function DashboardPage() {
         <div className="rounded-lg border bg-card p-4 shadow-xs">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             {netDelta >= 0 ? <TrendingUpIcon className="size-4" /> : <TrendingDownIcon className="size-4" />}
-            <p className="text-xs uppercase tracking-wide">Net (30d)</p>
+            <p className="text-xs uppercase tracking-wide">Net ({cardSuffix})</p>
           </div>
           <p className={cn("mt-2 font-mono font-semibold text-2xl tabular-nums", amountClass(last30.net))}>
             {formatBalance(last30.net, baseCurrency)}
           </p>
           <p className="mt-1 text-muted-foreground text-xs">
             {netDelta >= 0 ? "+" : "−"}
-            {formatBalance(Math.abs(netDelta), baseCurrency)} vs previous 30 days
+            {formatBalance(Math.abs(netDelta), baseCurrency)} vs {prevLabel}
           </p>
         </div>
       </div>
@@ -506,7 +521,7 @@ function DashboardPage() {
               </ChartContainer>
             ) : (
               <div className="flex h-64 items-center justify-center text-muted-foreground text-sm">
-                No spending recorded in the last 30 days.
+                No spending recorded in this period.
               </div>
             ))}
         </div>
