@@ -457,6 +457,9 @@ function AccountsNavItem({
       .orderBy("order", "asc"),
   );
 
+  const groupOpen = useSidebarStore((s) => s.groups.accounts);
+  const setGroupOpen = useSidebarStore((s) => s.setGroupOpen);
+
   const matches = useMatches();
   const lastMatch = matches[matches.length - 1];
   const activeAccountId =
@@ -508,7 +511,7 @@ function AccountsNavItem({
   }
 
   return (
-    <Collapsible defaultOpen={accounts.length > 0}>
+    <Collapsible open={groupOpen ?? accounts.length > 0} onOpenChange={(open) => setGroupOpen("accounts", open)}>
       <div
         className={cn(
           "flex items-center gap-2 rounded-md font-medium text-sm transition-colors",
@@ -580,6 +583,9 @@ function AgentsNavItem({
 }) {
   const isActive = currentPath === "/agents" || agentNavItems.some((item) => currentPath === item.to);
 
+  const groupOpen = useSidebarStore((s) => s.groups.agents);
+  const setGroupOpen = useSidebarStore((s) => s.setGroupOpen);
+
   if (collapsed) {
     return (
       <SidebarNavLink
@@ -594,7 +600,7 @@ function AgentsNavItem({
   }
 
   return (
-    <Collapsible defaultOpen>
+    <Collapsible open={groupOpen ?? true} onOpenChange={(open) => setGroupOpen("agents", open)}>
       <div
         className={cn(
           "flex items-center gap-2 rounded-md font-medium text-sm transition-colors",
