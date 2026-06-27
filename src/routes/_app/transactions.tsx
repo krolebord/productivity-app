@@ -194,22 +194,6 @@ function summaryAmountClass(amount: number) {
   return "text-foreground";
 }
 
-function renderCurrencyBreakdown(summaryByCurrency: Map<string, number>) {
-  if (summaryByCurrency.size === 0) {
-    return <span className="font-mono font-semibold text-lg tabular-nums">0</span>;
-  }
-
-  return (
-    <div className="space-y-1">
-      {Array.from(summaryByCurrency.entries()).map(([currency, amount]) => (
-        <p key={currency} className={cn("font-mono font-semibold text-lg tabular-nums", summaryAmountClass(amount))}>
-          {formatBalance(amount, currency)}
-        </p>
-      ))}
-    </div>
-  );
-}
-
 function formatDayHeader(timestamp: number) {
   if (isToday(timestamp)) {
     return "Today";
@@ -275,21 +259,15 @@ function TransactionsPage() {
     ),
   );
 
-  // Aggregate the full filtered set in SQL so the summary cards stay accurate
-  // regardless of how many rows are currently rendered.
-  const { data: summaryRows } = useDbQuery((db) =>
-    applyTransactionFilters(db.selectFrom("transaction_entry"), search)
-      .select((eb) => [
-        "type",
-        "accountCurrency",
-        eb.fn.sum<number>("amount").as("total"),
-        eb.fn.countAll<number>().as("count"),
-      ])
-      .groupBy(["type", "accountCurrency"]),
+  const { data: totalRows } = useDbQuery((db) =>
+    applyTransactionFilters(db.selectFrom("transaction_entry"), search).select((eb) =>
+      eb.fn.countAll<number>().as("count"),
+    ),
   );
 
   const hasMore = transactions.length > limit;
   const visibleTransactions = hasMore ? transactions.slice(0, limit) : transactions;
+  const totalEntries = Number(totalRows[0]?.count ?? 0);
 
   // Day headers only make sense while the list is ordered by date; under other
   // sorts the days would be interleaved and the headers would repeat noisily.
@@ -311,33 +289,6 @@ function TransactionsPage() {
 
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
   const selectedAccount = search.accountId ? accountMap.get(search.accountId) : undefined;
-
-  const summary = {
-    expenseByCurrency: new Map<string, number>(),
-    incomeByCurrency: new Map<string, number>(),
-    netByCurrency: new Map<string, number>(),
-  };
-  let totalEntries = 0;
-
-  for (const row of summaryRows) {
-    const currency = row.accountCurrency;
-    const total = Number(row.total ?? 0);
-    totalEntries += Number(row.count ?? 0);
-
-    if (!currency) {
-      continue;
-    }
-
-    // Income amounts are stored positive, expenses negative. Adjustments and
-    // transfers are excluded from income/expense/net totals.
-    if (row.type === "income") {
-      summary.incomeByCurrency.set(currency, (summary.incomeByCurrency.get(currency) ?? 0) + total);
-      summary.netByCurrency.set(currency, (summary.netByCurrency.get(currency) ?? 0) + total);
-    } else if (row.type === "expense") {
-      summary.expenseByCurrency.set(currency, (summary.expenseByCurrency.get(currency) ?? 0) + Math.abs(total));
-      summary.netByCurrency.set(currency, (summary.netByCurrency.get(currency) ?? 0) + total);
-    }
-  }
 
   function patchSearch(next: Partial<typeof search>) {
     navigate({
@@ -382,40 +333,6 @@ function TransactionsPage() {
             <ArrowLeftRightIcon className="size-4" />
             Transfer
           </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border bg-card p-4 shadow-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            <p className="text-muted-foreground text-xs uppercase tracking-wide">Income</p>
-          </div>
-          <div className="mt-2">{renderCurrencyBreakdown(summary.incomeByCurrency)}</div>
-        </div>
-        <div className="rounded-lg border bg-card p-4 shadow-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-red-500" />
-            <p className="text-muted-foreground text-xs uppercase tracking-wide">Expenses</p>
-          </div>
-          <div className="mt-2">{renderCurrencyBreakdown(summary.expenseByCurrency)}</div>
-        </div>
-        <div className="rounded-lg border bg-card p-4 shadow-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-blue-500" />
-            <p className="text-muted-foreground text-xs uppercase tracking-wide">Net change</p>
-          </div>
-          <div className="mt-2">{renderCurrencyBreakdown(summary.netByCurrency)}</div>
-        </div>
-        <div className="rounded-lg border bg-card p-4 shadow-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-primary" />
-            <p className="text-muted-foreground text-xs uppercase tracking-wide">Entries</p>
-          </div>
-          <p className="mt-2 font-mono font-semibold text-lg tabular-nums">{totalEntries}</p>
-          <p className="mt-1 text-muted-foreground text-xs">
-            Adjustments and transfers are excluded from the summary totals above.
-          </p>
         </div>
       </div>
 
