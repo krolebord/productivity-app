@@ -6,7 +6,7 @@ import {
   SlidersHorizontalIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { formatDateTimeLocal, parseDateTimeLocal } from "@/lib/date-time";
@@ -161,6 +161,7 @@ function TransactionDialogContent() {
   const { draft, mode, transactionId } = useTransactionDialogStore();
   const closeDialog = useTransactionDialogStore((state) => state.close);
   const [addMore, setAddMore] = useState(false);
+  const amountInputRef = useRef<HTMLInputElement>(null);
 
   const deleteConfirm = useInlineConfirm({
     onConfirm: () => {
@@ -186,6 +187,11 @@ function TransactionDialogContent() {
       .orderBy("category", "asc"),
   );
   const categories = categoryRows.map((row) => row.category);
+
+  useEffect(() => {
+    if (accounts.length === 0) return;
+    queueMicrotask(() => amountInputRef.current?.focus());
+  }, [accounts.length]);
 
   const existing = mode === "edit" ? existingTransactions[0] : undefined;
   const selectedType = (existing?.type ?? draft?.type ?? "expense") as TransactionType;
@@ -262,6 +268,7 @@ function TransactionDialogContent() {
           notes: "",
           title: "",
         });
+        queueMicrotask(() => amountInputRef.current?.focus());
         return;
       }
 
@@ -418,6 +425,7 @@ function TransactionDialogContent() {
                     }
                   >
                     <field.FormInput
+                      ref={amountInputRef}
                       type="number"
                       step="0.01"
                       placeholder={currentType === "adjustment" ? "-12.50 or 12.50" : "0.00"}
