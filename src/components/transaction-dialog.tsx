@@ -6,7 +6,7 @@ import {
   SlidersHorizontalIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { formatDateTimeLocal, parseDateTimeLocal } from "@/lib/date-time";
@@ -23,6 +23,7 @@ import { useDb, useDbQuery } from "@/user-db/user-db";
 import { useCreateAccount } from "./account-dialog";
 import { createTransactionFormSchema } from "./transaction-dialog.schema";
 import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
 import { useAppForm } from "./ui/form";
 import { useInlineConfirm } from "./ui/inline-confirm";
@@ -159,6 +160,7 @@ function TransactionDialogContent() {
   const createAccount = useCreateAccount();
   const { draft, mode, transactionId } = useTransactionDialogStore();
   const closeDialog = useTransactionDialogStore((state) => state.close);
+  const [addMore, setAddMore] = useState(false);
 
   const deleteConfirm = useInlineConfirm({
     onConfirm: () => {
@@ -250,6 +252,17 @@ function TransactionDialogContent() {
             type: "adjustment",
           });
           break;
+      }
+
+      if (mode === "create" && addMore) {
+        form.reset({
+          ...value,
+          amount: "",
+          counterpartyAmount: "",
+          notes: "",
+          title: "",
+        });
+        return;
       }
 
       closeDialog();
@@ -507,7 +520,7 @@ function TransactionDialogContent() {
               </p>
             )}
 
-          <DialogFooter className="flex-col gap-3 sm:flex-row sm:justify-between">
+          <DialogFooter className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             {mode === "edit" && transactionId ? (
               <Button
                 type="button"
@@ -522,7 +535,19 @@ function TransactionDialogContent() {
                 <Trash2Icon />
                 {deleteConfirm.armed ? "Click again to delete" : "Delete"}
               </Button>
-            ) : null}
+            ) : (
+              <label
+                htmlFor="transaction-add-more"
+                className="flex cursor-pointer items-center gap-2 text-muted-foreground text-sm"
+              >
+                <Checkbox
+                  id="transaction-add-more"
+                  checked={addMore}
+                  onCheckedChange={(checked) => setAddMore(checked === true)}
+                />
+                Add more
+              </label>
+            )}
 
             <div className="ml-auto flex gap-2">
               <Button type="button" variant="outline" onClick={closeDialog}>
