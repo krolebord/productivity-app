@@ -510,7 +510,7 @@ function DashboardPage() {
 
           {activeChart === "spending" &&
             (categoryData.length > 0 ? (
-              <ChartContainer config={categoryConfig} className="mx-auto aspect-square h-64">
+              <ChartContainer config={categoryConfig} className="aspect-auto h-64 w-full">
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
                   <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={52}>
