@@ -445,14 +445,14 @@ function DashboardPage() {
       <section className="rounded-lg border bg-card shadow-xs">
         <div className="flex @lg:flex-row flex-col @lg:items-center @lg:justify-between gap-3 border-b px-4 py-3">
           <h2 className="font-medium text-sm">{chartTitle}</h2>
-          <div className="inline-flex rounded-md border bg-muted/50 p-0.5">
+          <div className="flex @lg:inline-flex rounded-md border bg-muted/50 p-0.5">
             {CHART_TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveChart(tab.id)}
                 className={cn(
-                  "rounded px-3 py-1 font-medium text-sm transition-colors",
+                  "flex-1 @lg:flex-none rounded px-3 py-1 font-medium text-sm transition-colors",
                   activeChart === tab.id
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
