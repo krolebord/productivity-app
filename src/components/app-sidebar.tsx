@@ -455,10 +455,7 @@ function AccountsNavItem({
 }) {
   const db = useDb();
   const { data: accounts } = useDbQuery((db) =>
-    db
-      .selectFrom("account")
-      .select(["id", "labelColor", "labelText", "balance", "currency", "order"])
-      .orderBy("order", "asc"),
+    db.selectFrom("account").selectAll().orderBy("order", "asc"),
   );
 
   const groupOpen = useSidebarStore((s) => s.groups.accounts);

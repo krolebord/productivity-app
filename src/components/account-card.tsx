@@ -1,5 +1,8 @@
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash2 } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useCreateExpense } from "@/components/transaction-dialog";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
@@ -35,11 +38,35 @@ export function AccountCard({ account }: AccountCardProps) {
   const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
   const attachRef = { table: "account", id: account.id } as const;
 
+  const sortable = useSortable({ id: account.id });
+  const style = {
+    transform: CSS.Translate.toString(sortable.transform),
+    transition: sortable.transition,
+  };
+
+  // The whole card is the drag handle, so the body click that fires right
+  // after a drop must be swallowed — otherwise dropping a card also opens it.
+  const justDraggedRef = useRef(false);
+  useEffect(() => {
+    if (sortable.isDragging) {
+      justDraggedRef.current = true;
+    } else if (justDraggedRef.current) {
+      const timeout = setTimeout(() => {
+        justDraggedRef.current = false;
+      }, 0);
+      return () => clearTimeout(timeout);
+    }
+  }, [sortable.isDragging]);
+
   return (
-    <div className="group">
-      <div className="relative rounded-lg border bg-card text-card-foreground shadow-xs">
+    <div ref={sortable.setNodeRef} style={style} className={cn("group", sortable.isDragging && "z-10 opacity-50")}>
+      <div
+        className="relative touch-manipulation rounded-lg border bg-card text-card-foreground shadow-xs"
+        {...sortable.attributes}
+        {...sortable.listeners}
+      >
         {/* Hover actions */}
-        <div className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
             className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -70,7 +97,14 @@ export function AccountCard({ account }: AccountCardProps) {
 
         <div
           className={cn("select-none px-4 py-3", isContextKeyHeld ? "cursor-copy" : "cursor-pointer")}
-          onClick={isContextKeyHeld ? getAttachClickHandler(attachRef) : () => openAccountDialog(account.id)}
+          onClick={
+            isContextKeyHeld
+              ? getAttachClickHandler(attachRef)
+              : () => {
+                  if (justDraggedRef.current) return;
+                  openAccountDialog(account.id);
+                }
+          }
         >
           <div className="mb-2 flex items-center gap-2">
             <span
