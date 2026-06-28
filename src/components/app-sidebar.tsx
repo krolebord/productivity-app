@@ -233,12 +233,15 @@ function SidebarContent({
               type="button"
               variant="ghost"
               size={collapsed ? "icon" : "sm"}
-              className={cn(!collapsed && "w-full justify-start gap-2")}
+              className={cn(
+                "border bg-sidebar-accent/50 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                !collapsed && "w-full justify-start gap-2",
+              )}
               onClick={openCommand}
               aria-label="Search"
               aria-keyshortcuts={OPEN_COMMAND_HOTKEY}
             >
-              <Search className="size-4" />
+              <Search className="size-4 shrink-0" />
               {!collapsed && (
                 <>
                   <span className="flex-1 text-left text-muted-foreground">Search...</span>

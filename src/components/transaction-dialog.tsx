@@ -528,14 +528,13 @@ function TransactionDialogContent() {
               </p>
             )}
 
-          <DialogFooter className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <DialogFooter className="flex-row items-center justify-between gap-3">
             {mode === "edit" && transactionId ? (
               <Button
                 type="button"
                 variant={deleteConfirm.armed ? "destructive" : "ghost"}
                 size="sm"
                 className={cn(
-                  "self-start",
                   !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
                 )}
                 {...deleteConfirm.getButtonProps()}
