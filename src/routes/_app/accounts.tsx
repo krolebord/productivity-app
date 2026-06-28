@@ -18,8 +18,8 @@ function AccountsPage() {
   const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
 
   return (
-    <div className="px-4 py-4 sm:px-6 sm:py-6">
-      <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+    <div className="@container px-4 py-4 sm:px-6 sm:py-6">
+      <div className="@xl:mb-6 mb-4 flex @xl:flex-row flex-col @xl:items-center @xl:justify-between gap-3">
         <h1 className="font-semibold text-xl">Accounts</h1>
         <div className="flex flex-wrap gap-2">
           <Button onClick={refreshBalances} size="sm" variant="outline" disabled={accounts.length === 0}>
@@ -50,7 +50,7 @@ function AccountsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid @4xl:grid-cols-3 @md:grid-cols-2 grid-cols-1 gap-4">
         {accounts.map((account) => (
           <AccountCard key={account.id} account={account} />
         ))}

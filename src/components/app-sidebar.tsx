@@ -37,7 +37,7 @@ import { useEffect, useState } from "react";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
-import { TOGGLE_ASSISTANT_HOTKEY, TOGGLE_SIDEBAR_HOTKEY } from "@/lib/hotkeys";
+import { OPEN_COMMAND_HOTKEY, TOGGLE_ASSISTANT_HOTKEY, TOGGLE_SIDEBAR_HOTKEY } from "@/lib/hotkeys";
 import { useSidebarStore } from "@/lib/sidebar-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
@@ -228,25 +228,26 @@ function SidebarContent({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className={cn("hidden md:block", collapsed ? "flex justify-center p-2" : "p-2")}>
-          <SidebarTooltip label="Search (⌘K)" collapsed={collapsed}>
-            <button
+          <SidebarTooltip label={`Search (${formatForDisplay(OPEN_COMMAND_HOTKEY)})`} collapsed={collapsed}>
+            <Button
               type="button"
+              variant="ghost"
+              size={collapsed ? "icon" : "sm"}
+              className={cn(!collapsed && "w-full justify-start gap-2")}
               onClick={openCommand}
-              className={cn(
-                "flex items-center rounded-md border bg-sidebar-accent/50 text-muted-foreground text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                collapsed ? "size-9 justify-center p-0" : "w-full gap-2 px-3 py-1.5",
-              )}
+              aria-label="Search"
+              aria-keyshortcuts={OPEN_COMMAND_HOTKEY}
             >
-              <Search className="size-4 shrink-0" />
+              <Search className="size-4" />
               {!collapsed && (
                 <>
-                  <span className="flex-1 text-left">Search...</span>
+                  <span className="flex-1 text-left text-muted-foreground">Search...</span>
                   <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
-                    ⌘K
+                    {formatForDisplay(OPEN_COMMAND_HOTKEY)}
                   </kbd>
                 </>
               )}
-            </button>
+            </Button>
           </SidebarTooltip>
         </div>
 

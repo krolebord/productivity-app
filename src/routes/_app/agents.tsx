@@ -124,8 +124,8 @@ function AgentsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="@container mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-6">
+      <div className="mb-4 flex @xl:flex-row flex-col @xl:items-start @xl:justify-between gap-3">
         <div>
           <h1 className="font-semibold text-xl">Agents</h1>
           <p className="text-muted-foreground text-sm">
@@ -151,7 +151,7 @@ function AgentsPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid @4xl:grid-cols-4 @md:grid-cols-2 gap-3">
         <StatCard
           label="Conversations"
           value={totalConversations.toLocaleString()}
@@ -162,7 +162,7 @@ function AgentsPage() {
         <StatCard label="Average cost" value={formatCost(averageCost)} detail="Per conversation" />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="mt-4 grid @4xl:grid-cols-[minmax(0,1fr)_20rem] gap-4">
         <div className="rounded-lg border bg-card p-3">
           <div className="mb-3 flex items-center gap-2">
             <Bot className="size-4 text-muted-foreground" />
@@ -228,7 +228,7 @@ function AgentsPage() {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid @md:grid-cols-2 gap-3">
         <QuickLink
           to="/memories"
           icon={Brain}

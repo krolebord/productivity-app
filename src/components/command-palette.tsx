@@ -29,6 +29,7 @@ import {
   NEW_INCOME_HOTKEY,
   NEW_NOTE_HOTKEY,
   NEW_TRANSFER_HOTKEY,
+  OPEN_COMMAND_HOTKEY,
 } from "@/lib/hotkeys";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import {
@@ -66,7 +67,7 @@ export function CommandPalette() {
   const newConversation = useNewConversation();
   const assistantEnabled = useAssistantEnabled();
 
-  useHotkey("Mod+K", (e) => {
+  useHotkey(OPEN_COMMAND_HOTKEY, (e) => {
     e.preventDefault();
     toggle();
   });

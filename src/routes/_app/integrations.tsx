@@ -78,7 +78,7 @@ function MonobankAccountRow({
   const unsupported = monoAccount.currency === "";
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex @xl:flex-row flex-col @xl:items-center @xl:justify-between gap-2 rounded-lg border p-3">
       <div className="min-w-0">
         <p className="truncate font-medium text-sm">{monoAccount.displayName || monoAccount.providerAccountId}</p>
         <p className="text-muted-foreground text-xs">
@@ -95,7 +95,7 @@ function MonobankAccountRow({
       ) : (
         <div className="flex items-center gap-2">
           <Select value={monoAccount.linkedAccountId || UNLINK_VALUE} onValueChange={handleChange}>
-            <SelectTrigger className="w-full sm:w-56">
+            <SelectTrigger className="@xl:w-56 w-full">
               <SelectValue placeholder="Not linked" />
             </SelectTrigger>
             <SelectContent>
@@ -180,7 +180,7 @@ function MonobankSection({
 
   return (
     <section className="rounded-xl border bg-card">
-      <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex @2xl:flex-row flex-col @2xl:items-center @2xl:justify-between gap-3 border-b p-4">
         <div>
           <h2 className="font-semibold">Monobank</h2>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
@@ -263,8 +263,8 @@ function IntegrationsPage() {
   const { data: accounts } = useDbQuery((q) => q.selectFrom("account").selectAll().orderBy("order", "asc"));
 
   return (
-    <div className="px-4 py-4 sm:px-6 sm:py-6">
-      <h1 className="mb-4 font-semibold text-xl sm:mb-6">Integrations</h1>
+    <div className="@container px-4 py-4 sm:px-6 sm:py-6">
+      <h1 className="@md:mb-6 mb-4 font-semibold text-xl">Integrations</h1>
       <MonobankSection connection={connections[0]} monoAccounts={monoAccounts} accounts={accounts} />
     </div>
   );

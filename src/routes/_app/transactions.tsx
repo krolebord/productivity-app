@@ -309,8 +309,8 @@ function TransactionsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div className="@container mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
+      <div className="flex @2xl:flex-row flex-col @2xl:items-start @2xl:justify-between gap-3">
         <div>
           <h1 className="font-semibold text-xl">Transactions</h1>
           <p className="text-muted-foreground text-sm">
@@ -320,23 +320,25 @@ function TransactionsPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={createExpense} size="sm">
+        {/* Create actions — desktop only; mobile uses the FAB + command palette.
+            Full-width split while the header is stacked, natural width once it's a row. */}
+        <div className="hidden gap-2 md:flex">
+          <Button onClick={createExpense} size="sm" className="@2xl:flex-none flex-1">
             <ArrowDownLeftIcon className="size-4" />
             Expense
           </Button>
-          <Button onClick={createIncome} size="sm" variant="outline">
+          <Button onClick={createIncome} size="sm" variant="outline" className="@2xl:flex-none flex-1">
             <ArrowUpRightIcon className="size-4" />
             Income
           </Button>
-          <Button onClick={createTransfer} size="sm" variant="outline">
+          <Button onClick={createTransfer} size="sm" variant="outline" className="@2xl:flex-none flex-1">
             <ArrowLeftRightIcon className="size-4" />
             Transfer
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-xs md:grid-cols-2 xl:grid-cols-6">
+      <div className="grid @2xl:grid-cols-3 @5xl:grid-cols-6 @md:grid-cols-2 gap-3 rounded-lg border bg-card p-4 shadow-xs">
         <div className="space-y-1">
           <label htmlFor="transactions-account" className="text-muted-foreground text-xs uppercase tracking-wide">
             Account
@@ -530,7 +532,7 @@ function TransactionsPage() {
                           : () => openEdit(transaction.id)
                       }
                       className={cn(
-                        "flex w-full flex-col gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 sm:flex-row sm:items-center",
+                        "flex w-full @xl:flex-row flex-col @xl:items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40",
                         isContextKeyHeld && "cursor-copy",
                       )}
                     >

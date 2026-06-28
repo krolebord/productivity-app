@@ -5,6 +5,7 @@ import {
   ArrowLeftRightIcon,
   ArrowUpRightIcon,
   PlusIcon,
+  SettingsIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   WalletIcon,
@@ -12,7 +13,6 @@ import {
 import { useMemo, useState } from "react";
 import { Area, AreaChart, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { formatBalance } from "@/components/account-card";
-import { useCreateAccount } from "@/components/account-dialog";
 import { CurrencySelect } from "@/components/currency-select";
 import { DashboardRangeSelect } from "@/components/dashboard-range-select";
 import {
@@ -30,6 +30,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useBaseCurrencyStore } from "@/lib/base-currency-store";
 import { convertAmount, getCurrencyOptions } from "@/lib/currency/convert";
 import { APP_CURRENCIES } from "@/lib/currency/currencies";
@@ -97,7 +98,6 @@ function DashboardPage() {
   const createExpense = useCreateExpense();
   const createIncome = useCreateIncome();
   const createTransfer = useCreateTransfer();
-  const createAccount = useCreateAccount();
   const [activeChart, setActiveChart] = useState<ChartTab>("flow");
   const rangeMode = useDashboardRangeStore((s) => s.mode);
   const rangeDays = useDashboardRangeStore((s) => s.days);
@@ -341,13 +341,14 @@ function DashboardPage() {
         : `Spending by category · ${rangeLabel.toLowerCase()}`;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="@container mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
+      <div className="flex flex-row items-center justify-between gap-3">
         <div>
           <h1 className="font-semibold text-xl">Overview</h1>
           <p className="text-muted-foreground text-sm">{rangeLabel}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Settings inline when the panel is wide enough, else collapsed behind a button */}
+        <div className="@xl:flex hidden flex-wrap items-center gap-2">
           <DashboardRangeSelect />
           <span className="text-muted-foreground text-xs uppercase tracking-wide">Display in</span>
           <CurrencySelect
@@ -357,10 +358,31 @@ function DashboardPage() {
             className="w-40"
           />
         </div>
+        <div className="@xl:hidden">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="icon" variant="ghost" aria-label="Settings">
+                <SettingsIcon className="size-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="flex w-64 flex-col gap-3">
+              <DashboardRangeSelect className="w-full" />
+              <div className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-xs uppercase tracking-wide">Display in</span>
+                <CurrencySelect
+                  value={baseCurrency}
+                  currencies={currencyOptions}
+                  onChange={setBaseCurrency}
+                  className="w-full"
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       {!latestRate && (
-        <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed bg-card px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex @md:flex-row flex-col items-start @md:items-center @md:justify-between gap-2 rounded-lg border border-dashed bg-card px-4 py-3 text-sm">
           <p className="text-muted-foreground">
             No exchange rates stored yet. Totals only count accounts already in {baseCurrency}.
           </p>
@@ -371,7 +393,7 @@ function DashboardPage() {
       )}
 
       {/* Summary cards */}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid @4xl:grid-cols-4 @lg:grid-cols-2 gap-3">
         <div className="rounded-lg border bg-card p-4 shadow-xs">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <WalletIcon className="size-4" />
@@ -419,29 +441,9 @@ function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick actions */}
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={createExpense} size="sm">
-          <ArrowDownLeftIcon className="size-4" />
-          Expense
-        </Button>
-        <Button onClick={createIncome} size="sm" variant="outline">
-          <ArrowUpRightIcon className="size-4" />
-          Income
-        </Button>
-        <Button onClick={createTransfer} size="sm" variant="outline">
-          <ArrowLeftRightIcon className="size-4" />
-          Transfer
-        </Button>
-        <Button onClick={createAccount} size="sm" variant="outline">
-          <PlusIcon className="size-4" />
-          Account
-        </Button>
-      </div>
-
       {/* Trend charts */}
       <section className="rounded-lg border bg-card shadow-xs">
-        <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex @lg:flex-row flex-col @lg:items-center @lg:justify-between gap-3 border-b px-4 py-3">
           <h2 className="font-medium text-sm">{chartTitle}</h2>
           <div className="inline-flex rounded-md border bg-muted/50 p-0.5">
             {CHART_TABS.map((tab) => (
@@ -527,14 +529,31 @@ function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid @3xl:grid-cols-2 gap-4">
         {/* Recent transactions */}
         <section className="rounded-lg border bg-card shadow-xs">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <h2 className="font-medium text-sm">Recent activity</h2>
-            <Button asChild size="sm" variant="ghost">
-              <Link to="/transactions">View all</Link>
-            </Button>
+          <div className="flex flex-col gap-2 border-b px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-medium text-sm">Recent activity</h2>
+              <Button asChild size="sm" variant="ghost">
+                <Link to="/transactions">View all</Link>
+              </Button>
+            </div>
+            {/* Create actions — desktop only; mobile uses the FAB + command palette */}
+            <div className="hidden items-center gap-1.5 md:flex">
+              <Button onClick={createExpense} size="sm" className="flex-1">
+                <ArrowDownLeftIcon className="size-4" />
+                Expense
+              </Button>
+              <Button onClick={createIncome} size="sm" variant="outline" className="flex-1">
+                <ArrowUpRightIcon className="size-4" />
+                Income
+              </Button>
+              <Button onClick={createTransfer} size="sm" variant="outline" className="flex-1">
+                <ArrowLeftRightIcon className="size-4" />
+                Transfer
+              </Button>
+            </div>
           </div>
           {recent.length === 0 ? (
             <div className="px-4 py-10 text-center text-muted-foreground text-sm">No transactions yet.</div>

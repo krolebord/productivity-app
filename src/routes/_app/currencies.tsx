@@ -137,15 +137,34 @@ function CurrenciesPage() {
   }
 
   return (
-    <div className="px-4 py-4 sm:px-6 sm:py-6">
-      <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-semibold text-xl">Currencies</h1>
+    <div className="@container px-4 py-4 sm:px-6 sm:py-6">
+      <div className="@xl:mb-6 mb-4 flex @xl:flex-row flex-col @xl:items-center @xl:justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="font-semibold text-xl">Currencies</h1>
+            <Button
+              onClick={refreshRates}
+              size="sm"
+              variant="outline"
+              disabled={refreshMutation.isPending}
+              aria-label="Refresh currencies"
+              className="@xl:hidden shrink-0"
+            >
+              <RefreshCwIcon className={refreshMutation.isPending ? "animate-spin" : undefined} />
+            </Button>
+          </div>
           <p className="text-muted-foreground text-sm">
             Latest stored rates for {latestRate.date}, based on {latestRate.baseCurrency}.
           </p>
         </div>
-        <Button onClick={refreshRates} size="sm" variant="outline" disabled={refreshMutation.isPending}>
+        <Button
+          onClick={refreshRates}
+          size="sm"
+          variant="outline"
+          disabled={refreshMutation.isPending}
+          aria-label="Refresh currencies"
+          className="@xl:inline-flex hidden"
+        >
           <RefreshCwIcon className={refreshMutation.isPending ? "animate-spin" : undefined} />
           Refresh currencies
         </Button>
@@ -158,8 +177,8 @@ function CurrenciesPage() {
             <h2 className="font-medium text-sm">Converter</h2>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)_minmax(260px,1fr)] lg:items-end">
-            <div className="grid gap-2 lg:max-w-sm">
+          <div className="grid @4xl:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)_minmax(260px,1fr)] @4xl:items-end gap-4">
+            <div className="grid @4xl:max-w-sm gap-2">
               <Label htmlFor="currency-amount">Amount</Label>
               <Input
                 id="currency-amount"
@@ -210,11 +229,11 @@ function CurrenciesPage() {
             <CoinsIcon className="size-4 text-muted-foreground" />
             <h2 className="font-medium text-sm">Fetched Currencies</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid @4xl:grid-cols-3 @md:grid-cols-2 grid-cols-1">
             {ratesForDisplay.map(({ currency, rate }) => (
               <div
                 key={currency}
-                className="flex items-center justify-between gap-4 border-b px-4 py-3 sm:odd:border-r xl:[&:not(:nth-child(3n))]:border-r"
+                className="flex items-center justify-between gap-4 border-b px-4 py-3 @md:odd:border-r @4xl:[&:not(:nth-child(3n))]:border-r"
               >
                 <div>
                   <p className="font-medium text-sm">{currency}</p>
