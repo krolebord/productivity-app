@@ -452,7 +452,7 @@ function DashboardPage() {
                 type="button"
                 onClick={() => setActiveChart(tab.id)}
                 className={cn(
-                  "flex-1 @lg:flex-none rounded px-3 py-1 font-medium text-sm transition-colors",
+                  "@lg:flex-none flex-1 rounded px-3 py-1 font-medium text-sm transition-colors",
                   activeChart === tab.id
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",

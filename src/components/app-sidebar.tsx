@@ -454,9 +454,7 @@ function AccountsNavItem({
   onNavigate?: () => void;
 }) {
   const db = useDb();
-  const { data: accounts } = useDbQuery((db) =>
-    db.selectFrom("account").selectAll().orderBy("order", "asc"),
-  );
+  const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
 
   const groupOpen = useSidebarStore((s) => s.groups.accounts);
   const setGroupOpen = useSidebarStore((s) => s.setGroupOpen);
