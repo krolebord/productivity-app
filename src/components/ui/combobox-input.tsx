@@ -1,4 +1,4 @@
-import { Command as CommandPrimitive } from "cmdk";
+import { Command as CommandPrimitive, useCommandState } from "cmdk";
 import { CheckIcon } from "lucide-react";
 import * as React from "react";
 
@@ -22,6 +22,41 @@ type ComboboxInputProps = {
   "aria-invalid"?: boolean;
   "aria-labelledby"?: string;
 };
+
+type ComboboxDropdownProps = {
+  options: string[];
+  value: string;
+  onSelect: (selected: string) => void;
+};
+
+function ComboboxDropdown({ options, value, onSelect }: ComboboxDropdownProps) {
+  const count = useCommandState((state) => state.filtered.count);
+
+  return (
+    <div
+      className={cn(
+        "absolute top-full left-0 z-50 mt-1 w-max min-w-full max-w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border bg-popover shadow-md",
+        count === 0 && "hidden",
+      )}
+      aria-hidden={count === 0}
+    >
+      <CommandPrimitive.List className="max-h-72 scroll-py-1 overflow-y-auto p-1">
+        {options.map((option) => (
+          <CommandPrimitive.Item
+            key={option}
+            value={option}
+            onSelect={onSelect}
+            onMouseDown={(event) => event.preventDefault()}
+            className="relative flex cursor-default select-none items-center gap-2 truncate rounded-sm px-2 py-1.5 text-sm outline-hidden data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+          >
+            <CheckIcon className={cn("size-3.5 shrink-0", value === option ? "opacity-100" : "opacity-0")} />
+            {option}
+          </CommandPrimitive.Item>
+        ))}
+      </CommandPrimitive.List>
+    </div>
+  );
+}
 
 export function ComboboxInput({
   value,
@@ -56,14 +91,6 @@ export function ComboboxInput({
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [open]);
 
-  const filtered = React.useMemo(() => {
-    if (!inputValue) return options;
-    const lower = inputValue.toLowerCase();
-    return options.filter((opt) => opt.toLowerCase().includes(lower));
-  }, [options, inputValue]);
-
-  const showDropdown = open && filtered.length > 0;
-
   function handleValueChange(next: string) {
     setInputValue(next);
     onChange(next);
@@ -85,7 +112,7 @@ export function ComboboxInput({
 
   return (
     <div ref={containerRef} className="relative">
-      <CommandPrimitive loop shouldFilter={false}>
+      <CommandPrimitive loop>
         <CommandPrimitive.Input
           ref={inputRef}
           id={id}
@@ -101,23 +128,7 @@ export function ComboboxInput({
           aria-labelledby={ariaLabelledBy}
           autoComplete="off"
         />
-        {showDropdown && (
-          <div className="absolute top-full left-0 z-50 mt-1 w-max min-w-full max-w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border bg-popover shadow-md">
-            <CommandPrimitive.List className="max-h-72 scroll-py-1 overflow-y-auto p-1">
-              {filtered.map((option) => (
-                <CommandPrimitive.Item
-                  key={option}
-                  value={option}
-                  onSelect={handleSelect}
-                  className="relative flex cursor-default select-none items-center gap-2 truncate rounded-sm px-2 py-1.5 text-sm outline-hidden data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
-                >
-                  <CheckIcon className={cn("size-3.5 shrink-0", value === option ? "opacity-100" : "opacity-0")} />
-                  {option}
-                </CommandPrimitive.Item>
-              ))}
-            </CommandPrimitive.List>
-          </div>
-        )}
+        {open && <ComboboxDropdown options={options} value={value} onSelect={handleSelect} />}
       </CommandPrimitive>
     </div>
   );

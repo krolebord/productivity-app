@@ -204,12 +204,15 @@ function TransactionDialogContent() {
     validators: dynamicZodValidators(createTransactionFormSchema(accounts.length)),
     defaultValues: {
       accountId: existing?.accountId ?? draft?.accountId ?? fallbackAccountId,
-      amount:
-        existing?.type === "adjustment" ? String(existing.amount) : String(Math.abs(Number(existing?.amount ?? 0))),
+      amount: existing
+        ? existing.type === "adjustment"
+          ? String(existing.amount)
+          : String(Math.abs(Number(existing.amount)))
+        : "",
       category: existing?.category ?? "",
       counterpartyAccountId:
         existing?.counterpartyAccountId ?? draft?.counterpartyAccountId ?? fallbackTransferAccountId,
-      counterpartyAmount: String(Math.abs(Number(existing?.counterpartyAmount ?? 0))),
+      counterpartyAmount: existing ? String(Math.abs(Number(existing.counterpartyAmount ?? 0))) : "",
       effectiveAt: formatDateTimeLocal(existing?.effectiveAt ?? Date.now()),
       notes: existing?.notes ?? "",
       title: existing?.title ?? "",

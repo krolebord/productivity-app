@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { format, isSameDay } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import * as React from "react";
 
@@ -49,8 +49,17 @@ export function DateTimeInput({
   const time = toTimeString(value);
 
   function handleDateSelect(day: Date | undefined) {
-    if (!day) return;
+    if (!day) {
+      setOpen(false);
+      return;
+    }
+
+    const isReSelect = selected != null && isSameDay(day, selected);
     onChange(combineDateAndTime(day, time));
+
+    if (isReSelect) {
+      setOpen(false);
+    }
   }
 
   function handleTimeChange(newTime: string) {
@@ -83,6 +92,7 @@ export function DateTimeInput({
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
+          required
           selected={selected}
           onSelect={handleDateSelect}
           defaultMonth={selected}
