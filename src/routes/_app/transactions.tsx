@@ -4,11 +4,15 @@ import { type SelectQueryBuilder, sql } from "kysely";
 import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
+  ArrowUpDownIcon,
   ArrowUpRightIcon,
-  CalendarIcon,
+  CheckIcon,
+  ChevronLeftIcon,
   Landmark,
   PlusIcon,
+  SearchIcon,
   SlidersHorizontalIcon,
+  XIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { z } from "zod";
@@ -26,7 +30,13 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateTimeDisplay } from "@/lib/date-time";
-import { getDisplayAmountForAccount, TRANSACTION_TYPES, type TransactionType } from "@/lib/transactions";
+import {
+  getDisplayAmountForAccount,
+  IMPORTANCE_TIERS,
+  type ImportanceTier,
+  TRANSACTION_TYPES,
+  type TransactionType,
+} from "@/lib/transactions";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
@@ -36,10 +46,15 @@ import { useDbQuery } from "@/user-db/user-db";
 const TRANSACTION_SORTS = ["date_desc", "date_asc", "amount_desc", "amount_asc", "title_asc", "title_desc"] as const;
 type TransactionSort = (typeof TRANSACTION_SORTS)[number];
 
+// "none" matches transactions with no importance set (unclassified / imported).
+const IMPORTANCE_FILTERS = [...IMPORTANCE_TIERS, "none"] as const;
+
 const transactionsSearchSchema = z.object({
   accountId: z.string().optional(),
   category: z.string().optional(),
+  currency: z.string().optional(),
   from: z.coerce.number().finite().optional(),
+  importance: z.enum(IMPORTANCE_FILTERS).optional(),
   q: z.string().optional(),
   sort: z.enum(TRANSACTION_SORTS).optional(),
   to: z.coerce.number().finite().optional(),
@@ -63,8 +78,22 @@ function applyTransactionFilters<O>(
     query = query.where("type", "=", search.type);
   }
 
+  if (search.currency) {
+    const currency = search.currency;
+    query = query.where((eb) =>
+      eb.or([eb("accountCurrency", "=", currency), eb("counterpartyCurrency", "=", currency)]),
+    );
+  }
+
   if (search.category) {
     query = query.where("category", "like", `%${search.category}%`);
+  }
+
+  if (search.importance) {
+    query =
+      search.importance === "none"
+        ? query.where("importance", "is", null)
+        : query.where("importance", "=", search.importance);
   }
 
   if (search.from) {
@@ -137,6 +166,14 @@ const TYPE_STYLE = {
   },
 } satisfies Record<TransactionType, { icon: unknown; dot: string; badge: string; accent: string }>;
 
+// Per-tier pill styling, matching the importance selector in the transaction dialog.
+const IMPORTANCE_STYLE = {
+  fixed: { label: "Fixed", badge: "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400" },
+  flexible: { label: "Flexible", badge: "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400" },
+  optional: { label: "Optional", badge: "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-400" },
+  investment: { label: "Invest", badge: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400" },
+} satisfies Record<ImportanceTier, { label: string; badge: string }>;
+
 const SORT_LABELS = {
   date_desc: "Newest first",
   date_asc: "Oldest first",
@@ -182,18 +219,6 @@ const TIME_RANGE_PRESETS = [
   },
 ] as const;
 
-function summaryAmountClass(amount: number) {
-  if (amount > 0) {
-    return "text-emerald-600 dark:text-emerald-400";
-  }
-
-  if (amount < 0) {
-    return "text-rose-600 dark:text-rose-400";
-  }
-
-  return "text-foreground";
-}
-
 function formatDayHeader(timestamp: number) {
   if (isToday(timestamp)) {
     return "Today";
@@ -222,6 +247,44 @@ function formatTimeRangeLabel(from?: number, to?: number) {
   return "All time";
 }
 
+// The chip-based filters, in the order they appear. Search and sort live outside
+// this set because they stay visible at all times.
+const FILTER_ORDER = ["account", "currency", "time", "type", "importance", "category"] as const;
+type FilterKey = (typeof FILTER_ORDER)[number];
+
+const capitalize = (value: string) => value[0].toUpperCase() + value.slice(1);
+
+// A single-select list rendered inside a filter chip's popover. The empty-value
+// option ("All …") clears the filter.
+function FilterOptionList({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: { value: string; label: string }[];
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div className="flex max-h-72 w-52 flex-col overflow-auto p-1">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onSelect(option.value)}
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
+            selected === option.value && "bg-muted font-medium",
+          )}
+        >
+          <CheckIcon className={cn("size-3.5 shrink-0", selected === option.value ? "opacity-100" : "opacity-0")} />
+          <span className="truncate">{option.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function TransactionsPage() {
   const search = Route.useSearch();
   const sort = search.sort ?? "date_desc";
@@ -233,14 +296,29 @@ function TransactionsPage() {
   const createIncome = useCreateIncome(search.accountId ? { accountId: search.accountId } : undefined);
   const createTransfer = useCreateTransfer(search.accountId ? { accountId: search.accountId } : undefined);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  // Which filter chip's editor popover is open, plus the "Add filter" menu state.
+  const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addPage, setAddPage] = useState<FilterKey | null>(null);
 
   // Reset to the default page size whenever the active filters change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset is keyed on filter values, not setLimit.
   useEffect(() => {
     setLimit(DEFAULT_LIMIT);
-  }, [search.accountId, search.type, search.category, search.from, search.q, search.sort, search.to]);
+  }, [
+    search.accountId,
+    search.type,
+    search.category,
+    search.currency,
+    search.importance,
+    search.from,
+    search.q,
+    search.sort,
+    search.to,
+  ]);
 
   const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
+  const currencyOptions = Array.from(new Set(accounts.map((account) => account.currency))).sort();
 
   const { data: categoryRows } = useDbQuery((db) =>
     db
@@ -298,7 +376,9 @@ function TransactionsPage() {
         return {
           accountId: merged.accountId || undefined,
           category: merged.category || undefined,
+          currency: merged.currency || undefined,
           from: merged.from || undefined,
+          importance: merged.importance || undefined,
           q: merged.q || undefined,
           sort: merged.sort === "date_desc" ? undefined : merged.sort,
           to: merged.to || undefined,
@@ -307,6 +387,174 @@ function TransactionsPage() {
       },
     });
   }
+
+  function closeFilterPopovers() {
+    setOpenFilter(null);
+    setAddOpen(false);
+    setAddPage(null);
+  }
+
+  // Label + current display value for each chip filter. `value` is null when the
+  // filter is inactive, which keeps it out of the chip row and in the "Add filter" menu.
+  const filterMeta: Record<FilterKey, { label: string; value: string | null }> = {
+    account: {
+      label: "Account",
+      value: selectedAccount ? selectedAccount.labelText || "Untitled" : null,
+    },
+    currency: { label: "Currency", value: search.currency ?? null },
+    time: {
+      label: "Time range",
+      value: search.from || search.to ? formatTimeRangeLabel(search.from, search.to) : null,
+    },
+    type: { label: "Type", value: search.type ? capitalize(search.type) : null },
+    importance: {
+      label: "Importance",
+      value: search.importance
+        ? search.importance === "none"
+          ? "Unclassified"
+          : IMPORTANCE_STYLE[search.importance].label
+        : null,
+    },
+    category: { label: "Category", value: search.category || null },
+  };
+
+  function clearFilter(key: FilterKey) {
+    switch (key) {
+      case "account":
+        return patchSearch({ accountId: undefined });
+      case "currency":
+        return patchSearch({ currency: undefined });
+      case "time":
+        return patchSearch({ from: undefined, to: undefined });
+      case "type":
+        return patchSearch({ type: undefined });
+      case "importance":
+        return patchSearch({ importance: undefined });
+      case "category":
+        return patchSearch({ category: undefined });
+    }
+  }
+
+  // The editor shown inside a chip's popover (and in the "Add filter" second page).
+  // Single-selects close the popover on choose; time/category stay open for further input.
+  function renderFilterEditor(key: FilterKey) {
+    switch (key) {
+      case "account":
+        return (
+          <FilterOptionList
+            options={[
+              { value: "", label: "All accounts" },
+              ...accounts.map((account) => ({
+                value: account.id,
+                label: `${account.labelText || "Untitled"} (${account.currency})`,
+              })),
+            ]}
+            selected={search.accountId ?? ""}
+            onSelect={(value) => {
+              patchSearch({ accountId: value || undefined });
+              closeFilterPopovers();
+            }}
+          />
+        );
+      case "currency":
+        return (
+          <FilterOptionList
+            options={[
+              { value: "", label: "All currencies" },
+              ...currencyOptions.map((currency) => ({ value: currency, label: currency })),
+            ]}
+            selected={search.currency ?? ""}
+            onSelect={(value) => {
+              patchSearch({ currency: value || undefined });
+              closeFilterPopovers();
+            }}
+          />
+        );
+      case "type":
+        return (
+          <FilterOptionList
+            options={[
+              { value: "", label: "All types" },
+              ...TRANSACTION_TYPES.map((type) => ({ value: type, label: capitalize(type) })),
+            ]}
+            selected={search.type ?? ""}
+            onSelect={(value) => {
+              patchSearch({ type: value ? (value as TransactionType) : undefined });
+              closeFilterPopovers();
+            }}
+          />
+        );
+      case "importance":
+        return (
+          <FilterOptionList
+            options={[
+              { value: "", label: "All importance" },
+              ...IMPORTANCE_TIERS.map((tier) => ({ value: tier, label: IMPORTANCE_STYLE[tier].label })),
+              { value: "none", label: "Unclassified" },
+            ]}
+            selected={search.importance ?? ""}
+            onSelect={(value) => {
+              patchSearch({ importance: value ? (value as TransactionsSearch["importance"]) : undefined });
+              closeFilterPopovers();
+            }}
+          />
+        );
+      case "category":
+        return (
+          <div className="w-64 p-2">
+            <ComboboxInput
+              value={search.category ?? ""}
+              onChange={(value) => patchSearch({ category: value })}
+              options={categories}
+              placeholder="Filter category"
+            />
+          </div>
+        );
+      case "time":
+        return (
+          <div className="flex flex-col gap-3 p-3">
+            <div className="flex flex-wrap gap-2">
+              {TIME_RANGE_PRESETS.map((preset) => (
+                <Button
+                  key={preset.id}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => patchSearch(preset.getRange())}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => patchSearch({ from: undefined, to: undefined })}
+              >
+                Clear
+              </Button>
+            </div>
+            <Calendar
+              mode="range"
+              numberOfMonths={isDesktop ? 2 : 1}
+              selected={{
+                from: search.from ? new Date(search.from) : undefined,
+                to: search.to ? new Date(search.to) : undefined,
+              }}
+              onSelect={(range) =>
+                patchSearch({
+                  from: range?.from ? startOfDay(range.from).getTime() : undefined,
+                  to: range?.to ? endOfDay(range.to).getTime() : undefined,
+                })
+              }
+            />
+          </div>
+        );
+    }
+  }
+
+  const activeFilters = FILTER_ORDER.filter((key) => filterMeta[key].value !== null);
+  const inactiveFilters = FILTER_ORDER.filter((key) => filterMeta[key].value === null);
 
   return (
     <div className="@container mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
@@ -338,148 +586,140 @@ function TransactionsPage() {
         </div>
       </div>
 
-      <div className="grid @2xl:grid-cols-3 @5xl:grid-cols-6 @md:grid-cols-2 gap-3 rounded-lg border bg-card p-4 shadow-xs">
-        <div className="space-y-1">
-          <label htmlFor="transactions-account" className="text-muted-foreground text-xs uppercase tracking-wide">
-            Account
-          </label>
-          <Select
-            value={search.accountId ?? "__all__"}
-            onValueChange={(value) => patchSearch({ accountId: value === "__all__" ? undefined : value })}
-          >
-            <SelectTrigger id="transactions-account" className="w-full">
-              <SelectValue placeholder="All accounts" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All accounts</SelectItem>
-              {accounts.map((account) => (
-                <SelectItem key={account.id} value={account.id}>
-                  {account.labelText || "Untitled"} ({account.currency})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="transactions-time-range" className="text-muted-foreground text-xs uppercase tracking-wide">
-            Time range
-          </label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button id="transactions-time-range" variant="outline" className="w-full justify-start px-3 font-normal">
-                <CalendarIcon className="size-4 text-muted-foreground" />
-                <span className="truncate">{formatTimeRangeLabel(search.from, search.to)}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-0">
-              <div className="flex flex-col gap-3 p-3">
-                <div className="flex flex-wrap gap-2">
-                  {TIME_RANGE_PRESETS.map((preset) => (
-                    <Button
-                      key={preset.id}
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => patchSearch(preset.getRange())}
-                    >
-                      {preset.label}
-                    </Button>
-                  ))}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => patchSearch({ from: undefined, to: undefined })}
-                  >
-                    Clear
-                  </Button>
-                </div>
-                <Calendar
-                  mode="range"
-                  numberOfMonths={isDesktop ? 2 : 1}
-                  selected={{
-                    from: search.from ? new Date(search.from) : undefined,
-                    to: search.to ? new Date(search.to) : undefined,
-                  }}
-                  onSelect={(range) =>
-                    patchSearch({
-                      from: range?.from ? startOfDay(range.from).getTime() : undefined,
-                      to: range?.to ? endOfDay(range.to).getTime() : undefined,
-                    })
-                  }
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="transactions-sort" className="text-muted-foreground text-xs uppercase tracking-wide">
-            Sort
-          </label>
-          <Select value={sort} onValueChange={(value) => patchSearch({ sort: value as TransactionSort })}>
-            <SelectTrigger id="transactions-sort" className="w-full">
-              <SelectValue placeholder="Sort transactions" />
-            </SelectTrigger>
-            <SelectContent>
-              {TRANSACTION_SORTS.map((sortOption) => (
-                <SelectItem key={sortOption} value={sortOption}>
-                  {SORT_LABELS[sortOption]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="transactions-type" className="text-muted-foreground text-xs uppercase tracking-wide">
-            Type
-          </label>
-          <Select
-            value={search.type ?? "__all__"}
-            onValueChange={(value) =>
-              patchSearch({ type: value === "__all__" ? undefined : (value as TransactionType) })
-            }
-          >
-            <SelectTrigger id="transactions-type" className="w-full">
-              <SelectValue placeholder="All types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All types</SelectItem>
-              {TRANSACTION_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {type[0].toUpperCase() + type.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="transactions-category" className="text-muted-foreground text-xs uppercase tracking-wide">
-            Category
-          </label>
-          <ComboboxInput
-            id="transactions-category"
-            value={search.category ?? ""}
-            onChange={(value) => patchSearch({ category: value })}
-            options={categories}
-            placeholder="Filter category"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="transactions-search" className="text-muted-foreground text-xs uppercase tracking-wide">
-            Search
-          </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[14rem] flex-1 sm:max-w-sm">
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="transactions-search"
             value={search.q ?? ""}
             onChange={(event) => patchSearch({ q: event.currentTarget.value })}
-            placeholder="Title, notes, category"
+            placeholder="Search title, notes, category"
+            className="pl-9"
           />
         </div>
+
+        <Select value={sort} onValueChange={(value) => patchSearch({ sort: value as TransactionSort })}>
+          <SelectTrigger id="transactions-sort" className="w-[11.5rem]">
+            <ArrowUpDownIcon className="size-4 text-muted-foreground" />
+            <SelectValue placeholder="Sort transactions" />
+          </SelectTrigger>
+          <SelectContent>
+            {TRANSACTION_SORTS.map((sortOption) => (
+              <SelectItem key={sortOption} value={sortOption}>
+                {SORT_LABELS[sortOption]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <span className="hidden h-6 w-px self-center bg-border sm:block" />
+
+        {activeFilters.map((key) => (
+          <Popover key={key} open={openFilter === key} onOpenChange={(open) => setOpenFilter(open ? key : null)}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 py-0 pr-1 pl-3 text-blue-700 text-sm transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50"
+              >
+                <span className="max-w-[14rem] truncate">
+                  {filterMeta[key].label}: <span className="font-semibold">{filterMeta[key].value}</span>
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Clear ${filterMeta[key].label} filter`}
+                  className="flex size-5 items-center justify-center rounded-full hover:bg-blue-200/70 dark:hover:bg-blue-800/70"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    clearFilter(key);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      clearFilter(key);
+                    }
+                  }}
+                >
+                  <XIcon className="size-3.5" />
+                </span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-0">
+              {renderFilterEditor(key)}
+            </PopoverContent>
+          </Popover>
+        ))}
+
+        {inactiveFilters.length > 0 ? (
+          <Popover
+            open={addOpen}
+            onOpenChange={(open) => {
+              setAddOpen(open);
+              if (!open) {
+                setAddPage(null);
+              }
+            }}
+          >
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <PlusIcon className="size-3.5" />
+                Add filter
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-0">
+              {addPage === null ? (
+                <div className="flex w-44 flex-col p-1">
+                  {inactiveFilters.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setAddPage(key)}
+                      className="rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                    >
+                      {filterMeta[key].label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setAddPage(null)}
+                    className="flex w-full items-center gap-1.5 border-b px-3 py-2 text-left font-medium text-xs hover:bg-muted"
+                  >
+                    <ChevronLeftIcon className="size-3.5" />
+                    {filterMeta[addPage].label}
+                  </button>
+                  {renderFilterEditor(addPage)}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        ) : null}
+
+        {activeFilters.length > 0 ? (
+          <button
+            type="button"
+            onClick={() =>
+              patchSearch({
+                accountId: undefined,
+                currency: undefined,
+                from: undefined,
+                to: undefined,
+                type: undefined,
+                importance: undefined,
+                category: undefined,
+              })
+            }
+            className="ml-1 text-muted-foreground text-sm underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Clear all
+          </button>
+        ) : null}
       </div>
 
       {transactions.length === 0 ? (
@@ -539,18 +779,19 @@ function TransactionsPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="truncate font-medium">{title}</span>
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-[11px] uppercase tracking-wide",
-                              typeStyle.badge,
-                            )}
-                          >
-                            <span className={cn("size-1.5 rounded-full", typeStyle.dot)} />
-                            {transaction.type}
-                          </span>
                           {transaction.category ? (
                             <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
                               {transaction.category}
+                            </span>
+                          ) : null}
+                          {transaction.importance ? (
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 font-medium text-[11px]",
+                                IMPORTANCE_STYLE[transaction.importance].badge,
+                              )}
+                            >
+                              {IMPORTANCE_STYLE[transaction.importance].label}
                             </span>
                           ) : null}
                         </div>
@@ -573,7 +814,7 @@ function TransactionsPage() {
                       <div className="shrink-0 text-right">
                         {isTransfer && !search.accountId ? (
                           <div className="space-y-1">
-                            <p className="font-medium font-mono tabular-nums">
+                            <p className={cn("font-medium font-mono tabular-nums", typeStyle.accent)}>
                               {formatBalance(transaction.amount, transaction.accountCurrency)}
                             </p>
                             {transaction.counterpartyAmount !== null ? (
@@ -583,7 +824,7 @@ function TransactionsPage() {
                             ) : null}
                           </div>
                         ) : (
-                          <p className={cn("font-medium font-mono tabular-nums", summaryAmountClass(display.amount))}>
+                          <p className={cn("font-medium font-mono tabular-nums", typeStyle.accent)}>
                             {formatBalance(display.amount, display.currency)}
                           </p>
                         )}

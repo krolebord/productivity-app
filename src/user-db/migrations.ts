@@ -246,6 +246,14 @@ const migrations = createMigrations((b) => ({
       build: (col) => col.notNull(),
     }),
   ],
+  15: [
+    b.addColumn({
+      table: "_transaction_entry",
+      column: "importance",
+      type: "text",
+      defaultValue: null,
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -353,6 +361,13 @@ export const syncDbSchema = defineSyncSchema({
           .describe("Positive amount received by the destination account (transfers only)."),
         title: t.text().default(""),
         category: t.text().default("").describe("Free-form category for expenses/incomes (empty for transfers)."),
+        importance: t
+          .enum(["fixed", "flexible", "optional", "investment"])
+          .nullable()
+          .default(null)
+          .describe(
+            "Expense importance tier: fixed | flexible | optional | investment; null for other types or unset.",
+          ),
         notes: t.text().default("").describe("Free-form notes."),
         effectiveAt: t
           .integer()

@@ -13,7 +13,7 @@ import {
   WalletIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Area, AreaChart, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, CartesianGrid, Cell, ComposedChart, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { formatBalance } from "@/components/account-card";
 import { CurrencySelect } from "@/components/currency-select";
 import { DashboardRangeSelect } from "@/components/dashboard-range-select";
@@ -39,7 +39,12 @@ import { convertAmount, getCurrencyOptions } from "@/lib/currency/convert";
 import { APP_CURRENCIES } from "@/lib/currency/currencies";
 import { resolveDashboardRange, useDashboardRangeStore } from "@/lib/dashboard-range-store";
 import { formatDateTimeDisplay } from "@/lib/date-time";
-import { getDisplayAmountForAccount, type TransactionType } from "@/lib/transactions";
+import {
+  getDisplayAmountForAccount,
+  IMPORTANCE_TIERS,
+  type ImportanceTier,
+  type TransactionType,
+} from "@/lib/transactions";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 
@@ -58,6 +63,15 @@ const CHART_TABS = [
 ] as const;
 
 type ChartTab = (typeof CHART_TABS)[number]["id"];
+
+// Per-importance styling for the cash-flow expense stack: shades of red, darkest
+// for the most-required tier and lightening toward investments.
+const IMPORTANCE_FLOW = {
+  fixed: { label: "Fixed", color: "#991b1b" },
+  flexible: { label: "Flexible", color: "#ef4444" },
+  optional: { label: "Optional", color: "#f87171" },
+  investment: { label: "Invest", color: "#fca5a5" },
+} satisfies Record<ImportanceTier, { label: string; color: string }>;
 
 const DONUT_PALETTE = [
   "var(--color-chart-1)",
@@ -200,6 +214,7 @@ function DashboardPage() {
         "accountId",
         "accountCurrency",
         "amount",
+        "importance",
         "counterpartyAccountId",
         "counterpartyCurrency",
         "counterpartyAmount",
@@ -282,10 +297,12 @@ function DashboardPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, TOP_CATEGORIES);
 
-  // Cash flow per trend month, in the base currency.
+  // Cash flow per trend month, in the base currency. Expenses are split across
+  // importance tiers for the stacked bar; unclassified expenses count as optional.
   const flowData = months.map((month) => {
     let income = 0;
     let expense = 0;
+    const tiers: Record<ImportanceTier, number> = { fixed: 0, flexible: 0, optional: 0, investment: 0 };
     for (const row of windowRows) {
       if (row.effectiveAt < month.start || row.effectiveAt > month.end) {
         continue;
@@ -300,10 +317,13 @@ function DashboardPage() {
       if (row.type === "income") {
         income += value;
       } else if (row.type === "expense") {
-        expense += Math.abs(value);
+        const abs = Math.abs(value);
+        expense += abs;
+        const tier = row.importance && row.importance in tiers ? (row.importance as ImportanceTier) : "optional";
+        tiers[tier] += abs;
       }
     }
-    return { month: month.label, income, expense, net: income - expense };
+    return { month: month.label, income, expense, net: income - expense, ...tiers };
   });
   const flowHasData = flowData.some((d) => d.income !== 0 || d.expense !== 0);
 
@@ -349,8 +369,10 @@ function DashboardPage() {
 
   const flowConfig = {
     income: { label: "Income", color: "#10b981" },
-    expense: { label: "Expense", color: "#f43f5e" },
-    net: { label: "Net", color: "#3b82f6" },
+    fixed: IMPORTANCE_FLOW.fixed,
+    flexible: IMPORTANCE_FLOW.flexible,
+    optional: IMPORTANCE_FLOW.optional,
+    investment: IMPORTANCE_FLOW.investment,
   } satisfies ChartConfig;
 
   const netWorthConfig = {
@@ -502,11 +524,18 @@ function DashboardPage() {
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
                   <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={formatCompact} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
+                  <ChartTooltip content={<ChartTooltipContent reverse />} />
+                  <ChartLegend content={<ChartLegendContent reverse />} />
+                  {IMPORTANCE_TIERS.map((tier, index) => (
+                    <Bar
+                      key={tier}
+                      dataKey={tier}
+                      stackId="expense"
+                      fill={`var(--color-${tier})`}
+                      radius={index === IMPORTANCE_TIERS.length - 1 ? [4, 4, 0, 0] : 0}
+                    />
+                  ))}
                   <Bar dataKey="income" fill="var(--color-income)" radius={4} />
-                  <Bar dataKey="expense" fill="var(--color-expense)" radius={4} />
-                  <Line dataKey="net" type="monotone" stroke="var(--color-net)" strokeWidth={2} dot={false} />
                 </ComposedChart>
               </ChartContainer>
             ) : (

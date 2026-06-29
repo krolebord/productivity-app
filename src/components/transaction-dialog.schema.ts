@@ -13,6 +13,7 @@ export function createTransactionFormSchema(accountCount: number) {
       effectiveAt: dateTimeLocalString(),
       title: z.string(),
       category: z.string(),
+      importance: z.string(),
       notes: z.string(),
     })
     .superRefine((data, ctx) => {

@@ -6,7 +6,7 @@ import {
   SlidersHorizontalIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { formatDateTimeLocal, parseDateTimeLocal } from "@/lib/date-time";
@@ -14,6 +14,8 @@ import { createDynamicValidationLogic, dynamicZodValidators } from "@/lib/form-s
 import {
   createTransaction,
   deleteTransaction,
+  IMPORTANCE_TIERS,
+  type ImportanceTier,
   TRANSACTION_TYPES,
   type TransactionType,
   updateTransaction,
@@ -57,7 +59,9 @@ export const useTransactionDialogStore = create(
       openRevision: 0,
     } as TransactionDialogState,
     (set, get) => ({
-      close: () => set({ isOpen: false, mode: null, transactionId: null, draft: null }),
+      // Keep transactionId on close so the dialog's `where id = ?` live query doesn't
+      // re-fire with an empty id mid-close; the next open overwrites it anyway.
+      close: () => set({ isOpen: false, mode: null, draft: null }),
       openCreate: (draft?: TransactionDialogDraft) =>
         set({
           isOpen: true,
@@ -122,6 +126,27 @@ const TYPE_CONFIG = {
   },
 };
 
+const IMPORTANCE_CONFIG: Record<ImportanceTier, { label: string; activeClass: string }> = {
+  fixed: {
+    label: "Fixed",
+    activeClass: "bg-background text-red-600 shadow-sm dark:bg-input/50 dark:text-red-400",
+  },
+  flexible: {
+    label: "Flexible",
+    activeClass: "bg-background text-yellow-600 shadow-sm dark:bg-input/50 dark:text-yellow-400",
+  },
+  optional: {
+    label: "Optional",
+    activeClass: "bg-background text-green-600 shadow-sm dark:bg-input/50 dark:text-green-400",
+  },
+  investment: {
+    label: "Invest",
+    activeClass: "bg-background text-blue-600 shadow-sm dark:bg-input/50 dark:text-blue-400",
+  },
+};
+
+const DEFAULT_IMPORTANCE: ImportanceTier = "flexible";
+
 function getDialogTitle(mode: "create" | "edit" | null, type: TransactionType | undefined) {
   if (mode === "edit") {
     return type === "adjustment" ? "Edit adjustment" : "Edit transaction";
@@ -162,6 +187,9 @@ function TransactionDialogContent() {
   const closeDialog = useTransactionDialogStore((state) => state.close);
   const [addMore, setAddMore] = useState(false);
   const amountInputRef = useRef<HTMLInputElement>(null);
+  // Once the user picks an importance tier by hand, stop auto-filling it from the
+  // category. Editing an existing transaction also counts as "already set".
+  const importanceTouchedRef = useRef(mode === "edit");
 
   const deleteConfirm = useInlineConfirm({
     onConfirm: () => {
@@ -188,6 +216,30 @@ function TransactionDialogContent() {
   );
   const categories = categoryRows.map((row) => row.category);
 
+  // Per-category importance memory: the most-used tier for each category, so the
+  // importance field can pre-fill itself once a category has been classified before.
+  const { data: importanceRows } = useDbQuery((query) =>
+    query
+      .selectFrom("transaction_entry")
+      .select((eb) => ["category", "importance", eb.fn.count<number>("id").as("count")])
+      .where("type", "=", "expense")
+      .where("category", "!=", "")
+      .where("importance", "is not", null)
+      .groupBy(["category", "importance"]),
+  );
+  const importanceByCategory = useMemo(() => {
+    const best = new Map<string, { importance: ImportanceTier; count: number }>();
+    for (const row of importanceRows) {
+      if (!row.importance) continue;
+      const count = Number(row.count);
+      const current = best.get(row.category);
+      if (!current || count > current.count) {
+        best.set(row.category, { importance: row.importance as ImportanceTier, count });
+      }
+    }
+    return new Map([...best].map(([category, value]) => [category, value.importance] as const));
+  }, [importanceRows]);
+
   useEffect(() => {
     if (accounts.length === 0) return;
     queueMicrotask(() => amountInputRef.current?.focus());
@@ -210,6 +262,7 @@ function TransactionDialogContent() {
           : String(Math.abs(Number(existing.amount)))
         : "",
       category: existing?.category ?? "",
+      importance: existing?.importance ?? "",
       counterpartyAccountId:
         existing?.counterpartyAccountId ?? draft?.counterpartyAccountId ?? fallbackTransferAccountId,
       counterpartyAmount: existing ? String(Math.abs(Number(existing.counterpartyAmount ?? 0))) : "",
@@ -233,6 +286,7 @@ function TransactionDialogContent() {
             ...baseInput,
             amount: Number.parseFloat(value.amount),
             category: value.category,
+            importance: value.importance ? (value.importance as ImportanceTier) : null,
             type: "expense",
           });
           break;
@@ -290,9 +344,22 @@ function TransactionDialogContent() {
 
   const currentType = useStore(form.store, (state) => state.values.type as TransactionType);
   const currentAccountId = useStore(form.store, (state) => state.values.accountId);
+  const currentCategory = useStore(form.store, (state) => state.values.category);
+
+  // Pre-fill importance from the category's remembered tier (or the default) until
+  // the user overrides it, so classifying an expense usually takes no extra input.
+  useEffect(() => {
+    if (currentType !== "expense" || importanceTouchedRef.current) return;
+    const suggested = importanceByCategory.get(currentCategory.trim()) ?? DEFAULT_IMPORTANCE;
+    if (form.getFieldValue("importance") !== suggested) {
+      form.setFieldValue("importance", suggested);
+    }
+  }, [currentType, currentCategory, importanceByCategory, form]);
   const currentCounterpartyId = useStore(form.store, (state) => state.values.counterpartyAccountId);
   const sourceAccount = accounts.find((account) => account.id === currentAccountId);
   const destinationAccount = accounts.find((account) => account.id === currentCounterpartyId);
+  const hasOrphanSourceAccount = currentAccountId !== "" && !sourceAccount;
+  const hasOrphanCounterpartyAccount = currentCounterpartyId !== "" && !destinationAccount;
   const canRenderTransfer = currentType === "transfer" && accounts.length >= 2;
 
   function openAccountCreator() {
@@ -383,6 +450,7 @@ function TransactionDialogContent() {
                 {(field) => (
                   <field.FieldContainer labelText={currentType === "transfer" ? "Source account" : "Account"}>
                     <field.FormSelect placeholder="Select account">
+                      {hasOrphanSourceAccount && <SelectItem value={currentAccountId}>No account</SelectItem>}
                       {accounts.map((account) => (
                         <SelectItem key={account.id} value={account.id}>
                           {account.labelText || "Untitled"} ({account.currency})
@@ -402,6 +470,9 @@ function TransactionDialogContent() {
                     {(field) => (
                       <field.FieldContainer labelText="Destination account">
                         <field.FormSelect placeholder="Select destination">
+                          {hasOrphanCounterpartyAccount && (
+                            <SelectItem value={currentCounterpartyId}>No account</SelectItem>
+                          )}
                           {accounts.map((account) => (
                             <SelectItem key={account.id} value={account.id}>
                               {account.labelText || "Untitled"} ({account.currency})
@@ -491,6 +562,39 @@ function TransactionDialogContent() {
               {(field) => (
                 <field.FieldContainer labelText="Category">
                   <field.FormComboboxInput options={categories} placeholder="Optional category" />
+                </field.FieldContainer>
+              )}
+            </form.AppField>
+          )}
+
+          {currentType === "expense" && (
+            <form.AppField name="importance">
+              {(field) => (
+                <field.FieldContainer labelText="Importance">
+                  <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted/50 p-1">
+                    {IMPORTANCE_TIERS.map((tier) => {
+                      const config = IMPORTANCE_CONFIG[tier];
+                      const isActive = field.state.value === tier;
+                      return (
+                        <button
+                          key={tier}
+                          type="button"
+                          onClick={() => {
+                            importanceTouchedRef.current = true;
+                            field.handleChange(tier);
+                          }}
+                          className={cn(
+                            "rounded-md px-2 py-1.5 font-medium text-sm transition-all",
+                            isActive
+                              ? config.activeClass
+                              : "text-muted-foreground hover:bg-background/50 hover:text-foreground",
+                          )}
+                        >
+                          {config.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </field.FieldContainer>
               )}
             </form.AppField>

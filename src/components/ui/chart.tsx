@@ -85,6 +85,7 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
+  reverse = false,
 }: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
   React.ComponentProps<"div"> & {
     hideLabel?: boolean;
@@ -92,6 +93,7 @@ function ChartTooltipContent({
     indicator?: "line" | "dot" | "dashed";
     nameKey?: string;
     labelKey?: string;
+    reverse?: boolean;
   }) {
   const { config } = useChart();
 
@@ -122,6 +124,7 @@ function ChartTooltipContent({
   }
 
   const nestLabel = payload.length === 1 && indicator !== "dot";
+  const items = reverse ? [...payload].reverse() : payload;
 
   return (
     <div
@@ -132,7 +135,7 @@ function ChartTooltipContent({
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">
-        {payload.map((item, index) => {
+        {items.map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
           const indicatorColor = color || item.payload?.fill || item.color;
@@ -200,16 +203,20 @@ function ChartLegendContent({
   payload,
   verticalAlign = "bottom",
   nameKey,
+  reverse = false,
 }: React.ComponentProps<"div"> &
   Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
     hideIcon?: boolean;
     nameKey?: string;
+    reverse?: boolean;
   }) {
   const { config } = useChart();
 
   if (!payload?.length) {
     return null;
   }
+
+  const items = reverse ? [...payload].reverse() : payload;
 
   return (
     <div
@@ -219,7 +226,7 @@ function ChartLegendContent({
         className,
       )}
     >
-      {payload.map((item) => {
+      {items.map((item) => {
         const key = `${nameKey || item.dataKey || "value"}`;
         const itemConfig = getPayloadConfigFromPayload(config, item, key);
 

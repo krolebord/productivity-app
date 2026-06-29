@@ -137,6 +137,7 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
           counterpartyAmount: null,
           title: mapped.title,
           category: "",
+          importance: null,
           notes: mapped.notes,
           effectiveAt: mapped.effectiveAt,
           createdAt: now,

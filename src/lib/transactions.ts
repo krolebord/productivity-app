@@ -5,6 +5,9 @@ import type { UserDb } from "@/user-db/migrations";
 export const TRANSACTION_TYPES = ["expense", "income", "transfer", "adjustment"] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
+export const IMPORTANCE_TIERS = ["fixed", "flexible", "optional", "investment"] as const;
+export type ImportanceTier = (typeof IMPORTANCE_TIERS)[number];
+
 export type TransactionRow = Selectable<UserDb["transaction_entry"]>;
 export type AccountRow = Selectable<UserDb["account"]>;
 type TransactionDatabase = Pick<SQLiteDbWrapper<UserDb>, "executeTransaction">;
@@ -21,6 +24,7 @@ type TransactionBaseInput = {
 
 export type ExpenseTransactionInput = TransactionBaseInput & {
   amount: number;
+  importance?: ImportanceTier | null;
   type: "expense";
 };
 
@@ -118,6 +122,7 @@ function materializeTransaction(
         counterpartyAmount: null,
         title,
         category: trimText(input.category),
+        importance: input.importance ?? null,
         notes,
         effectiveAt,
       };
@@ -133,6 +138,7 @@ function materializeTransaction(
         counterpartyAmount: null,
         title,
         category: trimText(input.category),
+        importance: null,
         notes,
         effectiveAt,
       };
@@ -151,6 +157,7 @@ function materializeTransaction(
         counterpartyAmount: null,
         title: title || "Balance adjustment",
         category: trimText(input.category),
+        importance: null,
         notes,
         effectiveAt,
       };
@@ -171,6 +178,7 @@ function materializeTransaction(
         counterpartyAmount: Math.abs(input.counterpartyAmount),
         title: title || "Transfer",
         category: "",
+        importance: null,
         notes,
         effectiveAt,
       };
