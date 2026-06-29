@@ -42,7 +42,7 @@ function ordinal(n: number) {
 }
 
 /** The most recent occurrence of `cycleDay` at or before `now`, clamped to month length. */
-function cycleStartOnOrBefore(now: Date, cycleDay: number): Date {
+export function cycleStartOnOrBefore(now: Date, cycleDay: number): Date {
   const thisMonth = new Date(now.getFullYear(), now.getMonth(), Math.min(cycleDay, getDaysInMonth(now)));
   if (thisMonth.getTime() <= now.getTime()) {
     return thisMonth;

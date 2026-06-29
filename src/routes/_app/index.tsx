@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
+import { endOfDay, endOfMonth, format, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
 import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
@@ -50,7 +50,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useBaseCurrencyStore } from "@/lib/base-currency-store";
 import { convertAmount, getCurrencyOptions } from "@/lib/currency/convert";
 import { APP_CURRENCIES } from "@/lib/currency/currencies";
-import { resolveDashboardRange, useDashboardRangeStore } from "@/lib/dashboard-range-store";
+import { cycleStartOnOrBefore, resolveDashboardRange, useDashboardRangeStore } from "@/lib/dashboard-range-store";
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import {
   getDisplayAmountForAccount,
@@ -67,7 +67,7 @@ export const Route = createFileRoute("/_app/")({
 
 const RECENT_LIMIT = 12;
 const TOP_CATEGORIES = 6;
-const TREND_MONTHS = 6;
+const TREND_BUCKETS = 6;
 
 const CHART_TABS = [
   { id: "flow", label: "Cash flow" },
@@ -76,6 +76,12 @@ const CHART_TABS = [
 ] as const;
 
 type ChartTab = (typeof CHART_TABS)[number]["id"];
+
+type TrendBucket = {
+  label: string;
+  start: number;
+  end: number;
+};
 
 // Per-importance styling for the cash-flow expense stack: shades of red, darkest
 // for the most-required tier and lightening toward investments.
@@ -154,6 +160,34 @@ function cashFlowExpenseBarShape(tier: ImportanceTier) {
 
     return <Rectangle {...shapeProps} radius={radius} />;
   };
+}
+
+function buildCalendarTrendBuckets(now: Date): TrendBucket[] {
+  return Array.from({ length: TREND_BUCKETS }, (_, i) => {
+    const d = subMonths(now, TREND_BUCKETS - 1 - i);
+    return {
+      label: format(d, "MMM"),
+      start: startOfMonth(d).getTime(),
+      end: endOfMonth(d).getTime(),
+    };
+  });
+}
+
+function buildCycleTrendBuckets(now: Date, cycleDay: number): TrendBucket[] {
+  const currentStart = cycleStartOnOrBefore(now, cycleDay);
+  const starts = [currentStart];
+  while (starts.length < TREND_BUCKETS) {
+    starts.unshift(cycleStartOnOrBefore(subDays(starts[0], 1), cycleDay));
+  }
+
+  return starts.map((start, index) => {
+    const nextStart = index === starts.length - 1 ? null : starts[index + 1];
+    return {
+      label: format(start, "MMM d"),
+      start: startOfDay(start).getTime(),
+      end: nextStart ? endOfDay(subDays(nextStart, 1)).getTime() : endOfDay(now).getTime(),
+    };
+  });
 }
 
 type CashFlowTooltipPayload = {
@@ -237,8 +271,8 @@ function DashboardPage() {
 
   // Compute time boundaries so the queries below stay stable across renders
   // (instead of refetching on every tick) and only recompute when the chosen
-  // range changes. `months` are the trailing buckets used by the trend charts,
-  // oldest first; the last entry is the current (partial) month.
+  // range changes. `trendBuckets` are the trailing buckets used by the trend
+  // charts, oldest first; the last entry is the current partial period.
   const {
     rangeStart,
     rangeEnd,
@@ -247,26 +281,21 @@ function DashboardPage() {
     rangeLabel,
     cardSuffix,
     prevLabel,
-    months,
+    trendBuckets,
+    trendPeriodLabel,
     windowStart,
     nowTs,
   } = useMemo(() => {
     const now = new Date();
-    const buckets = Array.from({ length: TREND_MONTHS }, (_, i) => {
-      const d = subMonths(now, TREND_MONTHS - 1 - i);
-      return {
-        label: format(d, "MMM"),
-        start: startOfMonth(d).getTime(),
-        end: endOfMonth(d).getTime(),
-      };
-    });
+    const buckets = rangeMode === "cycle" ? buildCycleTrendBuckets(now, rangeCycleDay) : buildCalendarTrendBuckets(now);
     // Summary cards + spending donut follow the user-selected range; the
     // preceding window of equal shape drives the period-over-period delta.
     const range = resolveDashboardRange({ mode: rangeMode, days: rangeDays, cycleDay: rangeCycleDay }, now);
     return {
       ...range,
       rangeLabel: range.label,
-      months: buckets,
+      trendBuckets: buckets,
+      trendPeriodLabel: rangeMode === "cycle" ? "cycles" : "months",
       windowStart: buckets[0].start,
       nowTs: now.getTime(),
     };
@@ -411,14 +440,14 @@ function DashboardPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, TOP_CATEGORIES);
 
-  // Cash flow per trend month, in the base currency. Expenses are split across
+  // Cash flow per trend bucket, in the base currency. Expenses are split across
   // importance tiers for the stacked bar; unclassified expenses count as optional.
-  const flowData = months.map((month) => {
+  const flowData = trendBuckets.map((bucket) => {
     let income = 0;
     let expense = 0;
     const tiers: Record<ImportanceTier, number> = { fixed: 0, flexible: 0, optional: 0, investment: 0 };
     for (const row of windowRows) {
-      if (row.effectiveAt < month.start || row.effectiveAt > month.end) {
+      if (row.effectiveAt < bucket.start || row.effectiveAt > bucket.end) {
         continue;
       }
       if (excludedSet.has(row.accountId)) {
@@ -437,15 +466,15 @@ function DashboardPage() {
         tiers[tier] += abs;
       }
     }
-    return { month: month.label, income, expense, net: income - expense, ...tiers };
+    return { month: bucket.label, income, expense, net: income - expense, ...tiers };
   });
   const flowHasData = flowData.some((d) => d.income !== 0 || d.expense !== 0);
 
-  // Net worth at each month-end, reconstructed by rolling current balances back
+  // Net worth at each trend bucket end, reconstructed by rolling current balances back
   // through the transactions that happened after that point. The current
-  // month's point uses live balances. FX uses the latest rates for every point.
-  const netWorthData = months.map((month, index) => {
-    const boundary = index === months.length - 1 ? nowTs : month.end;
+  // bucket's point uses live balances. FX uses the latest rates for every point.
+  const netWorthData = trendBuckets.map((bucket, index) => {
+    const boundary = index === trendBuckets.length - 1 ? nowTs : bucket.end;
     const deltaByCurrency = new Map<string, number>();
     for (const row of windowRows) {
       if (row.effectiveAt <= boundary) {
@@ -471,7 +500,7 @@ function DashboardPage() {
         total += value;
       }
     }
-    return { month: month.label, netWorth: total };
+    return { month: bucket.label, netWorth: total };
   });
 
   // Spending donut data (current month, top categories).
@@ -504,9 +533,9 @@ function DashboardPage() {
 
   const chartTitle =
     activeChart === "flow"
-      ? `Cash flow · last ${TREND_MONTHS} months`
+      ? `Cash flow · last ${TREND_BUCKETS} ${trendPeriodLabel}`
       : activeChart === "networth"
-        ? `Net worth · last ${TREND_MONTHS} months`
+        ? `Net worth · last ${TREND_BUCKETS} ${trendPeriodLabel}`
         : `Spending by category · ${rangeLabel.toLowerCase()}`;
 
   return (
