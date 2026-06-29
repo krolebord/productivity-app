@@ -197,6 +197,8 @@ type CashFlowTooltipPayload = {
   value?: unknown;
 };
 
+const emptyRow: Exclude<CashFlowTooltipPayload["payload"], undefined> = {};
+
 function CashFlowTooltipContent({
   active,
   baseCurrency,
@@ -208,18 +210,22 @@ function CashFlowTooltipContent({
   label?: string | number;
   payload?: CashFlowTooltipPayload[];
 }) {
+  const row = payload ? (payload[0]?.payload ?? emptyRow) : emptyRow;
+  const totalExpense = row.expense ?? 0;
+  const tierRows = useMemo(
+    () =>
+      [...IMPORTANCE_TIERS].reverse().map((tier) => ({
+        color: IMPORTANCE_FLOW[tier].color,
+        label: IMPORTANCE_FLOW[tier].label,
+        percent: totalExpense > 0 ? ((row[tier] ?? 0) / totalExpense) * 100 : 0,
+        value: row[tier] ?? 0,
+      })),
+    [row, totalExpense],
+  );
+
   if (!active || !payload?.length) {
     return null;
   }
-
-  const row = payload[0]?.payload ?? {};
-  const totalExpense = row.expense ?? 0;
-  const tierRows = IMPORTANCE_TIERS.map((tier) => ({
-    color: IMPORTANCE_FLOW[tier].color,
-    label: IMPORTANCE_FLOW[tier].label,
-    percent: totalExpense > 0 ? ((row[tier] ?? 0) / totalExpense) * 100 : 0,
-    value: row[tier] ?? 0,
-  }));
   const rows = [
     { color: "var(--color-income)", label: "Income", value: row.income ?? 0 },
     { color: "var(--color-expense)", label: "Expenses", value: row.expense ?? 0 },
