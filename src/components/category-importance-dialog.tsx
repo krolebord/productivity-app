@@ -89,7 +89,7 @@ function CategoryExamples({ category }: { category: string }) {
       <div className="border-b px-3 py-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
         Examples
       </div>
-      <div className="divide-y min-h-[264px]">
+      <div className="min-h-[264px] divide-y">
         {(exampleTransactions as ExampleTransaction[]).map((transaction) => (
           <div key={transaction.id} className="grid grid-cols-[1fr_auto] gap-3 px-3 py-2 text-sm">
             <div className="min-w-0">

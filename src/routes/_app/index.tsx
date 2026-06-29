@@ -109,6 +109,72 @@ function formatCompact(value: number) {
   return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
+type CashFlowTooltipPayload = {
+  color?: string;
+  dataKey?: string | number;
+  payload?: Partial<Record<"expense" | "income" | ImportanceTier, number>>;
+  value?: unknown;
+};
+
+function CashFlowTooltipContent({
+  active,
+  baseCurrency,
+  label,
+  payload,
+}: {
+  active?: boolean;
+  baseCurrency: string;
+  label?: string | number;
+  payload?: CashFlowTooltipPayload[];
+}) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  const row = payload[0]?.payload ?? {};
+  const totalExpense = row.expense ?? 0;
+  const tierRows = IMPORTANCE_TIERS.map((tier) => ({
+    color: IMPORTANCE_FLOW[tier].color,
+    label: IMPORTANCE_FLOW[tier].label,
+    percent: totalExpense > 0 ? ((row[tier] ?? 0) / totalExpense) * 100 : 0,
+    value: row[tier] ?? 0,
+  }));
+  const rows = [
+    { color: "var(--color-income)", label: "Income", value: row.income ?? 0 },
+    { color: "var(--color-expense)", label: "Expenses", value: row.expense ?? 0 },
+  ];
+
+  return (
+    <div className="grid min-w-48 items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+      {label ? <div className="font-medium">{label}</div> : null}
+      <div className="grid gap-1.5">
+        {rows.map((item) => (
+          <div key={item.label} className="flex items-center gap-2">
+            <div className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: item.color }} />
+            <span className="text-muted-foreground">{item.label}</span>
+            <span className="ml-auto font-medium font-mono text-foreground tabular-nums">
+              {formatBalance(item.value, baseCurrency)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1 grid gap-1.5 border-t pt-1.5">
+        {tierRows.map((item) => (
+          <div key={item.label} className="flex items-center gap-2">
+            <div className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: item.color }} />
+            <span className="text-muted-foreground">
+              {item.label} <span className="text-muted-foreground/70">({item.percent.toFixed(0)}%)</span>
+            </span>
+            <span className="ml-auto font-medium font-mono text-foreground tabular-nums">
+              {formatBalance(item.value, baseCurrency)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DashboardPage() {
   const db = useDb();
   const { baseCurrency, setBaseCurrency } = useBaseCurrencyStore();
@@ -369,6 +435,7 @@ function DashboardPage() {
 
   const flowConfig = {
     income: { label: "Income", color: "#10b981" },
+    expense: { label: "Expenses", color: "#e11d48" },
     fixed: IMPORTANCE_FLOW.fixed,
     flexible: IMPORTANCE_FLOW.flexible,
     optional: IMPORTANCE_FLOW.optional,
@@ -524,8 +591,9 @@ function DashboardPage() {
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
                   <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={formatCompact} />
-                  <ChartTooltip content={<ChartTooltipContent reverse />} />
-                  <ChartLegend content={<ChartLegendContent reverse />} />
+                  <ChartTooltip content={<CashFlowTooltipContent baseCurrency={baseCurrency} />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Bar dataKey="income" fill="var(--color-income)" radius={4} />
                   {IMPORTANCE_TIERS.map((tier, index) => (
                     <Bar
                       key={tier}
@@ -535,7 +603,6 @@ function DashboardPage() {
                       radius={index === IMPORTANCE_TIERS.length - 1 ? [4, 4, 0, 0] : 0}
                     />
                   ))}
-                  <Bar dataKey="income" fill="var(--color-income)" radius={4} />
                 </ComposedChart>
               </ChartContainer>
             ) : (
