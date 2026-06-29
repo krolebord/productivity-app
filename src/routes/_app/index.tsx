@@ -159,7 +159,7 @@ function cashFlowExpenseBarShape(tier: ImportanceTier) {
 type CashFlowTooltipPayload = {
   color?: string;
   dataKey?: string | number;
-  payload?: Partial<Record<"expense" | "income" | ImportanceTier, number>>;
+  payload?: Partial<Record<"expense" | "income" | "net" | ImportanceTier, number>>;
   value?: unknown;
 };
 
@@ -189,6 +189,7 @@ function CashFlowTooltipContent({
   const rows = [
     { color: "var(--color-income)", label: "Income", value: row.income ?? 0 },
     { color: "var(--color-expense)", label: "Expenses", value: row.expense ?? 0 },
+    { color: "var(--color-net)", label: "Net", value: row.net ?? 0 },
   ];
 
   return (
@@ -483,6 +484,7 @@ function DashboardPage() {
   const flowConfig = {
     income: { label: "Income", color: "#10b981" },
     expense: { label: "Expenses", color: "#e11d48" },
+    net: { label: "Net", color: "#3b82f6" },
     fixed: IMPORTANCE_FLOW.fixed,
     flexible: IMPORTANCE_FLOW.flexible,
     optional: IMPORTANCE_FLOW.optional,
