@@ -4,6 +4,8 @@ import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
   ArrowUpRightIcon,
+  EyeIcon,
+  EyeOffIcon,
   PlusIcon,
   SettingsIcon,
   TrendingDownIcon,
@@ -31,6 +33,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBaseCurrencyStore } from "@/lib/base-currency-store";
 import { convertAmount, getCurrencyOptions } from "@/lib/currency/convert";
 import { APP_CURRENCIES } from "@/lib/currency/currencies";
@@ -38,7 +41,7 @@ import { resolveDashboardRange, useDashboardRangeStore } from "@/lib/dashboard-r
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import { getDisplayAmountForAccount, type TransactionType } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
-import { useDbQuery } from "@/user-db/user-db";
+import { useDb, useDbQuery } from "@/user-db/user-db";
 
 export const Route = createFileRoute("/_app/")({
   component: DashboardPage,
@@ -93,6 +96,7 @@ function formatCompact(value: number) {
 }
 
 function DashboardPage() {
+  const db = useDb();
   const { baseCurrency, setBaseCurrency } = useBaseCurrencyStore();
   const openEdit = useTransactionDialogStore((state) => state.openEdit);
   const createExpense = useCreateExpense();
@@ -140,7 +144,14 @@ function DashboardPage() {
     };
   }, [rangeMode, rangeDays, rangeCycleDay]);
 
-  const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
+  const { data: allAccounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
+
+  // Accounts flagged out of the dashboard are dropped from every metric below.
+  // `accounts` drives net worth and the accounts list; `excludedIds` filters the
+  // transaction-based queries (income/spend, charts, recent activity).
+  const accounts = useMemo(() => allAccounts.filter((a) => !a.excludeFromDashboard), [allAccounts]);
+  const excludedIds = useMemo(() => allAccounts.filter((a) => a.excludeFromDashboard).map((a) => a.id), [allAccounts]);
+  const excludedSet = useMemo(() => new Set(excludedIds), [excludedIds]);
 
   const { data: rates } = useDbQuery((db) =>
     db.selectFrom("currency_rate").selectAll().orderBy("date", "desc").orderBy("baseCurrency", "asc").limit(1),
@@ -153,6 +164,7 @@ function DashboardPage() {
       .select((eb) => ["type", "accountCurrency", eb.fn.sum<number>("amount").as("total")])
       .where("effectiveAt", ">=", rangeStart)
       .where("effectiveAt", "<=", rangeEnd)
+      .$if(excludedIds.length > 0, (qb) => qb.where("accountId", "not in", excludedIds))
       .groupBy(["type", "accountCurrency"]),
   );
 
@@ -162,6 +174,7 @@ function DashboardPage() {
       .select((eb) => ["type", "accountCurrency", eb.fn.sum<number>("amount").as("total")])
       .where("effectiveAt", ">=", prevRangeStart)
       .where("effectiveAt", "<=", prevRangeEnd)
+      .$if(excludedIds.length > 0, (qb) => qb.where("accountId", "not in", excludedIds))
       .groupBy(["type", "accountCurrency"]),
   );
 
@@ -172,6 +185,7 @@ function DashboardPage() {
       .where("type", "=", "expense")
       .where("effectiveAt", ">=", rangeStart)
       .where("effectiveAt", "<=", rangeEnd)
+      .$if(excludedIds.length > 0, (qb) => qb.where("accountId", "not in", excludedIds))
       .groupBy(["category", "accountCurrency"]),
   );
 
@@ -180,7 +194,16 @@ function DashboardPage() {
   const { data: windowRows } = useDbQuery((db) =>
     db
       .selectFrom("transaction_entry")
-      .select(["effectiveAt", "type", "accountCurrency", "amount", "counterpartyCurrency", "counterpartyAmount"])
+      .select([
+        "effectiveAt",
+        "type",
+        "accountId",
+        "accountCurrency",
+        "amount",
+        "counterpartyAccountId",
+        "counterpartyCurrency",
+        "counterpartyAmount",
+      ])
       .where("effectiveAt", ">=", windowStart),
   );
 
@@ -188,6 +211,7 @@ function DashboardPage() {
     db
       .selectFrom("transaction_entry")
       .selectAll()
+      .$if(excludedIds.length > 0, (qb) => qb.where("accountId", "not in", excludedIds))
       .orderBy("effectiveAt", "desc")
       .orderBy("createdAt", "desc")
       .limit(RECENT_LIMIT),
@@ -266,6 +290,9 @@ function DashboardPage() {
       if (row.effectiveAt < month.start || row.effectiveAt > month.end) {
         continue;
       }
+      if (excludedSet.has(row.accountId)) {
+        continue;
+      }
       const value = toBase(Number(row.amount), row.accountCurrency);
       if (value === null) {
         continue;
@@ -290,8 +317,12 @@ function DashboardPage() {
       if (row.effectiveAt <= boundary) {
         continue;
       }
-      deltaByCurrency.set(row.accountCurrency, (deltaByCurrency.get(row.accountCurrency) ?? 0) + Number(row.amount));
-      if (row.counterpartyCurrency && row.counterpartyAmount !== null) {
+      // Each transfer row touches two accounts; roll back only the sides that
+      // belong to an included account so excluded balances never leak in.
+      if (!excludedSet.has(row.accountId)) {
+        deltaByCurrency.set(row.accountCurrency, (deltaByCurrency.get(row.accountCurrency) ?? 0) + Number(row.amount));
+      }
+      if (row.counterpartyCurrency && row.counterpartyAmount !== null && !excludedSet.has(row.counterpartyAccountId)) {
         deltaByCurrency.set(
           row.counterpartyCurrency,
           (deltaByCurrency.get(row.counterpartyCurrency) ?? 0) + Number(row.counterpartyAmount),
@@ -331,7 +362,7 @@ function DashboardPage() {
     categoryConfig[slice.name] = { label: slice.name, color: slice.fill };
   }
 
-  const accountMap = new Map(accounts.map((account) => [account.id, account]));
+  const accountMap = new Map(allAccounts.map((account) => [account.id, account]));
 
   const chartTitle =
     activeChart === "flow"
@@ -601,22 +632,57 @@ function DashboardPage() {
               <Link to="/accounts">Manage</Link>
             </Button>
           </div>
-          {accounts.length === 0 ? (
+          {allAccounts.length === 0 ? (
             <div className="px-4 py-8 text-center text-muted-foreground text-sm">No accounts yet.</div>
           ) : (
             <div className="divide-y">
-              {accounts.map((account) => {
+              {allAccounts.map((account) => {
                 const converted = toBase(Number(account.balance), account.currency);
+                const excluded = account.excludeFromDashboard;
                 return (
-                  <Link
+                  <div
                     key={account.id}
-                    to="/transactions"
-                    search={{ accountId: account.id }}
-                    className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40"
+                    className={cn(
+                      "group flex items-center transition-colors hover:bg-muted/40",
+                      excluded && "opacity-50",
+                    )}
                   >
-                    <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: account.labelColor }} />
-                    <span className="min-w-0 flex-1 truncate text-sm">{account.labelText || "Untitled"}</span>
-                    <span className="shrink-0 text-right">
+                    <Link
+                      to="/transactions"
+                      search={{ accountId: account.id }}
+                      className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4"
+                    >
+                      <span
+                        className="size-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: account.labelColor }}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm">{account.labelText || "Untitled"}</span>
+                    </Link>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={excluded ? "Show on dashboard" : "Hide from dashboard"}
+                          className="mx-1 shrink-0 rounded-md p-1.5 text-muted-foreground/60 opacity-0 transition-all hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                          onClick={() =>
+                            db.db.executeKysely((q) =>
+                              q
+                                .updateTable("account")
+                                .set({ excludeFromDashboard: !excluded })
+                                .where("id", "=", account.id),
+                            )
+                          }
+                        >
+                          {excluded ? <EyeIcon className="size-4" /> : <EyeOffIcon className="size-4" />}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{excluded ? "Show on dashboard" : "Hide from dashboard"}</TooltipContent>
+                    </Tooltip>
+                    <Link
+                      to="/transactions"
+                      search={{ accountId: account.id }}
+                      className="shrink-0 py-2.5 pr-4 text-right"
+                    >
                       <span className="block font-medium font-mono text-sm tabular-nums">
                         {formatBalance(Number(account.balance), account.currency)}
                       </span>
@@ -625,8 +691,8 @@ function DashboardPage() {
                           ≈ {formatBalance(converted, baseCurrency)}
                         </span>
                       ) : null}
-                    </span>
-                  </Link>
+                    </Link>
+                  </div>
                 );
               })}
             </div>

@@ -1,7 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useNavigate } from "@tanstack/react-router";
-import { Trash2 } from "lucide-react";
+import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useCreateExpense } from "@/components/transaction-dialog";
@@ -69,6 +69,23 @@ export function AccountCard({ account }: AccountCardProps) {
         <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
+            className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+            aria-label={account.excludeFromDashboard ? "Show on dashboard" : "Hide from dashboard"}
+            title={account.excludeFromDashboard ? "Show on dashboard" : "Hide from dashboard"}
+            onClick={(e) => {
+              e.stopPropagation();
+              db.db.executeKysely((q) =>
+                q
+                  .updateTable("account")
+                  .set({ excludeFromDashboard: !account.excludeFromDashboard })
+                  .where("id", "=", account.id),
+              );
+            }}
+          >
+            {account.excludeFromDashboard ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+          </button>
+          <button
+            type="button"
             className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
             aria-label="Delete account"
             onClick={(e) => {
@@ -115,6 +132,15 @@ export function AccountCard({ account }: AccountCardProps) {
               <span className="truncate font-medium text-sm">{account.labelText}</span>
             ) : (
               <span className="text-muted-foreground/50 text-sm italic">Untitled</span>
+            )}
+            {account.excludeFromDashboard && (
+              <span
+                className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground/60 text-xs"
+                title="Hidden from dashboard"
+              >
+                <EyeOff className="size-3" />
+                Hidden
+              </span>
             )}
           </div>
 

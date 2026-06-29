@@ -237,6 +237,15 @@ const migrations = createMigrations((b) => ({
       idx.on("_transaction_entry").columns(["effectiveAt"]).where(sql.ref("tombstone"), "=", 0),
     ),
   ],
+  14: [
+    b.addColumn({
+      table: "_account",
+      column: "excludeFromDashboard",
+      type: "boolean",
+      defaultValue: false,
+      build: (col) => col.notNull(),
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -320,6 +329,10 @@ export const syncDbSchema = defineSyncSchema({
         labelColor: t.text().default("#8b5cf6").describe("Hex color of the display label."),
         labelText: t.text().default("").describe("Short display label shown on the account card."),
         order: t.real().default(0).describe("Manual sort position, ascending."),
+        excludeFromDashboard: t
+          .boolean()
+          .default(false)
+          .describe("When true, this account is left out of all dashboard metrics (net worth, income/spend, charts)."),
         createdAt: t.integer(),
       })
       .describe("Financial accounts (bank accounts, cash, etc.)."),

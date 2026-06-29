@@ -133,6 +133,7 @@ function AccountDialogContent() {
             labelColor: value.labelColor,
             labelText: value.labelText,
             order: maxOrder + 1,
+            excludeFromDashboard: false,
             createdAt,
             tombstone: false,
           }),
