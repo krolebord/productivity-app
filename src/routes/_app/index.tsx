@@ -13,7 +13,20 @@ import {
   WalletIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Area, AreaChart, Bar, CartesianGrid, Cell, ComposedChart, Pie, PieChart, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Pie,
+  PieChart,
+  Rectangle,
+  type RectangleProps,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { formatBalance } from "@/components/account-card";
 import { CurrencySelect } from "@/components/currency-select";
 import { DashboardRangeSelect } from "@/components/dashboard-range-select";
@@ -107,6 +120,40 @@ function amountClass(amount: number) {
 
 function formatCompact(value: number) {
   return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function getTopExpenseTier(row: Partial<Record<ImportanceTier, number>>) {
+  return [...IMPORTANCE_TIERS].reverse().find((tier) => (row[tier] ?? 0) > 0);
+}
+
+function getBottomExpenseTier(row: Partial<Record<ImportanceTier, number>>) {
+  return IMPORTANCE_TIERS.find((tier) => (row[tier] ?? 0) > 0);
+}
+
+type CashFlowBarShapeProps = RectangleProps & {
+  background?: unknown;
+  payload?: Partial<Record<ImportanceTier, number>>;
+  value?: unknown;
+};
+
+function cashFlowExpenseBarShape(tier: ImportanceTier) {
+  return function CashFlowExpenseBarShape(props: unknown) {
+    const { background, payload, value, ...shapeProps } = props as CashFlowBarShapeProps;
+    void background;
+    void value;
+
+    const row = payload ?? {};
+    const isTop = getTopExpenseTier(row) === tier;
+    const isBottom = getBottomExpenseTier(row) === tier;
+    const radius: [number, number, number, number] | number = [
+      isTop ? 4 : 0,
+      isTop ? 4 : 0,
+      isBottom ? 4 : 0,
+      isBottom ? 4 : 0,
+    ];
+
+    return <Rectangle {...shapeProps} radius={radius} />;
+  };
 }
 
 type CashFlowTooltipPayload = {
@@ -594,13 +641,13 @@ function DashboardPage() {
                   <ChartTooltip content={<CashFlowTooltipContent baseCurrency={baseCurrency} />} />
                   <ChartLegend content={<ChartLegendContent />} />
                   <Bar dataKey="income" fill="var(--color-income)" radius={4} />
-                  {IMPORTANCE_TIERS.map((tier, index) => (
+                  {IMPORTANCE_TIERS.map((tier) => (
                     <Bar
                       key={tier}
                       dataKey={tier}
                       stackId="expense"
                       fill={`var(--color-${tier})`}
-                      radius={index === IMPORTANCE_TIERS.length - 1 ? [4, 4, 0, 0] : 0}
+                      shape={cashFlowExpenseBarShape(tier)}
                     />
                   ))}
                 </ComposedChart>
