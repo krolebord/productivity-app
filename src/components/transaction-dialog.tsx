@@ -14,7 +14,6 @@ import { createDynamicValidationLogic, dynamicZodValidators } from "@/lib/form-s
 import {
   createTransaction,
   deleteTransaction,
-  IMPORTANCE_TIERS,
   type ImportanceTier,
   TRANSACTION_TYPES,
   type TransactionType,
@@ -23,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { useCreateAccount } from "./account-dialog";
+import { ImportanceSelector } from "./importance-selector";
 import { createTransactionFormSchema } from "./transaction-dialog.schema";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -123,25 +123,6 @@ const TYPE_CONFIG = {
     label: "Adjust",
     activeClass: "bg-background text-amber-600 shadow-sm dark:bg-input/50 dark:text-amber-400",
     dotColor: "bg-amber-500",
-  },
-};
-
-const IMPORTANCE_CONFIG: Record<ImportanceTier, { label: string; activeClass: string }> = {
-  fixed: {
-    label: "Fixed",
-    activeClass: "bg-background text-red-600 shadow-sm dark:bg-input/50 dark:text-red-400",
-  },
-  flexible: {
-    label: "Flexible",
-    activeClass: "bg-background text-yellow-600 shadow-sm dark:bg-input/50 dark:text-yellow-400",
-  },
-  optional: {
-    label: "Optional",
-    activeClass: "bg-background text-green-600 shadow-sm dark:bg-input/50 dark:text-green-400",
-  },
-  investment: {
-    label: "Invest",
-    activeClass: "bg-background text-blue-600 shadow-sm dark:bg-input/50 dark:text-blue-400",
   },
 };
 
@@ -571,30 +552,13 @@ function TransactionDialogContent() {
             <form.AppField name="importance">
               {(field) => (
                 <field.FieldContainer labelText="Importance">
-                  <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted/50 p-1">
-                    {IMPORTANCE_TIERS.map((tier) => {
-                      const config = IMPORTANCE_CONFIG[tier];
-                      const isActive = field.state.value === tier;
-                      return (
-                        <button
-                          key={tier}
-                          type="button"
-                          onClick={() => {
-                            importanceTouchedRef.current = true;
-                            field.handleChange(tier);
-                          }}
-                          className={cn(
-                            "rounded-md px-2 py-1.5 font-medium text-sm transition-all",
-                            isActive
-                              ? config.activeClass
-                              : "text-muted-foreground hover:bg-background/50 hover:text-foreground",
-                          )}
-                        >
-                          {config.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <ImportanceSelector
+                    value={field.state.value ? (field.state.value as ImportanceTier) : null}
+                    onChange={(tier) => {
+                      importanceTouchedRef.current = true;
+                      field.handleChange(tier);
+                    }}
+                  />
                 </field.FieldContainer>
               )}
             </form.AppField>

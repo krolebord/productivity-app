@@ -5,6 +5,7 @@ import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panel
 import { AccountDialog } from "@/components/account-dialog";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
+import { CategoryImportanceDialog } from "@/components/category-importance-dialog";
 import { CommandPalette } from "@/components/command-palette";
 import { Devtools } from "@/components/devtools";
 import { NoteDialog } from "@/components/note-dialog";
@@ -98,6 +99,7 @@ function RouteComponent() {
       <NoteDialog />
       <AccountDialog />
       <TransactionDialog />
+      <CategoryImportanceDialog />
       <Devtools />
     </DbProvider>
   );

@@ -257,6 +257,35 @@ export function updateTransaction(db: TransactionDatabase, transactionId: string
   });
 }
 
+export function changeCategoryImportanceDefault(
+  db: TransactionDatabase,
+  category: string,
+  previousImportance: ImportanceTier | null,
+  nextImportance: ImportanceTier,
+) {
+  const normalizedCategory = trimText(category);
+  if (!normalizedCategory) {
+    throw new Error("Category is required.");
+  }
+
+  return db.executeTransaction((trx) => {
+    const shouldUpdatePrevious = previousImportance !== null && previousImportance !== nextImportance;
+
+    trx.executeKysely((q) =>
+      q
+        .updateTable("transaction_entry")
+        .set({ importance: nextImportance, updatedAt: Date.now() })
+        .where("type", "=", "expense")
+        .where("category", "=", normalizedCategory)
+        .where((eb) =>
+          shouldUpdatePrevious
+            ? eb.or([eb("importance", "is", null), eb("importance", "=", previousImportance)])
+            : eb("importance", "is", null),
+        ),
+    );
+  });
+}
+
 export function deleteTransaction(db: TransactionDatabase, transactionId: string) {
   db.executeTransaction((trx) => {
     const [existing] = trx.executeKysely((q) =>

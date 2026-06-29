@@ -14,12 +14,14 @@ import {
   PlusIcon,
   RefreshCwIcon,
   StickyNote,
+  TagsIcon,
   Wallet,
   Workflow,
 } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { useCreateAccount, useRefreshAccountBalances } from "@/components/account-dialog";
 import { useNewConversation } from "@/components/assistant/assistant-sidebar";
+import { useOpenCategoryImportanceDialog } from "@/components/category-importance-dialog";
 import { useCreateNote } from "@/components/note-dialog";
 import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/components/transaction-dialog";
 import { useCommandStore } from "@/lib/command-store";
@@ -64,6 +66,7 @@ export function CommandPalette() {
   const createIncome = useCreateIncome();
   const createTransfer = useCreateTransfer();
   const refreshBalances = useRefreshAccountBalances();
+  const openCategoryImportanceDialog = useOpenCategoryImportanceDialog();
   const newConversation = useNewConversation();
   const assistantEnabled = useAssistantEnabled();
 
@@ -142,6 +145,13 @@ export function CommandPalette() {
           <CommandItem onSelect={() => runAndClose(refreshBalances)}>
             <RefreshCwIcon className="size-4" />
             Refresh account balances
+          </CommandItem>
+          <CommandItem
+            onSelect={() => runAndClose(openCategoryImportanceDialog)}
+            keywords={["importance", "classify", "default"]}
+          >
+            <TagsIcon className="size-4" />
+            Update default importance
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Navigation">
