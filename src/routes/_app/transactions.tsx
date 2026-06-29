@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { formatBalance } from "@/components/account-card";
+import { CategoryImportancePrompt } from "@/components/category-importance-prompt";
 import {
   useCreateExpense,
   useCreateIncome,
@@ -585,6 +586,8 @@ function TransactionsPage() {
           </Button>
         </div>
       </div>
+
+      <CategoryImportancePrompt />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[14rem] flex-1 sm:max-w-sm">
