@@ -18,7 +18,8 @@
     "typecheck": "tsgo --noEmit",
     "test": "vitest run",
     "format": "biome check --write",
-    "format:check": "biome check"
+    "format:check": "biome check",
+    "doctor": "react-doctor"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.210",
@@ -107,6 +108,7 @@
     "@typescript/native-preview": "7.0.0-dev.20260324.1",
     "@vitejs/plugin-react": "^6.0.2",
     "kysely-codegen": "^0.20.0",
+    "react-doctor": "^0.5.8",
     "react-grab": "^0.1.47",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
