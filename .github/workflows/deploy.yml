@@ -25,7 +25,14 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - run: pnpm rebuild --pending
+
+      - name: Build
+        run: pnpm run build
+        env:
+          VITE_APP_URL: https://productivity.krolebord.com
 
       - name: Run D1 migrations
         run: pnpm db:remote:migrate
@@ -33,6 +40,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Deploy
-        run: pnpm run deploy
+        run: pnpm exec wrangler deploy --var MODE:production --var VITE_APP_URL:https://productivity.krolebord.com
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
