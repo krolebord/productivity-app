@@ -55,11 +55,7 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
   const showDropdown = open && options.length > 0;
 
   const [activeIndex, setActiveIndex] = React.useState(0);
-  // Reset the highlight to the top whenever the option list changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when options identity changes
-  React.useEffect(() => {
-    setActiveIndex(0);
-  }, [options]);
+  const activeOptionIndex = options.length === 0 ? 0 : Math.min(activeIndex, options.length - 1);
 
   function addTag(raw: string) {
     const tag = normalizeTag(raw);
@@ -76,13 +72,13 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
     if (e.key === "ArrowDown" && options.length > 0) {
       e.preventDefault();
       setOpen(true);
-      setActiveIndex((i) => (i + 1) % options.length);
+      setActiveIndex((i) => (Math.min(i, options.length - 1) + 1) % options.length);
     } else if (e.key === "ArrowUp" && options.length > 0) {
       e.preventDefault();
       setOpen(true);
-      setActiveIndex((i) => (i - 1 + options.length) % options.length);
+      setActiveIndex((i) => (Math.min(i, options.length - 1) - 1 + options.length) % options.length);
     } else if (e.key === "Enter") {
-      const active = showDropdown ? options[activeIndex] : undefined;
+      const active = showDropdown ? options[activeOptionIndex] : undefined;
       if (active) {
         e.preventDefault();
         addTag(active.value);
@@ -98,7 +94,7 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
       // and keeps focus here so more tags can be added. With an empty input
       // it closes the dropdown and lets focus move on to the editor.
       if (normalizedInput) {
-        const active = showDropdown ? options[activeIndex] : undefined;
+        const active = showDropdown ? options[activeOptionIndex] : undefined;
         e.preventDefault();
         addTag(active ? active.value : inputValue);
       } else {
@@ -157,7 +153,7 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
           className="absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-md border bg-popover p-1 shadow-md"
         >
           {options.map((option, index) => {
-            const active = index === activeIndex;
+            const active = index === activeOptionIndex;
             return (
               <button
                 key={option.kind === "create" ? `__create__${option.value}` : option.value}

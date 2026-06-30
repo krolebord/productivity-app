@@ -287,18 +287,6 @@ function ManageCategoryImportanceView({ categories, onClose }: { categories: Cat
       (selectedImportance !== selectedSummary.inferredImportance || selectedSummary.unclassifiedCount > 0),
   );
 
-  useEffect(() => {
-    if (filteredCategories.length === 0) {
-      setSelectedCategory(null);
-      return;
-    }
-
-    if (!filteredCategories.some((category) => category.category === selectedCategory)) {
-      setSelectedCategory(filteredCategories[0].category);
-      setSelection(null);
-    }
-  }, [filteredCategories, selectedCategory]);
-
   function changeDefault() {
     if (!selectedSummary || !selectedImportance || !canSave) return;
 

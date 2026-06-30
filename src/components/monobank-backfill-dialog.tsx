@@ -28,7 +28,13 @@ function StatementList({
   onClose: () => void;
 }) {
   const db = useDb();
-  const statement = useQuery(
+  const {
+    data: statement,
+    error: statementError,
+    isError: statementIsError,
+    isLoading: statementIsLoading,
+    refetch: refetchStatement,
+  } = useQuery(
     orpc.integrations.monobank.getRecentStatement.queryOptions({
       input: { providerAccountId },
       staleTime: Number.POSITIVE_INFINITY,
@@ -45,7 +51,7 @@ function StatementList({
     [importedRows],
   );
 
-  const entries = statement.data?.entries ?? [];
+  const entries = statement?.entries ?? [];
   const rows = useMemo(
     () => entries.map((entry) => ({ entry, alreadyImported: importedIds.has(entry.providerId) })),
     [entries, importedIds],
@@ -80,7 +86,7 @@ function StatementList({
     }
   }
 
-  if (statement.isLoading) {
+  if (statementIsLoading) {
     return (
       <div className="flex h-40 items-center justify-center">
         <Loader2 className="size-5 animate-spin text-muted-foreground" />
@@ -88,13 +94,13 @@ function StatementList({
     );
   }
 
-  if (statement.isError) {
+  if (statementIsError) {
     return (
       <div className="flex flex-col gap-3 py-4">
         <p className="text-rose-600 text-sm dark:text-rose-400">
-          {getErrorMessage(statement.error, "Could not fetch transactions.")}
+          {getErrorMessage(statementError, "Could not fetch transactions.")}
         </p>
-        <Button variant="outline" onClick={() => statement.refetch()}>
+        <Button variant="outline" onClick={() => refetchStatement()}>
           Try again
         </Button>
       </div>
