@@ -32,7 +32,7 @@ function CommandDialog({
 }) {
   return (
     <Dialog {...props}>
-      <DialogContent className={cn("overflow-hidden p-0", className)} showCloseButton={showCloseButton}>
+      <DialogContent className={cn("overflow-hidden p-0 sm:p-0", className)} showCloseButton={showCloseButton}>
         <DialogHeader className="sr-only border-b px-4 py-3">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
