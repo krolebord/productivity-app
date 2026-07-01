@@ -1,5 +1,6 @@
 import { generateId } from "@sqlite-sync/core";
 import { z } from "zod";
+import { inferServerMonobankClassification } from "@/lib/monobank/inference";
 import { mapStatementItemToTransaction } from "@/lib/monobank/mapping";
 import { decideMonobankImport } from "@/lib/monobank/rules";
 import { MONOBANK_PROVIDER_TYPE, monobankWebhookPayloadSchema } from "@/lib/monobank/types";
@@ -121,6 +122,7 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
     }
 
     const transactionId = generateId();
+    const classification = await inferServerMonobankClassification(context.syncDb, context.env, mapped);
     context.syncDb.enqueueEvent(
       context.syncDb.createEvent({
         type: "item-created",
@@ -136,8 +138,8 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
           counterpartyCurrency: "",
           counterpartyAmount: null,
           title: mapped.title,
-          category: "",
-          importance: null,
+          category: classification.category,
+          importance: classification.importance,
           notes: mapped.notes,
           effectiveAt: mapped.effectiveAt,
           createdAt: now,

@@ -16,6 +16,7 @@ export type MappedMonobankTransaction = {
   effectiveAt: number;
   title: string;
   notes: string;
+  mcc?: number;
 };
 
 /**
@@ -35,8 +36,9 @@ export function mapStatementItemToTransaction(item: MonobankStatementItem): Mapp
     type: amount < 0 ? "expense" : "income",
     amount,
     effectiveAt: item.time * 1000,
-    title: item.description ?? "",
+    title: item.description?.trim() ?? "",
     notes: formatMonobankNotes(item),
+    mcc: item.mcc,
   };
 }
 

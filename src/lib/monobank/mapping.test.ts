@@ -22,6 +22,11 @@ describe("mapStatementItemToTransaction", () => {
     expect(mapped?.title).toBe("Coffee");
   });
 
+  it("trims the title for stable import matching", () => {
+    const mapped = mapStatementItemToTransaction(statementItem({ description: "  Coffee  " }));
+    expect(mapped?.title).toBe("Coffee");
+  });
+
   it("maps positive minor units to income in major units", () => {
     const mapped = mapStatementItemToTransaction(statementItem({ amount: 12345 }));
     expect(mapped?.type).toBe("income");
@@ -37,6 +42,11 @@ describe("mapStatementItemToTransaction", () => {
     expect(mapped).not.toBeNull();
     expect(mapped?.type).toBe("expense");
     expect(mapped?.amount).toBe(-1);
+  });
+
+  it("keeps MCC available for import inference", () => {
+    const mapped = mapStatementItemToTransaction(statementItem({ mcc: 5411 }));
+    expect(mapped?.mcc).toBe(5411);
   });
 });
 

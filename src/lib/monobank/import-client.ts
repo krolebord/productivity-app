@@ -1,6 +1,7 @@
 import type { SQLiteDbWrapper } from "@sqlite-sync/core";
 import { createTransactionInTransaction } from "@/lib/transactions";
 import type { UserDb } from "@/user-db/migrations";
+import { inferClientMonobankClassification } from "./inference";
 import type { MonobankImportEntry } from "./mapping";
 import { MONOBANK_PROVIDER_TYPE } from "./types";
 
@@ -48,16 +49,24 @@ export function importMonobankStatementItems(
         continue;
       }
 
-      createTransactionInTransaction(trx, {
-        type: entry.type,
+      const classification = inferClientMonobankClassification(trx, entry);
+      const baseInput = {
         accountId: account.id,
         amount: Math.abs(entry.amount),
+        category: classification.category,
         effectiveAt: entry.effectiveAt,
         title: entry.title,
         notes: entry.notes,
         providerType: MONOBANK_PROVIDER_TYPE,
         providerId: entry.providerId,
-      });
+      };
+
+      createTransactionInTransaction(
+        trx,
+        entry.type === "expense"
+          ? { ...baseInput, type: entry.type, importance: classification.importance }
+          : { ...baseInput, type: entry.type },
+      );
       imported += 1;
     }
 

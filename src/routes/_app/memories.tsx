@@ -19,7 +19,7 @@ type MemoryRow = Pick<MemoryItem, "id" | "content" | "source" | "enabled" | "cre
 function MemoryCard({ memory }: { memory: MemoryRow }) {
   const db = useDb();
   const confirm = useConfirmDialogStore((s) => s.confirm);
-  const [draft, setDraft] = useState(memory.content);
+  const [draft, setDraft] = useState(() => memory.content);
 
   function saveContent() {
     const trimmed = draft.trim();

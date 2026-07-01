@@ -34,9 +34,9 @@ const STATUS_META: Record<SkillStatus, { label: string; className: string }> = {
 function SkillEditor({ skill, onClose }: { skill: SkillRow; onClose: () => void }) {
   const db = useDb();
   const confirm = useConfirmDialogStore((s) => s.confirm);
-  const [name, setName] = useState(skill.name);
-  const [whenToUse, setWhenToUse] = useState(skill.whenToUse);
-  const [instructions, setInstructions] = useState(skill.instructions);
+  const [name, setName] = useState(() => skill.name);
+  const [whenToUse, setWhenToUse] = useState(() => skill.whenToUse);
+  const [instructions, setInstructions] = useState(() => skill.instructions);
 
   useHotkey("Escape", () => onClose());
 
