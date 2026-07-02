@@ -17,6 +17,11 @@ const buttonVariants = cva(
         secondary: "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80 active:bg-secondary/70",
         ghost: "hover:bg-accent hover:text-accent-foreground active:bg-accent/80 dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // Subtle primary-tinted button. Light mode uses a primary wash because
+        // sidebar-accent is too faint there to tint a button; dark mode uses
+        // the sidebar-accent look.
+        tinted:
+          "border border-primary/25 bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary active:bg-primary/15 dark:border-border dark:bg-sidebar-accent/50 dark:text-sidebar-foreground dark:hover:bg-sidebar-accent dark:hover:text-sidebar-accent-foreground dark:active:bg-sidebar-accent/80",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

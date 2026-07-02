@@ -12,6 +12,9 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { Link, useMatches, useNavigate, useRouter } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 import {
+  ArrowDownLeftIcon,
+  ArrowLeftRightIcon,
+  ArrowUpRightIcon,
   Bot,
   Brain,
   ChevronDown,
@@ -37,10 +40,22 @@ import {
   Workflow,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useCreateAccount } from "@/components/account-dialog";
+import { useCreateNote } from "@/components/note-dialog";
+import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/components/transaction-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
-import { OPEN_COMMAND_HOTKEY, TOGGLE_ASSISTANT_HOTKEY, TOGGLE_SIDEBAR_HOTKEY } from "@/lib/hotkeys";
+import {
+  NEW_ACCOUNT_HOTKEY,
+  NEW_EXPENSE_HOTKEY,
+  NEW_INCOME_HOTKEY,
+  NEW_NOTE_HOTKEY,
+  NEW_TRANSFER_HOTKEY,
+  OPEN_COMMAND_HOTKEY,
+  TOGGLE_ASSISTANT_HOTKEY,
+  TOGGLE_SIDEBAR_HOTKEY,
+} from "@/lib/hotkeys";
 import { useSidebarStore } from "@/lib/sidebar-store";
 import { type Theme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
@@ -58,6 +73,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Separator } from "./ui/separator";
@@ -197,6 +213,105 @@ function AssistantToggle({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
+  const openCommand = useCommandStore((s) => s.open);
+  const createNote = useCreateNote();
+  const createExpense = useCreateExpense();
+  const createIncome = useCreateIncome();
+  const createTransfer = useCreateTransfer();
+  const createAccount = useCreateAccount();
+
+  const menuContent = (
+    <DropdownMenuContent side={collapsed ? "right" : "bottom"} align="start" className="w-56">
+      <DropdownMenuItem onClick={createNote}>
+        <StickyNote className="size-4" />
+        New note
+        <DropdownMenuShortcut>{formatForDisplay(NEW_NOTE_HOTKEY)}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={createExpense}>
+        <ArrowDownLeftIcon className="size-4 text-red-500" />
+        New expense
+        <DropdownMenuShortcut>{formatForDisplay(NEW_EXPENSE_HOTKEY)}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={createIncome}>
+        <ArrowUpRightIcon className="size-4 text-emerald-500" />
+        New income
+        <DropdownMenuShortcut>{formatForDisplay(NEW_INCOME_HOTKEY)}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={createTransfer}>
+        <ArrowLeftRightIcon className="size-4 text-blue-500" />
+        New transfer
+        <DropdownMenuShortcut>{formatForDisplay(NEW_TRANSFER_HOTKEY)}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={createAccount}>
+        <Wallet className="size-4" />
+        New account
+        <DropdownMenuShortcut>{formatForDisplay(NEW_ACCOUNT_HOTKEY)}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  );
+
+  const searchLabel = `Search (${formatForDisplay(OPEN_COMMAND_HOTKEY)})`;
+
+  if (collapsed) {
+    return (
+      <div className="hidden flex-col items-center gap-1 p-2 md:flex">
+        <DropdownMenu>
+          <SidebarTooltip label="New" collapsed>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="icon" aria-label="New">
+                <PlusIcon className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+          </SidebarTooltip>
+          {menuContent}
+        </DropdownMenu>
+        <SidebarTooltip label={searchLabel} collapsed>
+          <Button
+            type="button"
+            variant="tinted"
+            size="icon"
+            onClick={openCommand}
+            aria-label="Search"
+            aria-keyshortcuts={OPEN_COMMAND_HOTKEY}
+          >
+            <Search className="size-4" />
+          </Button>
+        </SidebarTooltip>
+      </div>
+    );
+  }
+
+  return (
+    <div className="hidden gap-1.5 p-2 md:flex">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" size="icon-sm" aria-label="New">
+            <PlusIcon className="size-4 shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        {menuContent}
+      </DropdownMenu>
+      <Button
+        type="button"
+        variant="tinted"
+        size="sm"
+        className="flex-1 justify-start gap-2"
+        onClick={openCommand}
+        aria-label="Search"
+        aria-keyshortcuts={OPEN_COMMAND_HOTKEY}
+      >
+        <Search className="size-4 shrink-0" />
+        <span className="flex-1 text-left">Search...</span>
+        <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
+          {formatForDisplay(OPEN_COMMAND_HOTKEY)}
+        </kbd>
+      </Button>
+    </div>
+  );
+}
+
 function SidebarContent({
   collapsed = false,
   onToggleCollapse,
@@ -210,7 +325,6 @@ function SidebarContent({
   const logout = useSignOut();
   const matches = useMatches();
   const currentPath = matches[matches.length - 1]?.fullPath;
-  const openCommand = useCommandStore((s) => s.open);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
 
@@ -235,32 +349,7 @@ function SidebarContent({
       <Separator />
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className={cn("hidden md:block", collapsed ? "flex justify-center p-2" : "p-2")}>
-          <SidebarTooltip label={`Search (${formatForDisplay(OPEN_COMMAND_HOTKEY)})`} collapsed={collapsed}>
-            <Button
-              type="button"
-              variant="ghost"
-              size={collapsed ? "icon" : "sm"}
-              className={cn(
-                "border bg-sidebar-accent/50 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                !collapsed && "w-full justify-start gap-2",
-              )}
-              onClick={openCommand}
-              aria-label="Search"
-              aria-keyshortcuts={OPEN_COMMAND_HOTKEY}
-            >
-              <Search className="size-4 shrink-0" />
-              {!collapsed && (
-                <>
-                  <span className="flex-1 text-left text-muted-foreground">Search...</span>
-                  <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
-                    {formatForDisplay(OPEN_COMMAND_HOTKEY)}
-                  </kbd>
-                </>
-              )}
-            </Button>
-          </SidebarTooltip>
-        </div>
+        <SidebarActionRow collapsed={collapsed} />
 
         <nav className="flex flex-col gap-1 p-2">
           {navItems.map((item) => (
