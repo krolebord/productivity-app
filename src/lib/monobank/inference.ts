@@ -22,6 +22,7 @@ export type MonobankClassification = {
 
 type MonobankClassificationCandidate = {
   category: string;
+  importance: ImportanceTier | null;
 };
 
 export function inferClientMonobankClassification(
@@ -44,14 +45,20 @@ export async function inferServerMonobankClassification(
   }
 
   const category = await inferCategoryWithLlm(db, env, transaction);
+  if (category) {
+    return classifyMonobankTransaction({
+      category,
+      importance: findLatestServerImportanceByCategory(db, category),
+    });
+  }
 
-  return classifyMonobankTransaction(category ? { category } : null);
+  return classifyMonobankTransaction(null);
 }
 
 function classifyMonobankTransaction(candidate: MonobankClassificationCandidate | null): MonobankClassification {
   return {
     category: candidate?.category.trim() ?? "",
-    importance: null,
+    importance: candidate?.importance ?? null,
   };
 }
 
@@ -67,7 +74,7 @@ function findLatestClientCategoryCandidateByTitle(
   const { rows } = db.executeKysely((q) =>
     q
       .selectFrom("transaction_entry")
-      .select(["category"])
+      .select(["category", "importance"])
       .where("providerType", "=", MONOBANK_PROVIDER_TYPE)
       .where("title", "=", trimmedTitle)
       .where("category", "!=", "")
@@ -90,7 +97,7 @@ function findLatestServerCategoryCandidateByTitle(
   const { rows } = db.executeKysely((q) =>
     q
       .selectFrom("transaction_entry")
-      .select(["category"])
+      .select(["category", "importance"])
       .where("providerType", "=", MONOBANK_PROVIDER_TYPE)
       .where("title", "=", trimmedTitle)
       .where("category", "!=", "")
@@ -99,6 +106,25 @@ function findLatestServerCategoryCandidateByTitle(
   );
 
   return rows[0] ?? null;
+}
+
+function findLatestServerImportanceByCategory(db: ServerMonobankDb, category: string): ImportanceTier | null {
+  const trimmedCategory = category.trim();
+  if (!trimmedCategory) {
+    return null;
+  }
+
+  const { rows } = db.executeKysely((q) =>
+    q
+      .selectFrom("transaction_entry")
+      .select(["importance"])
+      .where("category", "=", trimmedCategory)
+      .where("importance", "is not", null)
+      .orderBy("effectiveAt", "desc")
+      .limit(1),
+  );
+
+  return rows[0]?.importance ?? null;
 }
 
 function getExistingCategories(db: ServerMonobankDb): string[] {
