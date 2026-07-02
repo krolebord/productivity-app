@@ -1,2 +1,5 @@
 minimumReleaseAge: 10080
+# eslint 10.6.0 is already in the lockfile; it fails the age check on re-resolution until 2026-07-03
+minimumReleaseAgeExclude:
+  - eslint
 trustPolicy: no-downgrade

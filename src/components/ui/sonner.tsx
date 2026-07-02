@@ -1,10 +1,13 @@
 import { CircleCheckIcon, InfoIcon, Loader2Icon, OctagonXIcon, TriangleAlertIcon } from "lucide-react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { useResolvedTheme } from "@/lib/theme-store";
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  const theme = useResolvedTheme();
+
   return (
     <Sonner
-      theme="dark"
+      theme={theme}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4 text-emerald-500" />,

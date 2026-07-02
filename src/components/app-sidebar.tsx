@@ -21,6 +21,8 @@ import {
   Loader2,
   LogOut,
   Menu,
+  Monitor,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
@@ -28,6 +30,7 @@ import {
   Search,
   Sparkles,
   StickyNote,
+  Sun,
   Wallet,
   Wifi,
   WifiOff,
@@ -39,6 +42,7 @@ import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
 import { OPEN_COMMAND_HOTKEY, TOGGLE_ASSISTANT_HOTKEY, TOGGLE_SIDEBAR_HOTKEY } from "@/lib/hotkeys";
 import { useSidebarStore } from "@/lib/sidebar-store";
+import { type Theme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { cn } from "@/lib/utils";
@@ -51,6 +55,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
@@ -205,6 +211,8 @@ function SidebarContent({
   const matches = useMatches();
   const currentPath = matches[matches.length - 1]?.fullPath;
   const openCommand = useCommandStore((s) => s.open);
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
 
   return (
     <>
@@ -360,6 +368,22 @@ function SidebarContent({
               </div>
             </div>
           </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-muted-foreground text-xs">Theme</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>
+            <DropdownMenuRadioItem value="light">
+              <Sun className="size-4" />
+              Light
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="dark">
+              <Moon className="size-4" />
+              Dark
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="system">
+              <Monitor className="size-4" />
+              System
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={logout} disabled={logout.isPending}>
             <LogOut className="size-4" />

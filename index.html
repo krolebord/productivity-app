@@ -8,6 +8,22 @@
 	<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 	<link rel="icon" href="/favicon.ico" sizes="32x32">
 	<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+	<script>
+		// Apply the persisted theme before first paint to avoid a flash.
+		// Reads the zustand persist entry written by src/lib/theme-store.ts.
+		(() => {
+			var theme;
+			try {
+				theme = JSON.parse(localStorage.getItem("productivity-theme")).state.theme;
+			} catch (_) { }
+			var dark = theme === "light"
+				? false
+				: theme === "dark"
+					? true
+					: window.matchMedia("(prefers-color-scheme: dark)").matches;
+			document.documentElement.classList.toggle("dark", dark);
+		})();
+	</script>
 </head>
 
 <body class="min-h-screen font-sans scroll-smooth antialiased">

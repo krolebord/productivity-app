@@ -14,6 +14,7 @@ import {
   PlusIcon,
   RefreshCwIcon,
   StickyNote,
+  SunMoonIcon,
   TagsIcon,
   Wallet,
   Workflow,
@@ -33,6 +34,7 @@ import {
   NEW_TRANSFER_HOTKEY,
   OPEN_COMMAND_HOTKEY,
 } from "@/lib/hotkeys";
+import { useResolvedTheme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import {
   CommandDialog,
@@ -69,6 +71,8 @@ export function CommandPalette() {
   const openCategoryImportanceDialog = useOpenCategoryImportanceDialog();
   const newConversation = useNewConversation();
   const assistantEnabled = useAssistantEnabled();
+  const resolvedTheme = useResolvedTheme();
+  const setTheme = useThemeStore((s) => s.setTheme);
 
   useHotkey(OPEN_COMMAND_HOTKEY, (e) => {
     e.preventDefault();
@@ -152,6 +156,13 @@ export function CommandPalette() {
           >
             <TagsIcon className="size-4" />
             Update default importance
+          </CommandItem>
+          <CommandItem
+            onSelect={() => runAndClose(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}
+            keywords={["theme", "dark", "light", "appearance"]}
+          >
+            <SunMoonIcon className="size-4" />
+            Switch to {resolvedTheme === "dark" ? "light" : "dark"} theme
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Navigation">
