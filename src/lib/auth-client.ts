@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLoaderData, useNavigate } from "@tanstack/react-router";
+import { clearCachedAuth } from "@/lib/auth-cache";
 import { orpc } from "@/orpc/orpc-client";
 
 export function useSignOut() {
@@ -8,6 +9,7 @@ export function useSignOut() {
   const signOutMutation = useMutation(
     orpc.auth.signOut.mutationOptions({
       onSuccess: async () => {
+        clearCachedAuth();
         navigate({ to: "/sign-in", replace: true, reloadDocument: true });
         queryClient.invalidateQueries();
       },

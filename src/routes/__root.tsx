@@ -3,6 +3,7 @@ import { createRootRouteWithContext, type ErrorComponentProps, Link, Outlet } fr
 import { AlertTriangle, FileQuestion } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Devtools } from "@/components/devtools";
+import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -61,6 +62,7 @@ function Root() {
     <>
       <Outlet />
       <ConfirmDialog />
+      <PwaUpdatePrompt />
       <Toaster closeButton />
     </>
   );

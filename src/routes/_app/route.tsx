@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/client";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { Suspense } from "react";
@@ -12,6 +13,7 @@ import { NoteDialog } from "@/components/note-dialog";
 import { SyncStatusMonitor } from "@/components/sync-status-monitor";
 import { TransactionDialog } from "@/components/transaction-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
+import { clearCachedAuth, readCachedAuth, writeCachedAuth } from "@/lib/auth-cache";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { orpc } from "@/orpc/orpc-client";
 import { DbProvider, initUserDb } from "@/user-db/user-db";
@@ -22,7 +24,22 @@ export const Route = createFileRoute("/_app")({
   component: RouteComponent,
   shouldReload: false,
   loader: async ({ context }) => {
-    const auth = await context.queryClient.ensureQueryData(orpc.auth.getAuth.queryOptions());
+    let auth: ReturnType<typeof readCachedAuth>;
+    try {
+      const fetched = await context.queryClient.ensureQueryData(orpc.auth.getAuth.queryOptions());
+      writeCachedAuth(fetched);
+      auth = fetched;
+    } catch (error) {
+      // Only an explicit rejection means the session is gone. Anything else
+      // (offline, server unreachable) boots from the last-known auth — the
+      // data is local anyway, and sync will re-authenticate when it connects.
+      if (error instanceof ORPCError && error.code === "UNAUTHORIZED") {
+        clearCachedAuth();
+        throw redirect({ to: "/sign-in" });
+      }
+      auth = readCachedAuth();
+      if (!auth) throw error;
+    }
 
     if (!auth) {
       throw redirect({ to: "/sign-in" });
