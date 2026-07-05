@@ -195,7 +195,8 @@
     background-color: oklch(0.6056 0.2189 292.7172 / 0.2);
   }
 
-  /* Refined scrollbar for webkit */
+  /* Refined scrollbar for webkit; follows the theme via --border, so no
+     separate .dark overrides are needed. */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -206,20 +207,22 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: oklch(0.7 0 0 / 0.3);
+    background: var(--border);
     border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.6 0 0 / 0.5);
+    background: color-mix(in oklab, var(--border) 70%, var(--foreground));
   }
 
-  .dark ::-webkit-scrollbar-thumb {
-    background: oklch(0.4 0 0 / 0.4);
-  }
-
-  .dark ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.5 0 0 / 0.6);
+  /* Firefox ignores ::-webkit-scrollbar; the standard properties get close
+     (thin ≈ 6px, no hover styling). Guarded so Chrome keeps the rules above
+     instead of double-applying. scrollbar-color inherits from the root. */
+  @supports not selector(::-webkit-scrollbar) {
+    :root {
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
   }
 }
 
