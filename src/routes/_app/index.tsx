@@ -597,7 +597,7 @@ function DashboardPage() {
       )}
 
       {/* Summary cards */}
-      <div className="grid @4xl:grid-cols-4 @lg:grid-cols-2 gap-3">
+      <div className="grid @4xl:grid-cols-4 @lg:grid-cols-2 grid-cols-[minmax(0,1fr)] gap-3">
         <div className="rounded-lg border bg-card p-4 shadow-xs">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <WalletIcon className="size-4" />
@@ -740,9 +740,9 @@ function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid @3xl:grid-cols-2 gap-4">
+      <div className="grid @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] grid-cols-[minmax(0,1fr)] gap-4">
         {/* Recent transactions */}
-        <section className="rounded-lg border bg-card shadow-xs">
+        <section className="min-w-0 overflow-hidden rounded-lg border bg-card shadow-xs">
           <div className="flex flex-col gap-2 border-b px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="font-medium text-sm">Recent activity</h2>
@@ -781,7 +781,7 @@ function DashboardPage() {
                     key={transaction.id}
                     type="button"
                     onClick={() => openEdit(transaction.id)}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/40"
+                    className="flex w-full min-w-0 items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/40"
                   >
                     <span className={cn("shrink-0", TYPE_ACCENT[type] ?? TYPE_ACCENT.expense)}>
                       <Icon className="size-4" />
@@ -793,7 +793,10 @@ function DashboardPage() {
                       </p>
                     </div>
                     <p
-                      className={cn("shrink-0 font-medium font-mono text-sm tabular-nums", amountClass(display.amount))}
+                      className={cn(
+                        "max-w-[45%] shrink-0 truncate text-right font-medium font-mono text-sm tabular-nums",
+                        amountClass(display.amount),
+                      )}
                     >
                       {formatBalance(display.amount, display.currency)}
                     </p>
@@ -805,7 +808,7 @@ function DashboardPage() {
         </section>
 
         {/* Accounts */}
-        <section className="rounded-lg border bg-card shadow-xs">
+        <section className="min-w-0 overflow-hidden rounded-lg border bg-card shadow-xs">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <h2 className="font-medium text-sm">Accounts</h2>
             <Button asChild size="sm" variant="ghost">
