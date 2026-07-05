@@ -133,9 +133,9 @@ export function AccountCard({ account }: AccountCardProps) {
             ) : (
               <span className="text-muted-foreground/50 text-sm italic">Untitled</span>
             )}
-            {account.excludeFromDashboard && (
+            {!!account.excludeFromDashboard && (
               <span
-                className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground/60 text-xs"
+                className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground/60 text-xs transition-opacity group-hover:opacity-0"
                 title="Hidden from dashboard"
               >
                 <EyeOff className="size-3" />

@@ -51,6 +51,9 @@ const config = defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  server: {
+    allowedHosts: ["local.krolebord.com"],
+  },
   optimizeDeps: {
     // sqlite-wasm can't be pre-bundled (WASM). The packages that import it must
     // also be excluded, otherwise Vite pre-bundles them with a bare
