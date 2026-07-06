@@ -47,10 +47,10 @@ import {
 } from "@/components/ui/chart";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBaseCurrencyStore } from "@/lib/base-currency-store";
 import { convertAmount, getCurrencyOptions } from "@/lib/currency/convert";
 import { APP_CURRENCIES } from "@/lib/currency/currencies";
-import { cycleStartOnOrBefore, resolveDashboardRange, useDashboardRangeStore } from "@/lib/dashboard-range-store";
+import { cycleStartOnOrBefore, resolveDashboardRange } from "@/lib/dashboard-range-store";
+import { useDashboardSettings } from "@/lib/dashboard-settings";
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import {
   getDisplayAmountForAccount,
@@ -265,15 +265,18 @@ function CashFlowTooltipContent({
 
 function DashboardPage() {
   const db = useDb();
-  const { baseCurrency, setBaseCurrency } = useBaseCurrencyStore();
+  const {
+    baseCurrency,
+    setBaseCurrency,
+    mode: rangeMode,
+    days: rangeDays,
+    cycleDay: rangeCycleDay,
+  } = useDashboardSettings();
   const openEdit = useTransactionDialogStore((state) => state.openEdit);
   const createExpense = useCreateExpense();
   const createIncome = useCreateIncome();
   const createTransfer = useCreateTransfer();
   const [activeChart, setActiveChart] = useState<ChartTab>("flow");
-  const rangeMode = useDashboardRangeStore((s) => s.mode);
-  const rangeDays = useDashboardRangeStore((s) => s.days);
-  const rangeCycleDay = useDashboardRangeStore((s) => s.cycleDay);
 
   // Compute time boundaries so the queries below stay stable across renders
   // (instead of refetching on every tick) and only recompute when the chosen

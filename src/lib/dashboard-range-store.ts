@@ -1,6 +1,4 @@
 import { differenceInCalendarDays, endOfDay, getDaysInMonth, startOfDay, subDays, subMonths } from "date-fns";
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 export type DashboardRangeMode = "days" | "cycle";
 
@@ -12,28 +10,7 @@ export interface DashboardRangeConfig {
   cycleDay: number;
 }
 
-interface DashboardRangeStore extends DashboardRangeConfig {
-  setMode: (mode: DashboardRangeMode) => void;
-  setDays: (days: number) => void;
-  setCycleDay: (day: number) => void;
-}
-
-const clampDay = (value: number) => Math.min(31, Math.max(1, Math.round(value || 0)));
-
-/** Controls the time window the Overview summary cards and spending donut cover. */
-export const useDashboardRangeStore = create<DashboardRangeStore>()(
-  persist(
-    (set) => ({
-      mode: "days",
-      days: 30,
-      cycleDay: 25,
-      setMode: (mode) => set({ mode }),
-      setDays: (days) => set({ days: clampDay(days) }),
-      setCycleDay: (cycleDay) => set({ cycleDay: clampDay(cycleDay) }),
-    }),
-    { name: "productivity-dashboard-range" },
-  ),
-);
+export const clampDashboardRangeValue = (value: number) => Math.min(31, Math.max(1, Math.round(value || 0)));
 
 function ordinal(n: number) {
   const suffixes = ["th", "st", "nd", "rd"];

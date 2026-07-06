@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { type DashboardRangeMode, resolveDashboardRange, useDashboardRangeStore } from "@/lib/dashboard-range-store";
+import { type DashboardRangeMode, resolveDashboardRange } from "@/lib/dashboard-range-store";
+import { useDashboardSettings } from "@/lib/dashboard-settings";
 import { cn } from "@/lib/utils";
 
 const MODE_TABS: { id: DashboardRangeMode; label: string }[] = [
@@ -12,12 +13,7 @@ const MODE_TABS: { id: DashboardRangeMode; label: string }[] = [
 ];
 
 export function DashboardRangeSelect({ className }: { className?: string }) {
-  const mode = useDashboardRangeStore((s) => s.mode);
-  const days = useDashboardRangeStore((s) => s.days);
-  const cycleDay = useDashboardRangeStore((s) => s.cycleDay);
-  const setMode = useDashboardRangeStore((s) => s.setMode);
-  const setDays = useDashboardRangeStore((s) => s.setDays);
-  const setCycleDay = useDashboardRangeStore((s) => s.setCycleDay);
+  const { mode, days, cycleDay, setMode, setDays, setCycleDay } = useDashboardSettings();
 
   const { label } = resolveDashboardRange({ mode, days, cycleDay }, new Date());
 

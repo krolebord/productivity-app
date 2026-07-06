@@ -254,6 +254,19 @@ const migrations = createMigrations((b) => ({
       defaultValue: null,
     }),
   ],
+  16: [
+    b.createTable("_dashboard_settings", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("rangeMode", "text", (col) => col.notNull().defaultTo("days"))
+        .addColumn("rangeDays", "integer", (col) => col.notNull().defaultTo(30))
+        .addColumn("cycleDay", "integer", (col) => col.notNull().defaultTo(25))
+        .addColumn("baseCurrency", "text", (col) => col.notNull().defaultTo("USD"))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -506,6 +519,16 @@ export const syncDbSchema = defineSyncSchema({
           "account links one-to-one to an in-app account via `linkedAccountId`. No balances are stored here.",
         ].join(" "),
       ),
+    dashboard_settings: t
+      .table({
+        rangeMode: t.enum(["days", "cycle"]).default("days").describe("Dashboard range type: days | cycle."),
+        rangeDays: t.integer().default(30).describe('Trailing-window length for rangeMode "days".'),
+        cycleDay: t.integer().default(25).describe('Day of month when rangeMode "cycle" starts.'),
+        baseCurrency: t.text().default("USD").describe("Currency used to display dashboard totals."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe("Singleton dashboard preferences synced across the user's devices."),
   },
   migrations,
 });
@@ -519,6 +542,7 @@ export type MemoryItem = typeof syncDbSchema.tables.memory.$row;
 export type SkillItem = typeof syncDbSchema.tables.skill.$row;
 export type MonobankConnectionMetaItem = typeof syncDbSchema.tables.monobank_connection.$row;
 export type MonobankAccountItem = typeof syncDbSchema.tables.monobank_account.$row;
+export type DashboardSettingsItem = typeof syncDbSchema.tables.dashboard_settings.$row;
 
 export type UserDb = (typeof syncDbSchema)["~clientSchema"];
 
