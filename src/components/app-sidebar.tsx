@@ -203,7 +203,7 @@ function AssistantToggle({ collapsed }: { collapsed: boolean }) {
         {!collapsed && (
           <>
             <span className="flex-1 text-left">Assistant</span>
-            <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
+            <kbd className="pointer-events-none hidden rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground md:inline">
               {formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)}
             </kbd>
           </>
@@ -304,7 +304,7 @@ function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
       >
         <Search className="size-4 shrink-0" />
         <span className="flex-1 text-left">Search...</span>
-        <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
+        <kbd className="pointer-events-none hidden rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground md:inline">
           {formatForDisplay(OPEN_COMMAND_HOTKEY)}
         </kbd>
       </Button>
@@ -411,7 +411,7 @@ function SidebarContent({
                 {!collapsed && (
                   <>
                     <span className="flex-1 text-left">Collapse</span>
-                    <kbd className="pointer-events-none rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground">
+                    <kbd className="pointer-events-none hidden rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground md:inline">
                       {formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)}
                     </kbd>
                   </>

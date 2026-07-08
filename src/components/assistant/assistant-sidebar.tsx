@@ -960,7 +960,9 @@ function ConversationView({
               <X className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Close ({formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)})</TooltipContent>
+          <TooltipContent side="bottom">
+            Close <span className="hidden md:inline">({formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)})</span>
+          </TooltipContent>
         </Tooltip>
       </div>
 
