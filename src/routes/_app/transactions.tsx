@@ -8,7 +8,6 @@ import {
   ArrowUpRightIcon,
   CheckIcon,
   ChevronLeftIcon,
-  EyeOffIcon,
   Landmark,
   PlusIcon,
   SearchIcon,
@@ -231,10 +230,6 @@ function formatDayHeader(timestamp: number) {
   }
 
   return format(timestamp, "EEEE, MMM d, yyyy");
-}
-
-function formatEntryCount(count: number) {
-  return `${count} transaction${count === 1 ? "" : "s"}`;
 }
 
 function formatTimeRangeLabel(from?: number, to?: number) {
@@ -594,39 +589,6 @@ function TransactionsPage() {
 
       <CategoryImportancePrompt />
 
-      {selectedAccount ? (
-        <div className="flex @xl:flex-row flex-col @xl:items-center @xl:justify-between gap-3 rounded-lg border bg-card px-4 py-3 shadow-xs">
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                className="inline-block size-3 shrink-0 rounded-full"
-                style={{ backgroundColor: selectedAccount.labelColor }}
-              />
-              <span className="truncate font-medium text-sm">{selectedAccount.labelText || "Untitled account"}</span>
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-              <span>{selectedAccount.currency}</span>
-              <span>{formatEntryCount(totalEntries)} in this view</span>
-              {selectedAccount.excludeFromDashboard ? (
-                <span className="inline-flex items-center gap-1">
-                  <EyeOffIcon className="size-3" />
-                  Hidden from dashboard
-                </span>
-              ) : null}
-            </div>
-            {selectedAccount.description ? (
-              <p className="mt-1 line-clamp-1 text-muted-foreground text-xs">{selectedAccount.description}</p>
-            ) : null}
-          </div>
-          <div className="@xl:text-right">
-            <p className="text-muted-foreground text-xs">Current balance</p>
-            <p className="font-mono font-semibold text-base tabular-nums">
-              {formatBalance(selectedAccount.balance, selectedAccount.currency)}
-            </p>
-          </div>
-        </div>
-      ) : null}
-
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[14rem] flex-1 sm:max-w-sm">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -762,6 +724,34 @@ function TransactionsPage() {
           </button>
         ) : null}
       </div>
+
+      {selectedAccount ? (
+        <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 shadow-xs">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                className="inline-block size-3 shrink-0 rounded-full"
+                style={{ backgroundColor: selectedAccount.labelColor }}
+              />
+              <span className="truncate font-medium text-sm">{selectedAccount.labelText || "Untitled account"}</span>
+              <span className="shrink-0 text-muted-foreground text-xs">{selectedAccount.currency}</span>
+            </div>
+            <p className="mt-0.5 font-mono font-semibold text-base tabular-nums">
+              {formatBalance(selectedAccount.balance, selectedAccount.currency)}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="shrink-0"
+            aria-label="New transaction"
+            onClick={createExpense}
+          >
+            <PlusIcon className="size-4" />
+          </Button>
+        </div>
+      ) : null}
 
       {transactions.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card px-6 py-14 text-center">

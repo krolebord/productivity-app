@@ -299,13 +299,11 @@ function TransactionDialogContent() {
       }
 
       if (mode === "create" && addMore) {
-        form.reset({
-          ...value,
-          amount: "",
-          counterpartyAmount: "",
-          notes: "",
-          title: "",
-        });
+        // Clear only entry fields. Avoid form.reset() — it clears isTouched, and TanStack
+        // Form then reverts untouched fields (accountId) to their initial defaultValue.
+        for (const field of ["amount", "counterpartyAmount", "notes", "title"] as const) {
+          form.setFieldValue(field, "", { dontValidate: true });
+        }
         queueMicrotask(() => amountInputRef.current?.focus());
         return;
       }
