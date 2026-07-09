@@ -69,7 +69,7 @@ export function NoteEditor({ ref, initialContent, placeholder, onChange, onEscap
     content: parseNoteMarkdown(initialContent),
     editorProps: {
       attributes: {
-        class: "note-prose min-h-40 max-h-[60vh] overflow-y-auto py-1 outline-none",
+        class: "note-prose min-h-40 py-1 outline-none",
       },
       handleKeyDown: (_view, event) => {
         if (event.key === "Escape") {

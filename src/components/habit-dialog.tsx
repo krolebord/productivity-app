@@ -322,6 +322,7 @@ function HabitDialogContent() {
                     <button
                       key={option.value}
                       type="button"
+                      aria-pressed={isActive}
                       onClick={() => field.handleChange(option.value)}
                       className={cn(
                         "flex min-w-0 items-center justify-center rounded-sm px-1.5 py-1.5 font-medium text-sm transition-all",

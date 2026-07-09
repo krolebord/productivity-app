@@ -132,8 +132,8 @@ function NoteDialogContent({
 
   return (
     <>
-      <DialogTitle>{isNew ? "New note" : "Edit note"}</DialogTitle>
-      <div className="flex flex-col gap-3">
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+        <DialogTitle>{isNew ? "New note" : "Edit note"}</DialogTitle>
         <Input
           placeholder="Title"
           value={title}
@@ -149,7 +149,6 @@ function NoteDialogContent({
           className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
         />
         <TagInput value={tags} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder="Add tags..." />
-        <NoteDueDateControl dueAt={dueAt} hasDueTime={hasDueTime} onChange={handleDueChange} />
         <NoteEditor
           ref={editorRef}
           initialContent={note?.content ?? ""}
@@ -159,6 +158,9 @@ function NoteDialogContent({
           }}
           onEscape={onClose}
         />
+      </div>
+      <div className="shrink-0 border-t pt-2">
+        <NoteDueDateControl dueAt={dueAt} hasDueTime={hasDueTime} onChange={handleDueChange} />
       </div>
     </>
   );
@@ -182,7 +184,7 @@ export function NoteDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && saveAndClose()}>
-      <DialogContent className="sm:max-w-lg" showCloseButton={false}>
+      <DialogContent className="flex flex-col gap-3 overflow-hidden pb-2 sm:max-w-lg sm:pb-2" showCloseButton={false}>
         {noteId ? (
           <NoteDialogContent key={openRevision} noteId={noteId} saveNote={saveNote} onClose={saveAndClose} />
         ) : (

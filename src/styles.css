@@ -356,7 +356,9 @@
     min-width: 0;
   }
 
-  .note-prose li[data-checked="true"] > div {
+  /* Scoped to the item's own paragraphs so the decoration and muted color
+     don't propagate into nested (possibly unchecked) sub-lists. */
+  .note-prose li[data-checked="true"] > div > p {
     color: var(--color-muted-foreground);
     text-decoration: line-through;
   }

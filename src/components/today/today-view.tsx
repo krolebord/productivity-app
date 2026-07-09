@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { CalendarDays, CheckIcon, ChevronLeft, ChevronRight, PlusIcon } from "lucide-react";
+import { CalendarDays, CalendarPlus, CheckIcon, ChevronLeft, ChevronRight, PlusIcon } from "lucide-react";
 import { useNoteDialogStore } from "@/components/note-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,11 +20,18 @@ export function TodayView() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <h1 className="min-w-0 flex-1 truncate font-semibold text-xl">{headerLabel}</h1>
-        {!agenda.isSelectedToday && (
-          <Button type="button" variant="outline" size="sm" onClick={agenda.goToToday}>
-            Today
-          </Button>
-        )}
+        {/* Always mounted so appearing/disappearing doesn't shift the header */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={agenda.goToToday}
+          aria-hidden={agenda.isSelectedToday}
+          tabIndex={agenda.isSelectedToday ? -1 : undefined}
+          className={cn(agenda.isSelectedToday && "invisible")}
+        >
+          Today
+        </Button>
       </div>
 
       <WeekStrip
@@ -75,7 +82,7 @@ function WeekStrip({
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="size-7 shrink-0 text-muted-foreground"
+        className="shrink-0 text-muted-foreground"
         aria-label="Previous week"
         onClick={() => onShiftWeek(-1)}
       >
@@ -92,9 +99,10 @@ function WeekStrip({
               type="button"
               onClick={() => onSelect(day.dateKey)}
               aria-label={format(day.date, "EEEE, MMMM d")}
-              aria-current={selected ? "date" : undefined}
+              aria-current={isToday ? "date" : undefined}
+              aria-pressed={selected}
               className={cn(
-                "relative flex flex-col items-center gap-0.5 rounded-md py-1.5 transition-colors",
+                "relative flex flex-col items-center gap-px rounded-md py-1 transition-colors",
                 selected
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -102,7 +110,7 @@ function WeekStrip({
               )}
             >
               <span className="font-medium text-[10px] uppercase leading-none">{WEEKDAY_INITIALS[index]}</span>
-              <span className="relative flex size-7 items-center justify-center">
+              <span className="relative flex size-6 items-center justify-center">
                 {day.habitProgress && (
                   <HabitProgressRing progress={day.habitProgress} selected={selected} className="absolute inset-0" />
                 )}
@@ -131,7 +139,7 @@ function WeekStrip({
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="size-7 shrink-0 text-muted-foreground"
+        className="shrink-0 text-muted-foreground"
         aria-label="Next week"
         onClick={() => onShiftWeek(1)}
       >
@@ -173,7 +181,7 @@ function HabitProgressRing({
 function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed bg-card px-6 py-14 text-center">
-      <CalendarDays className="size-6 text-muted-foreground" />
+      <CalendarDays className="size-8 text-muted-foreground" />
       <p className="font-medium">Nothing scheduled</p>
       <p className="text-muted-foreground text-sm">No notes or habits due on this day.</p>
     </div>
@@ -273,16 +281,23 @@ function NoteRow({
         {dueLabel && <p className="mt-0.5 text-destructive text-xs">{dueLabel}</p>}
       </button>
       {overdue && (
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onMoveToToday}>
-            Move to today
+        <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity focus-within:opacity-100 md:opacity-0 md:group-hover:opacity-100">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Move to today"
+            title="Move to today"
+            onClick={onMoveToToday}
+          >
+            <CalendarPlus className="size-3.5" />
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="size-7"
             aria-label="Complete"
+            title="Complete"
             onClick={() => onToggle(true)}
           >
             <CheckIcon className="size-3.5" />
@@ -340,7 +355,10 @@ function HabitRow({
       )}
 
       <div className="min-w-0 flex-1">
-        <p className={cn("truncate text-sm", done && "line-through")}>{habit.name}</p>
+        <p className={cn("truncate text-sm", done && "line-through")}>
+          {habit.name}
+          {!editable && <span className="sr-only">{done ? " (done)" : " (not done)"}</span>}
+        </p>
         {!isSimple && <p className="text-muted-foreground text-xs tabular-nums">{progressLabel}</p>}
       </div>
 
@@ -349,7 +367,7 @@ function HabitRow({
           type="button"
           variant="outline"
           size="icon-sm"
-          className="size-7 shrink-0"
+          className="shrink-0"
           aria-label={`Add 1 to ${habit.name}`}
           onClick={onIncrement}
         >

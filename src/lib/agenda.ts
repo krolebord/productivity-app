@@ -111,10 +111,6 @@ export function addLocalDays(date: Date, days: number): Date {
   return addDays(startOfLocalDay(date), days);
 }
 
-export function compareDateKeys(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 export function isHabitDoneOnDay(target: number, value: number): boolean {
   return value >= target;
 }
@@ -124,12 +120,12 @@ export function getEntryValue(entries: HabitEntryValuesByDate | undefined, dateK
 }
 
 /**
- * Habits archived on a local day before `dateKey` are excluded.
- * Archived on `dateKey` itself still appears that day.
+ * Archived habits disappear from the archive day onward; days that already
+ * have a recorded entry keep showing so history stays intact.
  */
-export function isHabitArchivedBefore(habit: Pick<AgendaHabit, "archivedAt">, dateKey: string): boolean {
+export function isHabitArchivedOn(habit: Pick<AgendaHabit, "archivedAt">, dateKey: string): boolean {
   if (habit.archivedAt == null) return false;
-  return toDateKey(new Date(habit.archivedAt)) < dateKey;
+  return toDateKey(new Date(habit.archivedAt)) <= dateKey;
 }
 
 function lastDoneDateBefore(
@@ -176,9 +172,9 @@ export function isHabitDueOnDay(
   todayKey: string,
   entries: HabitEntryValuesByDate | undefined,
 ): boolean {
-  if (isHabitArchivedBefore(habit, dateKey)) return false;
-
   const valueOnDay = getEntryValue(entries, dateKey);
+  if (isHabitArchivedOn(habit, dateKey) && valueOnDay <= 0) return false;
+
   const doneOnDay = isHabitDoneOnDay(habit.target, valueOnDay);
 
   switch (habit.scheduleType) {

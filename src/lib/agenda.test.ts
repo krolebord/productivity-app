@@ -43,14 +43,15 @@ describe("isHabitDueOnDay", () => {
     expect(isHabitDueOnDay(h, "2026-07-08", today, undefined)).toBe(true); // Wed
   });
 
-  it("excludes habits archived before the day", () => {
+  it("hides habits from the archive day onward unless recorded that day", () => {
     const h = habit({
       id: "a",
       scheduleType: "daily",
       archivedAt: new Date(2026, 6, 8, 15).getTime(),
     });
     expect(isHabitDueOnDay(h, "2026-07-07", today, undefined)).toBe(true);
-    expect(isHabitDueOnDay(h, "2026-07-08", today, undefined)).toBe(true);
+    expect(isHabitDueOnDay(h, "2026-07-08", today, undefined)).toBe(false);
+    expect(isHabitDueOnDay(h, "2026-07-08", today, entries(["2026-07-08", 1]))).toBe(true);
     expect(isHabitDueOnDay(h, "2026-07-09", today, undefined)).toBe(false);
   });
 

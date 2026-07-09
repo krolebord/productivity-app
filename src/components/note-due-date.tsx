@@ -107,7 +107,7 @@ export function NoteDueDateControl({ dueAt, hasDueTime, onChange }: NoteDueDateC
     ? hasDueTime
       ? format(selected, "MMM d, yyyy HH:mm")
       : format(selected, "MMM d, yyyy")
-    : "Due date";
+    : null;
 
   return (
     <div className="flex items-center gap-1">
@@ -116,11 +116,15 @@ export function NoteDueDateControl({ dueAt, hasDueTime, onChange }: NoteDueDateC
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className={cn("h-8 gap-1.5 px-2 font-normal text-muted-foreground", selected && "text-foreground")}
+            size={selected ? "sm" : "icon-sm"}
+            aria-label={selected ? `Due ${display}` : "Set due date"}
+            className={cn(
+              "font-normal text-muted-foreground",
+              selected ? "h-8 gap-1.5 px-2 text-foreground" : "size-7",
+            )}
           >
             <CalendarIcon className="size-3.5" />
-            <span className="text-xs">{display}</span>
+            {display && <span className="text-xs">{display}</span>}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
@@ -157,18 +161,6 @@ export function NoteDueDateControl({ dueAt, hasDueTime, onChange }: NoteDueDateC
               >
                 <ClockIcon className="size-3.5" />
                 Add time
-              </Button>
-            )}
-            {selected && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 justify-start gap-1.5 px-2 text-muted-foreground"
-                onClick={handleClear}
-              >
-                <XIcon className="size-3.5" />
-                Clear due date
               </Button>
             )}
           </div>
