@@ -15,10 +15,12 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AuthMagicLinkVerifyRouteImport } from './routes/_auth/magic-link-verify'
 import { Route as AppTransactionsRouteImport } from './routes/_app/transactions'
+import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppSkillsRouteImport } from './routes/_app/skills'
 import { Route as AppNotesRouteImport } from './routes/_app/notes'
 import { Route as AppMemoriesRouteImport } from './routes/_app/memories'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
+import { Route as AppHabitsRouteImport } from './routes/_app/habits'
 import { Route as AppCurrenciesRouteImport } from './routes/_app/currencies'
 import { Route as AppAgentsRouteImport } from './routes/_app/agents'
 import { Route as AppAccountsRouteImport } from './routes/_app/accounts'
@@ -51,6 +53,11 @@ const AppTransactionsRoute = AppTransactionsRouteImport.update({
   path: '/transactions',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppTodayRoute = AppTodayRouteImport.update({
+  id: '/today',
+  path: '/today',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppSkillsRoute = AppSkillsRouteImport.update({
   id: '/skills',
   path: '/skills',
@@ -69,6 +76,11 @@ const AppMemoriesRoute = AppMemoriesRouteImport.update({
 const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppHabitsRoute = AppHabitsRouteImport.update({
+  id: '/habits',
+  path: '/habits',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AppCurrenciesRoute = AppCurrenciesRouteImport.update({
@@ -92,10 +104,12 @@ export interface FileRoutesByFullPath {
   '/accounts': typeof AppAccountsRoute
   '/agents': typeof AppAgentsRoute
   '/currencies': typeof AppCurrenciesRoute
+  '/habits': typeof AppHabitsRoute
   '/integrations': typeof AppIntegrationsRoute
   '/memories': typeof AppMemoriesRoute
   '/notes': typeof AppNotesRoute
   '/skills': typeof AppSkillsRoute
+  '/today': typeof AppTodayRoute
   '/transactions': typeof AppTransactionsRoute
   '/magic-link-verify': typeof AuthMagicLinkVerifyRoute
   '/sign-in': typeof AuthSignInRoute
@@ -105,10 +119,12 @@ export interface FileRoutesByTo {
   '/accounts': typeof AppAccountsRoute
   '/agents': typeof AppAgentsRoute
   '/currencies': typeof AppCurrenciesRoute
+  '/habits': typeof AppHabitsRoute
   '/integrations': typeof AppIntegrationsRoute
   '/memories': typeof AppMemoriesRoute
   '/notes': typeof AppNotesRoute
   '/skills': typeof AppSkillsRoute
+  '/today': typeof AppTodayRoute
   '/transactions': typeof AppTransactionsRoute
   '/magic-link-verify': typeof AuthMagicLinkVerifyRoute
   '/sign-in': typeof AuthSignInRoute
@@ -120,10 +136,12 @@ export interface FileRoutesById {
   '/_app/accounts': typeof AppAccountsRoute
   '/_app/agents': typeof AppAgentsRoute
   '/_app/currencies': typeof AppCurrenciesRoute
+  '/_app/habits': typeof AppHabitsRoute
   '/_app/integrations': typeof AppIntegrationsRoute
   '/_app/memories': typeof AppMemoriesRoute
   '/_app/notes': typeof AppNotesRoute
   '/_app/skills': typeof AppSkillsRoute
+  '/_app/today': typeof AppTodayRoute
   '/_app/transactions': typeof AppTransactionsRoute
   '/_auth/magic-link-verify': typeof AuthMagicLinkVerifyRoute
   '/_auth/sign-in': typeof AuthSignInRoute
@@ -136,10 +154,12 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/agents'
     | '/currencies'
+    | '/habits'
     | '/integrations'
     | '/memories'
     | '/notes'
     | '/skills'
+    | '/today'
     | '/transactions'
     | '/magic-link-verify'
     | '/sign-in'
@@ -149,10 +169,12 @@ export interface FileRouteTypes {
     | '/accounts'
     | '/agents'
     | '/currencies'
+    | '/habits'
     | '/integrations'
     | '/memories'
     | '/notes'
     | '/skills'
+    | '/today'
     | '/transactions'
     | '/magic-link-verify'
     | '/sign-in'
@@ -163,10 +185,12 @@ export interface FileRouteTypes {
     | '/_app/accounts'
     | '/_app/agents'
     | '/_app/currencies'
+    | '/_app/habits'
     | '/_app/integrations'
     | '/_app/memories'
     | '/_app/notes'
     | '/_app/skills'
+    | '/_app/today'
     | '/_app/transactions'
     | '/_auth/magic-link-verify'
     | '/_auth/sign-in'
@@ -222,6 +246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTransactionsRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/today': {
+      id: '/_app/today'
+      path: '/today'
+      fullPath: '/today'
+      preLoaderRoute: typeof AppTodayRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/skills': {
       id: '/_app/skills'
       path: '/skills'
@@ -248,6 +279,13 @@ declare module '@tanstack/react-router' {
       path: '/integrations'
       fullPath: '/integrations'
       preLoaderRoute: typeof AppIntegrationsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/habits': {
+      id: '/_app/habits'
+      path: '/habits'
+      fullPath: '/habits'
+      preLoaderRoute: typeof AppHabitsRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/_app/currencies': {
@@ -278,10 +316,12 @@ interface AppRouteRouteChildren {
   AppAccountsRoute: typeof AppAccountsRoute
   AppAgentsRoute: typeof AppAgentsRoute
   AppCurrenciesRoute: typeof AppCurrenciesRoute
+  AppHabitsRoute: typeof AppHabitsRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppMemoriesRoute: typeof AppMemoriesRoute
   AppNotesRoute: typeof AppNotesRoute
   AppSkillsRoute: typeof AppSkillsRoute
+  AppTodayRoute: typeof AppTodayRoute
   AppTransactionsRoute: typeof AppTransactionsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -290,10 +330,12 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppAccountsRoute: AppAccountsRoute,
   AppAgentsRoute: AppAgentsRoute,
   AppCurrenciesRoute: AppCurrenciesRoute,
+  AppHabitsRoute: AppHabitsRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
   AppMemoriesRoute: AppMemoriesRoute,
   AppNotesRoute: AppNotesRoute,
   AppSkillsRoute: AppSkillsRoute,
+  AppTodayRoute: AppTodayRoute,
   AppTransactionsRoute: AppTransactionsRoute,
   AppIndexRoute: AppIndexRoute,
 }

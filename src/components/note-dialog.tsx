@@ -5,6 +5,7 @@ import { combine } from "zustand/middleware";
 import { parseTags, serializeTags } from "@/lib/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@/lib/use-debounced-callback";
 import { useDb, useDbQuery } from "@/user-db/user-db";
+import { NoteDueDateControl, type NoteDueFields } from "./note-due-date";
 import { NoteEditor, type NoteEditorHandle } from "./note-editor";
 import { TagInput } from "./tag-input";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
@@ -51,6 +52,7 @@ export function useCreateNote() {
           order: maxOrder + 1,
           createdAt,
           tags: "[]",
+          hasDueTime: false,
           tombstone: false,
         }),
       );
@@ -60,7 +62,14 @@ export function useCreateNote() {
   }, [db, openNoteDialog]);
 }
 
-type NoteFields = { title?: string; content?: string; tags?: string };
+type NoteFields = {
+  title?: string;
+  content?: string;
+  tags?: string;
+  dueAt?: number | null;
+  hasDueTime?: boolean;
+  completedAt?: number | null;
+};
 
 function NoteDialogContent({
   noteId,
@@ -88,10 +97,19 @@ function NoteDialogContent({
 
   const [title, setTitle] = useState(note?.title ?? "");
   const [tags, setTags] = useState<string[]>(() => parseTags(note?.tags));
+  const [dueAt, setDueAt] = useState<number | null>(note?.dueAt ?? null);
+  const [hasDueTime, setHasDueTime] = useState(note?.hasDueTime ?? false);
   const editorRef = useRef<NoteEditorHandle>(null);
   // Latest values live in a ref so every save carries all fields,
   // regardless of which input triggered it.
-  const fieldsRef = useRef({ title: note?.title ?? "", content: note?.content ?? "", tags: note?.tags ?? "[]" });
+  const fieldsRef = useRef({
+    title: note?.title ?? "",
+    content: note?.content ?? "",
+    tags: note?.tags ?? "[]",
+    dueAt: note?.dueAt ?? null,
+    hasDueTime: note?.hasDueTime ?? false,
+    completedAt: note?.completedAt ?? null,
+  });
 
   const updateNote = (fields: NoteFields) => {
     if (fields.title !== undefined) setTitle(fields.title);
@@ -102,6 +120,12 @@ function NoteDialogContent({
   const handleTagsChange = (next: string[]) => {
     setTags(next);
     updateNote({ tags: serializeTags(next) });
+  };
+
+  const handleDueChange = (fields: NoteDueFields) => {
+    setDueAt(fields.dueAt);
+    setHasDueTime(fields.hasDueTime);
+    updateNote(fields);
   };
 
   const isNew = !note?.title?.trim() && !note?.content?.trim();
@@ -125,6 +149,7 @@ function NoteDialogContent({
           className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
         />
         <TagInput value={tags} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder="Add tags..." />
+        <NoteDueDateControl dueAt={dueAt} hasDueTime={hasDueTime} onChange={handleDueChange} />
         <NoteEditor
           ref={editorRef}
           initialContent={note?.content ?? ""}

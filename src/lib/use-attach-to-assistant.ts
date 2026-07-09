@@ -81,16 +81,16 @@ function getServerSnapshot(): boolean {
 export function useAttachToAssistant() {
   const isContextKeyHeld = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const appendToInput = useAssistantStore((s) => s.appendToInput);
-  const setOpen = useAssistantStore((s) => s.setOpen);
+  const openPanel = useAssistantStore((s) => s.openPanel);
   const requestComposerFocus = useAssistantStore((s) => s.requestComposerFocus);
 
   const attach = useCallback(
     (ref: AttachRef) => {
       appendToInput(formatAttachToken(ref));
-      setOpen(true);
+      openPanel("assistant");
       requestComposerFocus();
     },
-    [appendToInput, setOpen, requestComposerFocus],
+    [appendToInput, openPanel, requestComposerFocus],
   );
 
   const getAttachClickHandler = useCallback(

@@ -716,7 +716,7 @@ function ConversationView({
 }) {
   const auth = useAuth();
   const db = useDb();
-  const setOpen = useAssistantStore((s) => s.setOpen);
+  const closePanel = useAssistantStore((s) => s.closePanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   // The draft lives in the store so off-screen rows can append context tokens to it.
   const input = useAssistantStore((s) => s.inputDraft);
@@ -955,7 +955,7 @@ function ConversationView({
               className="size-8 text-muted-foreground"
               aria-label="Close assistant"
               aria-keyshortcuts={TOGGLE_ASSISTANT_HOTKEY}
-              onClick={() => setOpen(false)}
+              onClick={closePanel}
             >
               <X className="size-4" />
             </Button>
@@ -1104,12 +1104,12 @@ function ConversationView({
  */
 export function useNewConversation() {
   const db = useDb();
-  const setOpen = useAssistantStore((s) => s.setOpen);
+  const openPanel = useAssistantStore((s) => s.openPanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const preferredModel = useAssistantStore((s) => s.model);
 
   return useCallback(() => {
-    setOpen(true);
+    openPanel("assistant");
 
     const [empty] = db.db.executeKysely((q) =>
       q
@@ -1141,7 +1141,7 @@ export function useNewConversation() {
       }),
     );
     setActiveConversation(id);
-  }, [db, setOpen, setActiveConversation, preferredModel]);
+  }, [db, openPanel, setActiveConversation, preferredModel]);
 }
 
 export function AssistantSidebar() {

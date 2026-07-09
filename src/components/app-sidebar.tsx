@@ -17,6 +17,7 @@ import {
   ArrowUpRightIcon,
   Bot,
   Brain,
+  CalendarCheck,
   ChevronDown,
   ChevronsUpDown,
   Coins,
@@ -30,6 +31,7 @@ import {
   PanelLeftOpen,
   Plug,
   PlusIcon,
+  Repeat,
   Search,
   Sparkles,
   StickyNote,
@@ -82,7 +84,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: Home },
+  { to: "/today", label: "Today", icon: CalendarCheck },
   { to: "/notes", label: "Notes", icon: StickyNote },
+  { to: "/habits", label: "Habits", icon: Repeat },
 ] as const;
 
 const agentNavItems = [
@@ -179,10 +183,33 @@ function SidebarNavLink({
   );
 }
 
+function TodayToggle({ collapsed }: { collapsed: boolean }) {
+  const activePanel = useAssistantStore((s) => s.activePanel);
+  const togglePanel = useAssistantStore((s) => s.togglePanel);
+  const open = activePanel === "today";
+
+  return (
+    <SidebarTooltip label="Today" collapsed={collapsed}>
+      <Button
+        type="button"
+        variant="ghost"
+        size={collapsed ? "icon" : "sm"}
+        className={cn(!collapsed && "w-full justify-start gap-2", open && "text-primary")}
+        onClick={() => togglePanel("today")}
+        aria-label={open ? "Close today panel" : "Open today panel"}
+      >
+        <CalendarCheck className="size-4" />
+        {!collapsed && <span className="flex-1 text-left">Today</span>}
+      </Button>
+    </SidebarTooltip>
+  );
+}
+
 function AssistantToggle({ collapsed }: { collapsed: boolean }) {
-  const open = useAssistantStore((s) => s.open);
-  const toggle = useAssistantStore((s) => s.toggle);
+  const activePanel = useAssistantStore((s) => s.activePanel);
+  const togglePanel = useAssistantStore((s) => s.togglePanel);
   const assistantEnabled = useAssistantEnabled();
+  const open = activePanel === "assistant";
 
   if (!assistantEnabled) {
     return null;
@@ -195,7 +222,7 @@ function AssistantToggle({ collapsed }: { collapsed: boolean }) {
         variant="ghost"
         size={collapsed ? "icon" : "sm"}
         className={cn(!collapsed && "w-full justify-start gap-2", open && "text-primary")}
-        onClick={toggle}
+        onClick={() => togglePanel("assistant")}
         aria-label={open ? "Close assistant" : "Open assistant"}
         aria-keyshortcuts={TOGGLE_ASSISTANT_HOTKEY}
       >
@@ -389,6 +416,7 @@ function SidebarContent({
       <div className={cn("flex p-2", collapsed ? "flex-col items-center gap-1" : "flex-col gap-1")}>
         {onToggleCollapse && (
           <>
+            <TodayToggle collapsed={collapsed} />
             <AssistantToggle collapsed={collapsed} />
             <SidebarTooltip
               label={
@@ -770,7 +798,7 @@ function MobileSidebar() {
   }, [router]);
 
   const openCommand = useCommandStore((s) => s.open);
-  const toggleAssistant = useAssistantStore((s) => s.toggle);
+  const togglePanel = useAssistantStore((s) => s.togglePanel);
   const assistantEnabled = useAssistantEnabled();
 
   return (
@@ -795,13 +823,26 @@ function MobileSidebar() {
         </SheetContent>
       </Sheet>
 
+      <Button
+        variant="secondary"
+        size="icon"
+        className={cn(
+          "!rounded-full fixed right-4 z-40 size-11 shadow-lg md:hidden",
+          assistantEnabled ? "bottom-[8.5rem]" : "bottom-[4.75rem]",
+        )}
+        aria-label="Open today panel"
+        onClick={() => togglePanel("today")}
+      >
+        <CalendarCheck className="size-5" />
+      </Button>
+
       {assistantEnabled && (
         <Button
           variant="secondary"
           size="icon"
           className="!rounded-full fixed right-4 bottom-[4.75rem] z-40 size-11 shadow-lg md:hidden"
           aria-label="Open assistant"
-          onClick={toggleAssistant}
+          onClick={() => togglePanel("assistant")}
         >
           <Sparkles className="size-5" />
         </Button>
@@ -823,7 +864,7 @@ function MobileSidebar() {
 export function AppSidebar() {
   const collapsed = useSidebarStore((s) => s.collapsed);
   const toggle = useSidebarStore((s) => s.toggle);
-  const toggleAssistant = useAssistantStore((s) => s.toggle);
+  const togglePanel = useAssistantStore((s) => s.togglePanel);
   const assistantEnabled = useAssistantEnabled();
 
   useHotkey(TOGGLE_SIDEBAR_HOTKEY, (e) => {
@@ -837,7 +878,7 @@ export function AppSidebar() {
     (e) => {
       if (!window.matchMedia("(min-width: 768px)").matches) return;
       e.preventDefault();
-      toggleAssistant();
+      togglePanel("assistant");
     },
     { enabled: assistantEnabled },
   );

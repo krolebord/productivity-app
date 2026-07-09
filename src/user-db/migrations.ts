@@ -267,6 +267,60 @@ const migrations = createMigrations((b) => ({
         .addColumn("updatedAt", "integer", (col) => col.notNull()),
     ),
   ],
+  17: [
+    b.addColumn({
+      table: "_item",
+      column: "dueAt",
+      type: "integer",
+      defaultValue: null,
+    }),
+    b.addColumn({
+      table: "_item",
+      column: "hasDueTime",
+      type: "boolean",
+      defaultValue: false,
+      build: (col) => col.notNull(),
+    }),
+    b.addColumn({
+      table: "_item",
+      column: "completedAt",
+      type: "integer",
+      defaultValue: null,
+    }),
+    b.createTable("_habit", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("name", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("scheduleType", "text", (col) => col.notNull().defaultTo("daily"))
+        .addColumn("scheduleInterval", "integer", (col) => col.notNull().defaultTo(1))
+        .addColumn("scheduleWeekdays", "text", (col) => col.notNull().defaultTo("[]"))
+        .addColumn("timeOfDay", "text")
+        .addColumn("target", "real", (col) => col.notNull().defaultTo(1))
+        .addColumn("unit", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("order", "real", (col) => col.notNull().defaultTo(0))
+        .addColumn("archivedAt", "integer")
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+    b.createTable("_habit_entry", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("habitId", "text", (col) => col.notNull())
+        .addColumn("date", "text", (col) => col.notNull())
+        .addColumn("value", "real", (col) => col.notNull().defaultTo(0))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+    b.createIndex("habit_entry_habit_date", (idx) =>
+      idx.on("_habit_entry").columns(["habitId", "date"]).where(sql.ref("tombstone"), "=", 0),
+    ),
+    b.createIndex("habit_entry_date", (idx) =>
+      idx.on("_habit_entry").columns(["date"]).where(sql.ref("tombstone"), "=", 0),
+    ),
+    b.createIndex("item_due", (idx) => idx.on("_item").columns(["dueAt"]).where(sql.ref("tombstone"), "=", 0)),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -291,8 +345,34 @@ export const syncDbSchema = defineSyncSchema({
           .text()
           .default("[]")
           .describe('JSON array of normalized tag strings, e.g. ["work","idea"]. Defaults to "[]".'),
+        dueAt: t
+          .integer()
+          .nullable()
+          .default(null)
+          .describe(
+            "When the note is due / appears on the Today agenda (epoch ms). Null means undated — a plain note, not an agenda item.",
+          ),
+        hasDueTime: t
+          .boolean()
+          .default(false)
+          .describe(
+            "Whether dueAt carries a meaningful time-of-day. False means all-day (only the calendar date of dueAt matters).",
+          ),
+        completedAt: t
+          .integer()
+          .nullable()
+          .default(null)
+          .describe(
+            "Epoch ms when the user checked this dated note off the agenda. Completing dismisses it from Today but does not delete or otherwise change the note itself. Null when not completed.",
+          ),
       })
-      .describe("The user's notes."),
+      .describe(
+        [
+          "The user's notes. Notes with a non-null `dueAt` also act as todos/agenda items on the Today",
+          "view: they appear on the day of `dueAt` until `completedAt` is set. Undated notes (`dueAt` null)",
+          "are ordinary notes and do not appear on the agenda.",
+        ].join(" "),
+      ),
     currency_rate: t
       .table({
         date: t.text().describe('Rate date as "YYYY-MM-DD".'),
@@ -529,6 +609,78 @@ export const syncDbSchema = defineSyncSchema({
         updatedAt: t.integer(),
       })
       .describe("Singleton dashboard preferences synced across the user's devices."),
+    habit: t
+      .table({
+        name: t.text().default("").describe("Display name of the habit."),
+        scheduleType: t
+          .enum(["daily", "weekly", "everyNDays", "weekdays"])
+          .default("daily")
+          .describe(
+            [
+              'How often the habit is due: "daily" = every day; "weekdays" = only on the ISO weekdays listed',
+              'in scheduleWeekdays; "weekly" = once per calendar week (Monday-start), shown until done that',
+              'week; "everyNDays" = due scheduleInterval days after the last completed day, shown until done.',
+            ].join(" "),
+          ),
+        scheduleInterval: t
+          .integer()
+          .default(1)
+          .describe('The N for scheduleType "everyNDays" (days between completions). Unused for other schedule types.'),
+        scheduleWeekdays: t
+          .text()
+          .default("[]")
+          .describe(
+            'JSON array of ISO weekday numbers 1 (Mon) through 7 (Sun), used only when scheduleType is "weekdays". Defaults to "[]".',
+          ),
+        timeOfDay: t
+          .enum(["morning", "afternoon", "evening", "night"])
+          .nullable()
+          .default(null)
+          .describe("Preferred time bucket: morning | afternoon | evening | night. Null means anytime."),
+        target: t
+          .real()
+          .default(1)
+          .describe(
+            "Daily quantity target. A habit counts as done for a day when the sum of that day's habit_entry.value is >= target. 1 means a simple check-off.",
+          ),
+        unit: t.text().default("").describe('Optional unit label for the target, e.g. "pages". Empty when unused.'),
+        order: t.real().default(0).describe("Manual sort position, ascending."),
+        archivedAt: t
+          .integer()
+          .nullable()
+          .default(null)
+          .describe("Epoch ms when the habit was soft-archived, or null if active. Habits are never hard-deleted."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "Recurring habits shown on the Today view. Schedule semantics: daily = every day; weekdays = on the",
+          "days listed in scheduleWeekdays; weekly = once per Monday-start calendar week (shown until done that",
+          "week); everyNDays = due scheduleInterval days after the last completed day (shown until done).",
+          "Done-for-a-day means the sum of habit_entry.value for that date is >= target. Soft-archive via",
+          "archivedAt rather than deleting.",
+        ].join(" "),
+      ),
+    habit_entry: t
+      .table({
+        habitId: t.text().describe("References habit.id."),
+        date: t.text().describe('Local calendar day as "YYYY-MM-DD".'),
+        value: t
+          .real()
+          .default(0)
+          .describe(
+            "Accumulated amount logged for this habit on this date. The habit counts as done for the day when value >= habit.target.",
+          ),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "Per-day progress toward a habit. One logical entry per (habitId, date); value accumulates toward",
+          "habit.target. The habit is done for that day when value >= target.",
+        ].join(" "),
+      ),
   },
   migrations,
 });
@@ -543,6 +695,8 @@ export type SkillItem = typeof syncDbSchema.tables.skill.$row;
 export type MonobankConnectionMetaItem = typeof syncDbSchema.tables.monobank_connection.$row;
 export type MonobankAccountItem = typeof syncDbSchema.tables.monobank_account.$row;
 export type DashboardSettingsItem = typeof syncDbSchema.tables.dashboard_settings.$row;
+export type HabitItem = typeof syncDbSchema.tables.habit.$row;
+export type HabitEntryItem = typeof syncDbSchema.tables.habit_entry.$row;
 
 export type UserDb = (typeof syncDbSchema)["~clientSchema"];
 

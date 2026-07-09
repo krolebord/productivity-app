@@ -9,8 +9,10 @@ import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
 import { CategoryImportanceDialog } from "@/components/category-importance-dialog";
 import { CommandPalette } from "@/components/command-palette";
 import { Devtools } from "@/components/devtools";
+import { HabitDialog } from "@/components/habit-dialog";
 import { NoteDialog } from "@/components/note-dialog";
 import { SyncStatusMonitor } from "@/components/sync-status-monitor";
+import { TodayPanel } from "@/components/today/today-panel";
 import { TransactionDialog } from "@/components/transaction-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { clearCachedAuth, readCachedAuth, writeCachedAuth } from "@/lib/auth-cache";
@@ -55,12 +57,38 @@ export const Route = createFileRoute("/_app")({
   staleTime: 1000 * 60 * 5,
 });
 
+function RightRailContent({ panel }: { panel: "assistant" | "today" }) {
+  if (panel === "today") {
+    return <TodayPanel />;
+  }
+
+  // useAgentChat suspends while fetching history — keep that contained to the panel
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center bg-background">
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <AssistantSidebar />
+    </Suspense>
+  );
+}
+
 function RouteComponent() {
   const { db, auth } = Route.useLoaderData();
-  const assistantOpen = useAssistantStore((s) => s.open);
+  const activePanel = useAssistantStore((s) => s.activePanel);
   const isDesktop = useIsDesktop();
   const assistantEnabled = auth.assistantEnabled;
-  const showAssistant = assistantEnabled && assistantOpen && isDesktop;
+  // Assistant stays gated; Today is available to everyone. One right panel at a time.
+  const resolvedPanel =
+    activePanel === "assistant" && !assistantEnabled
+      ? null
+      : activePanel === "assistant" || activePanel === "today"
+        ? activePanel
+        : null;
+  const showRightPanel = resolvedPanel !== null && isDesktop;
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "assistant-layout" });
 
   return (
@@ -79,42 +107,26 @@ function RouteComponent() {
               <Outlet />
             </main>
           </Panel>
-          {showAssistant && (
+          {showRightPanel && resolvedPanel && (
             <>
               <Separator className="w-px bg-border transition-colors data-[separator=active]:bg-ring data-[separator=hover]:bg-ring" />
               <Panel id="assistant" defaultSize="400px" minSize="280px" maxSize="50%">
-                {/* useAgentChat suspends while fetching history — keep that contained to the panel */}
-                <Suspense
-                  fallback={
-                    <div className="flex h-full items-center justify-center bg-background">
-                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                    </div>
-                  }
-                >
-                  <AssistantSidebar />
-                </Suspense>
+                <RightRailContent panel={resolvedPanel} />
               </Panel>
             </>
           )}
         </Group>
       </div>
-      {/* Mobile: the assistant fills the screen instead of docking in a panel. Its header X closes it. */}
-      {assistantEnabled && assistantOpen && !isDesktop && (
+      {/* Mobile: the right panel fills the screen instead of docking. Its header X closes it. */}
+      {resolvedPanel && !isDesktop && (
         <div className="fixed inset-0 z-50 bg-background md:hidden">
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center bg-background">
-                <Loader2 className="size-4 animate-spin text-muted-foreground" />
-              </div>
-            }
-          >
-            <AssistantSidebar />
-          </Suspense>
+          <RightRailContent panel={resolvedPanel} />
         </div>
       )}
       <CommandPalette />
       <NoteDialog />
       <AccountDialog />
+      <HabitDialog />
       <TransactionDialog />
       <CategoryImportanceDialog />
       <Devtools />

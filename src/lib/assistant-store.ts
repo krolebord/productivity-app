@@ -2,8 +2,11 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId } from "@/agent/models";
 
+export type RightPanel = "assistant" | "today";
+
 interface AssistantStore {
-  open: boolean;
+  /** Which right-rail panel is open. Only one at a time; null means closed. */
+  activePanel: RightPanel | null;
   activeConversationId: string | null;
   model: AssistantModelId;
   /**
@@ -18,8 +21,9 @@ interface AssistantStore {
    * return focus to the input without holding a ref to it.
    */
   composerFocusNonce: number;
-  toggle: () => void;
-  setOpen: (open: boolean) => void;
+  openPanel: (panel: RightPanel) => void;
+  closePanel: () => void;
+  togglePanel: (panel: RightPanel) => void;
   setActiveConversation: (id: string | null) => void;
   setModel: (model: AssistantModelId) => void;
   setInputDraft: (value: string) => void;
@@ -27,16 +31,22 @@ interface AssistantStore {
   requestComposerFocus: () => void;
 }
 
+type PersistedAssistantState = Partial<AssistantStore> & {
+  /** Legacy boolean from before activePanel; migrated in merge. */
+  open?: boolean;
+};
+
 export const useAssistantStore = create<AssistantStore>()(
   persist(
     (set) => ({
-      open: false,
+      activePanel: null,
       activeConversationId: null,
       model: DEFAULT_ASSISTANT_MODEL,
       inputDraft: "",
       composerFocusNonce: 0,
-      toggle: () => set((s) => ({ open: !s.open })),
-      setOpen: (open) => set({ open }),
+      openPanel: (panel) => set({ activePanel: panel }),
+      closePanel: () => set({ activePanel: null }),
+      togglePanel: (panel) => set((s) => ({ activePanel: s.activePanel === panel ? null : panel })),
       setActiveConversation: (id) => set({ activeConversationId: id }),
       setModel: (model) => set({ model }),
       setInputDraft: (inputDraft) => set({ inputDraft }),
@@ -50,13 +60,22 @@ export const useAssistantStore = create<AssistantStore>()(
     {
       name: "productivity-assistant",
       partialize: (state) => ({
-        open: state.open,
+        activePanel: state.activePanel,
         activeConversationId: state.activeConversationId,
         model: state.model,
       }),
-      // Guard against a persisted id that's no longer in the supported list.
+      // Guard against a persisted id that's no longer in the supported list,
+      // and migrate the legacy `open` boolean into `activePanel`.
       merge: (persisted, current) => {
-        const state = { ...current, ...(persisted as Partial<AssistantStore>) };
+        const raw = (persisted ?? {}) as PersistedAssistantState;
+        const { open, ...rest } = raw;
+        let activePanel = current.activePanel;
+        if ("activePanel" in rest) {
+          activePanel = rest.activePanel ?? null;
+        } else if (typeof open === "boolean") {
+          activePanel = open ? "assistant" : null;
+        }
+        const state = { ...current, ...rest, activePanel };
         return { ...state, model: resolveAssistantModelId(state.model) };
       },
     },
