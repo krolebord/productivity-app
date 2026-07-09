@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { Suspense } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { AccountDialog } from "@/components/account-dialog";
+import { AppDndProvider } from "@/components/app-dnd";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
 import { CategoryImportanceDialog } from "@/components/category-importance-dialog";
@@ -93,43 +94,45 @@ function RouteComponent() {
 
   return (
     <DbProvider db={db}>
-      <SyncStatusMonitor />
-      <div className="flex h-screen overflow-hidden">
-        <AppSidebar />
-        <Group
-          orientation="horizontal"
-          className="min-w-0 flex-1"
-          defaultLayout={defaultLayout}
-          onLayoutChanged={onLayoutChanged}
-        >
-          <Panel id="main" minSize="40%">
-            <main className="h-full overflow-auto">
-              <Outlet />
-            </main>
-          </Panel>
-          {showRightPanel && resolvedPanel && (
-            <>
-              <Separator className="w-px bg-border transition-colors data-[separator=active]:bg-ring data-[separator=hover]:bg-ring" />
-              <Panel id="assistant" defaultSize="400px" minSize="280px" maxSize="50%">
-                <RightRailContent panel={resolvedPanel} />
-              </Panel>
-            </>
-          )}
-        </Group>
-      </div>
-      {/* Mobile: the right panel fills the screen instead of docking. Its header X closes it. */}
-      {resolvedPanel && !isDesktop && (
-        <div className="fixed inset-0 z-50 bg-background md:hidden">
-          <RightRailContent panel={resolvedPanel} />
+      <AppDndProvider>
+        <SyncStatusMonitor />
+        <div className="flex h-screen overflow-hidden">
+          <AppSidebar />
+          <Group
+            orientation="horizontal"
+            className="min-w-0 flex-1"
+            defaultLayout={defaultLayout}
+            onLayoutChanged={onLayoutChanged}
+          >
+            <Panel id="main" minSize="40%">
+              <main className="h-full overflow-auto">
+                <Outlet />
+              </main>
+            </Panel>
+            {showRightPanel && resolvedPanel && (
+              <>
+                <Separator className="w-px bg-border transition-colors data-[separator=active]:bg-ring data-[separator=hover]:bg-ring" />
+                <Panel id="assistant" defaultSize="400px" minSize="280px" maxSize="50%">
+                  <RightRailContent panel={resolvedPanel} />
+                </Panel>
+              </>
+            )}
+          </Group>
         </div>
-      )}
-      <CommandPalette />
-      <NoteDialog />
-      <AccountDialog />
-      <HabitDialog />
-      <TransactionDialog />
-      <CategoryImportanceDialog />
-      <Devtools />
+        {/* Mobile: the right panel fills the screen instead of docking. Its header X closes it. */}
+        {resolvedPanel && !isDesktop && (
+          <div className="fixed inset-0 z-50 bg-background md:hidden">
+            <RightRailContent panel={resolvedPanel} />
+          </div>
+        )}
+        <CommandPalette />
+        <NoteDialog />
+        <AccountDialog />
+        <HabitDialog />
+        <TransactionDialog />
+        <CategoryImportanceDialog />
+        <Devtools />
+      </AppDndProvider>
     </DbProvider>
   );
 }

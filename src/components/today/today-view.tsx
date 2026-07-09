@@ -1,3 +1,4 @@
+import { useDroppable } from "@dnd-kit/core";
 import { format } from "date-fns";
 import {
   CalendarDays,
@@ -9,6 +10,7 @@ import {
   ChevronUp,
   PlusIcon,
 } from "lucide-react";
+import { calendarDayDroppableId, TODAY_AREA_DROPPABLE_ID } from "@/components/app-dnd";
 import { useNoteDialogStore } from "@/components/note-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,10 +25,14 @@ export function TodayView() {
   const agenda = useAgenda();
   const openNoteDialog = useNoteDialogStore((s) => s.open);
 
+  // No-op drop target covering the whole view: keeps a dragged note's overlay
+  // in calendar mode while it moves between day cells instead of flickering.
+  const areaDroppable = useDroppable({ id: TODAY_AREA_DROPPABLE_ID });
+
   const headerLabel = agenda.isSelectedToday ? "Today" : format(agenda.selectedDate, "EEE, MMM d");
 
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={areaDroppable.setNodeRef} className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <h1 className="min-w-0 flex-1 truncate font-semibold text-xl">{headerLabel}</h1>
         {/* Always mounted so appearing/disappearing doesn't shift the header */}
@@ -184,8 +190,12 @@ function DayCell({
   muted?: boolean;
   onSelect: (dateKey: string) => void;
 }) {
+  // Notes dragged from the notes grid can be dropped here to reschedule them.
+  const droppable = useDroppable({ id: calendarDayDroppableId(day.dateKey) });
+
   return (
     <button
+      ref={droppable.setNodeRef}
       type="button"
       onClick={() => onSelect(day.dateKey)}
       aria-label={format(day.date, "EEEE, MMMM d")}
@@ -196,6 +206,7 @@ function DayCell({
         selected ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         !selected && isToday && "text-foreground",
         muted && !selected && "opacity-40",
+        droppable.isOver && "opacity-100 ring-2 ring-ring",
       )}
     >
       {initial && <span className="font-medium text-[10px] uppercase leading-none">{initial}</span>}

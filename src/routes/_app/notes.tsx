@@ -1,10 +1,11 @@
-import type { CollisionDetection, DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
-import { closestCenter, DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import type { CollisionDetection, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
+import { closestCenter, DragOverlay } from "@dnd-kit/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { PlusIcon, StickyNote, XIcon } from "lucide-react";
+import { CalendarDays, PlusIcon, StickyNote, XIcon } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { z } from "zod";
+import { isCalendarDropTarget, useDndDelegate } from "@/components/app-dnd";
 import { useMasonryLayout } from "@/components/masonry-grid";
 import { NoteCard, NoteCardContent } from "@/components/note-card";
 import { useCreateNote, useNoteDialogStore } from "@/components/note-dialog";
@@ -112,6 +113,12 @@ function NotesPage() {
   const [dragIds, setDragIds] = useState<string[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // While hovering a Today-panel calendar day, the drag overlay collapses to a
+  // small chip so the day cell under it stays visible. The chip is anchored to
+  // the grab point because the overlay wrapper keeps the card's dimensions.
+  const [overCalendar, setOverCalendar] = useState(false);
+  const [grabOffset, setGrabOffset] = useState<{ x: number; y: number } | null>(null);
+
   const orderedNotes = useMemo(() => {
     if (!dragIds) return visibleNotes;
     const byId = new Map(visibleNotes.map((note) => [note.id, note]));
@@ -131,8 +138,6 @@ function NotesPage() {
     columnWidth: 240,
     gap: 16,
   });
-
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const lastReorderPointerRef = useRef<{ x: number; y: number } | null>(null);
@@ -175,10 +180,26 @@ function NotesPage() {
     setDragIds(notes.map((note) => note.id));
     lastPointerRef.current = null;
     lastReorderPointerRef.current = null;
+
+    setOverCalendar(false);
+    setGrabOffset(null);
+  }
+
+  // The active rect isn't measured yet in onDragStart, so the grab offset is
+  // captured on the first move: activator coords are the drag-start pointer
+  // position, and the initial rect is where the card was at that moment.
+  function handleDragMove(event: DragMoveEvent) {
+    if (grabOffset) return;
+    const rect = event.active.rect.current.initial;
+    const activator = event.activatorEvent;
+    if (rect && activator instanceof PointerEvent) {
+      setGrabOffset({ x: activator.clientX - rect.left, y: activator.clientY - rect.top });
+    }
   }
 
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
+    setOverCalendar(over != null && isCalendarDropTarget(String(over.id)));
     if (!over || over.id === active.id) return;
 
     // Reordering reflows the masonry, which can change the collision result
@@ -208,6 +229,7 @@ function NotesPage() {
   const finishDrag = useCallback(() => {
     setActiveId(null);
     setDragIds(null);
+    setOverCalendar(false);
     recentlyDraggedRef.current = true;
     setTimeout(() => {
       recentlyDraggedRef.current = false;
@@ -261,6 +283,17 @@ function NotesPage() {
       });
     }
   }
+
+  // Drag handling lives in the app-shell AppDndProvider so notes can also be
+  // dropped on Today-panel calendar days; this page owns everything else.
+  useDndDelegate({
+    collisionDetection,
+    onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDragCancel: finishDrag,
+  });
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-6">
@@ -337,43 +370,52 @@ function NotesPage() {
         </div>
       )}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={collisionDetection}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        onDragCancel={finishDrag}
-      >
-        <div {...masonry.outerProps}>
-          <div {...masonry.innerProps}>
-            {orderedNotes.map((note) => {
-              const itemProps = masonry.getItemProps(note.id);
-              return (
-                <div key={note.id} ref={itemProps.ref} style={itemProps.style}>
-                  <NoteCard
-                    note={note}
-                    disabled={isFiltering}
-                    onTagClick={toggleTag}
-                    activeTags={selectedTags}
-                    onOpen={() => {
-                      if (!recentlyDraggedRef.current) openNoteDialog(note.id);
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
+      <div {...masonry.outerProps}>
+        <div {...masonry.innerProps}>
+          {orderedNotes.map((note) => {
+            const itemProps = masonry.getItemProps(note.id);
+            return (
+              <div key={note.id} ref={itemProps.ref} style={itemProps.style}>
+                <NoteCard
+                  note={note}
+                  disabled={isFiltering}
+                  onTagClick={toggleTag}
+                  activeTags={selectedTags}
+                  onOpen={() => {
+                    if (!recentlyDraggedRef.current) openNoteDialog(note.id);
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
+      </div>
 
-        <DragOverlay dropAnimation={{ duration: 200, easing: "ease" }}>
-          {activeNote && (
+      <DragOverlay dropAnimation={{ duration: 200, easing: "ease" }}>
+        {activeNote &&
+          (overCalendar ? (
+            <div className="relative h-full w-full">
+              <div
+                className="absolute flex w-max max-w-56 cursor-grabbing items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-card-foreground shadow-xl"
+                style={
+                  grabOffset
+                    ? // Snap the chip to the cursor: centered horizontally, its
+                      // bottom edge just above the pointer so the target day
+                      // cell below stays visible.
+                      { left: grabOffset.x, top: grabOffset.y, transform: "translate(-50%, calc(-100% - 2px))" }
+                    : undefined
+                }
+              >
+                <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm">{activeNote.title.trim() || "Untitled"}</span>
+              </div>
+            </div>
+          ) : (
             <div className="cursor-grabbing rounded-lg border bg-card text-card-foreground shadow-xl">
               <NoteCardContent note={activeNote} />
             </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+          ))}
+      </DragOverlay>
     </div>
   );
 }
