@@ -1,4 +1,4 @@
-import { addDays, format, getISODay, startOfWeek } from "date-fns";
+import { addDays, endOfMonth, format, getISODay, startOfMonth, startOfWeek } from "date-fns";
 import { localMidnightMs } from "./date-time";
 
 export type AgendaBucket = "overdue" | "morning" | "afternoon" | "evening" | "night" | "anytime";
@@ -105,6 +105,17 @@ export function startOfWeekMonday(date: Date): Date {
 export function getWeekDays(date: Date): Date[] {
   const start = startOfWeekMonday(date);
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
+/** All days of the Mon-start week grid covering `date`'s month (4–6 full weeks). */
+export function getMonthGridDays(date: Date): Date[] {
+  const start = startOfWeekMonday(startOfMonth(date));
+  const endExclusive = addDays(startOfWeekMonday(endOfMonth(date)), 7);
+  const days: Date[] = [];
+  for (let day = start; day < endExclusive; day = addDays(day, 1)) {
+    days.push(day);
+  }
+  return days;
 }
 
 export function addLocalDays(date: Date, days: number): Date {

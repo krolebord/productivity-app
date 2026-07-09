@@ -1,13 +1,16 @@
 import { generateId } from "@sqlite-sync/core";
+import { addMonths } from "date-fns";
 import { useCallback, useMemo, useState } from "react";
 import { parseScheduleWeekdays } from "@/components/habit-dialog";
 import {
   type AgendaHabit,
   type AgendaNote,
   type AgendaSection,
+  addLocalDays,
   buildAgendaSections,
   dayHasIncompleteNotes,
   getDayHabitProgress,
+  getMonthGridDays,
   getWeekDays,
   type HabitEntryValuesByDate,
   startOfLocalDay,
@@ -17,7 +20,7 @@ import {
 import { combineLocalDateAndTime, localMidnightMs } from "@/lib/date-time";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 
-export type WeekDayInfo = {
+export type CalendarDayInfo = {
   date: Date;
   dateKey: string;
   hasIncompleteNotes: boolean;
@@ -28,15 +31,20 @@ export function useAgenda() {
   const db = useDb();
   const [selectedDate, setSelectedDate] = useState(() => startOfLocalDay(new Date()));
 
+  const [calendarExpanded, setCalendarExpanded] = useState(false);
+
   const today = startOfLocalDay(new Date());
   const todayKey = toDateKey(today);
   const selectedKey = toDateKey(selectedDate);
-  const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
-  const weekStart = weekDays[0] ?? selectedDate;
-  const weekEnd = weekDays[6] ?? selectedDate;
-  const weekEndKey = toDateKey(weekEnd);
-  const weekStartMs = localMidnightMs(weekStart);
-  const weekEndExclusiveMs = localMidnightMs(weekEnd) + 24 * 60 * 60 * 1000;
+  const visibleDays = useMemo(
+    () => (calendarExpanded ? getMonthGridDays(selectedDate) : getWeekDays(selectedDate)),
+    [calendarExpanded, selectedDate],
+  );
+  const visibleStart = visibleDays[0] ?? selectedDate;
+  const visibleEnd = visibleDays[visibleDays.length - 1] ?? selectedDate;
+  const visibleEndKey = toDateKey(visibleEnd);
+  const visibleStartMs = localMidnightMs(visibleStart);
+  const visibleEndExclusiveMs = localMidnightMs(visibleEnd) + 24 * 60 * 60 * 1000;
   const todayStartMs = localMidnightMs(today);
 
   const { data: habitsRaw } = useDbQuery((q) => q.selectFrom("habit").selectAll().orderBy("order", "asc"));
@@ -46,7 +54,7 @@ export function useAgenda() {
     [habitsRaw],
   );
 
-  // Notes due in the visible week, plus incomplete notes before today (overdue).
+  // Notes due in the visible calendar range, plus incomplete notes before today (overdue).
   const { data: notes } = useDbQuery((q) =>
     q
       .selectFrom("item")
@@ -55,7 +63,7 @@ export function useAgenda() {
       .where("dueAt", "is not", null)
       .where((eb) =>
         eb.or([
-          eb.and([eb("dueAt", ">=", weekStartMs), eb("dueAt", "<", weekEndExclusiveMs)]),
+          eb.and([eb("dueAt", ">=", visibleStartMs), eb("dueAt", "<", visibleEndExclusiveMs)]),
           eb.and([eb("dueAt", "<", todayStartMs), eb("completedAt", "is", null)]),
         ]),
       ),
@@ -66,7 +74,7 @@ export function useAgenda() {
   // All entries (local SQLite is cheap). Needed so everyNDays can find the last
   // completion even when it falls outside the visible week.
   const { data: entriesRaw } = useDbQuery((q) =>
-    q.selectFrom("habit_entry").select(["id", "habitId", "date", "value"]).where("date", "<=", weekEndKey),
+    q.selectFrom("habit_entry").select(["id", "habitId", "date", "value"]).where("date", "<=", visibleEndKey),
   );
 
   const entriesByHabit = useMemo(() => {
@@ -90,9 +98,9 @@ export function useAgenda() {
     return map;
   }, [entriesRaw]);
 
-  const weekDayInfos: WeekDayInfo[] = useMemo(
+  const dayInfos: CalendarDayInfo[] = useMemo(
     () =>
-      weekDays.map((date) => {
+      visibleDays.map((date) => {
         const dateKey = toDateKey(date);
         const progress = getDayHabitProgress(habits, dateKey, todayKey, entriesByHabit);
         return {
@@ -102,7 +110,7 @@ export function useAgenda() {
           habitProgress: progress.due > 0 && dateKey <= todayKey ? progress : null,
         };
       }),
-    [weekDays, habits, todayKey, entriesByHabit, agendaNotes],
+    [visibleDays, habits, todayKey, entriesByHabit, agendaNotes],
   );
 
   const sections: AgendaSection[] = useMemo(
@@ -126,12 +134,18 @@ export function useAgenda() {
     setSelectedDate(startOfLocalDay(new Date()));
   }, []);
 
-  const shiftWeek = useCallback((delta: number) => {
-    setSelectedDate((prev) => {
-      const next = new Date(prev);
-      next.setDate(next.getDate() + delta * 7);
-      return startOfLocalDay(next);
-    });
+  // Shifts by week when collapsed, by month when expanded.
+  const shiftCalendar = useCallback(
+    (delta: number) => {
+      setSelectedDate((prev) =>
+        startOfLocalDay(calendarExpanded ? addMonths(prev, delta) : addLocalDays(prev, delta * 7)),
+      );
+    },
+    [calendarExpanded],
+  );
+
+  const toggleCalendarExpanded = useCallback(() => {
+    setCalendarExpanded((prev) => !prev);
   }, []);
 
   const toggleNoteCompleted = useCallback(
@@ -221,11 +235,13 @@ export function useAgenda() {
     selectedKey,
     todayKey,
     isSelectedToday: selectedKey === todayKey,
-    weekDayInfos,
+    calendarExpanded,
+    toggleCalendarExpanded,
+    dayInfos,
     sections,
     selectDateKey,
     goToToday,
-    shiftWeek,
+    shiftCalendar,
     toggleNoteCompleted,
     moveNoteToToday,
     toggleHabitDone,
