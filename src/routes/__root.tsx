@@ -17,7 +17,7 @@ export const Route = createRootRouteWithContext<{
 
 function NotFound() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-dvh items-center justify-center">
       <div className="flex flex-col items-center gap-4 text-center">
         <div className="flex size-14 items-center justify-center rounded-xl bg-muted text-muted-foreground">
           <FileQuestion className="size-7" />
@@ -36,7 +36,7 @@ function NotFound() {
 
 function ErrorPage({ error, reset }: ErrorComponentProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-dvh items-center justify-center">
       <div className="flex flex-col items-center gap-4 text-center">
         <div className="flex size-14 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
           <AlertTriangle className="size-7" />

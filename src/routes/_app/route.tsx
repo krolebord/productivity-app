@@ -96,7 +96,7 @@ function RouteComponent() {
     <DbProvider db={db}>
       <AppDndProvider>
         <SyncStatusMonitor />
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-dvh overflow-hidden">
           <AppSidebar />
           <Group
             orientation="horizontal"
