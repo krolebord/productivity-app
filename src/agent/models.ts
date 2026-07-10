@@ -1,6 +1,8 @@
 export type AssistantModelId =
   | "deepseek/deepseek-v4-flash"
   | "deepseek/deepseek-v4-pro"
+  | "openai/gpt-5.6-terra"
+  | "openai/gpt-5.6-luna"
   | "openai/gpt-5.5"
   | "openai/gpt-5.4-mini"
   | "google/gemini-3-flash-preview"
@@ -9,6 +11,8 @@ export type AssistantModelId =
   | "xiaomi/mimo-v2.5-pro";
 
 export type AssistantModelInputModality = "audio" | "file" | "image" | "text" | "video";
+
+export type AssistantReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
 
 export type AssistantModel = {
   id: AssistantModelId;
@@ -19,14 +23,34 @@ export type AssistantModel = {
     outputPerMillion: number;
     cacheReadPerMillion?: number;
   };
+  /** Reasoning effort to request for this model, when it supports reasoning. */
+  reasoningEffort?: AssistantReasoningEffort;
+  /** When false, the model is kept for backwards compatibility but not offered for selection. */
+  selectable?: boolean;
 };
 
 export const ASSISTANT_MODELS: AssistantModel[] = [
   {
+    id: "openai/gpt-5.6-terra",
+    label: "GPT-5.6 Terra",
+    inputModalities: ["text", "image", "file"],
+    pricing: { inputPerMillion: 2.5, outputPerMillion: 15, cacheReadPerMillion: 0.25 },
+    reasoningEffort: "medium",
+  },
+  {
+    id: "openai/gpt-5.6-luna",
+    label: "GPT-5.6 Luna",
+    inputModalities: ["text", "image", "file"],
+    pricing: { inputPerMillion: 1, outputPerMillion: 6, cacheReadPerMillion: 0.1 },
+    reasoningEffort: "medium",
+  },
+  {
+    // Kept for backwards compatibility with existing selections; no longer selectable.
     id: "openai/gpt-5.5",
     label: "GPT-5.5",
     inputModalities: ["text", "image", "file"],
     pricing: { inputPerMillion: 5, outputPerMillion: 30, cacheReadPerMillion: 0.5 },
+    selectable: false,
   },
   {
     id: "openai/gpt-5.4-mini",
@@ -72,7 +96,9 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
   },
 ];
 
-export const ASSISTANT_MODELS_BY_PRICE = [...ASSISTANT_MODELS].sort(
+export const SELECTABLE_ASSISTANT_MODELS = ASSISTANT_MODELS.filter((model) => model.selectable !== false);
+
+export const ASSISTANT_MODELS_BY_PRICE = [...SELECTABLE_ASSISTANT_MODELS].sort(
   (a, b) =>
     a.pricing.inputPerMillion - b.pricing.inputPerMillion || a.pricing.outputPerMillion - b.pricing.outputPerMillion,
 );
@@ -85,4 +111,8 @@ export function isAssistantModelId(value: unknown): value is AssistantModelId {
 
 export function resolveAssistantModelId(value: unknown): AssistantModelId {
   return isAssistantModelId(value) ? value : DEFAULT_ASSISTANT_MODEL;
+}
+
+export function getAssistantModel(id: AssistantModelId): AssistantModel | undefined {
+  return ASSISTANT_MODELS.find((model) => model.id === id);
 }

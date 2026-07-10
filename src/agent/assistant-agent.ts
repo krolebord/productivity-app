@@ -17,7 +17,7 @@ import { getServerByName } from "partyserver";
 import { z } from "zod";
 import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
 import { ChartSpecSchema } from "./chart-spec";
-import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId } from "./models";
+import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, getAssistantModel, resolveAssistantModelId } from "./models";
 
 type WorkspaceUploadInput = {
   filename: string;
@@ -124,7 +124,11 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     const openrouter = createOpenRouter({
       apiKey: this.env.OPENROUTER_API_KEY,
     });
-    return openrouter.chat(modelId, { usage: { include: true } });
+    const reasoningEffort = getAssistantModel(modelId)?.reasoningEffort;
+    return openrouter.chat(modelId, {
+      usage: { include: true },
+      ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
+    });
   }
 
   async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
