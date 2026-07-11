@@ -718,31 +718,10 @@ function ConversationView({
   const db = useDb();
   const closePanel = useAssistantStore((s) => s.closePanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
-  // The draft lives in the store so off-screen rows can append context tokens to it.
-  const input = useAssistantStore((s) => s.inputDraft);
-  const setInput = useAssistantStore((s) => s.setInputDraft);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const preferredModel = useAssistantStore((s) => s.model);
   const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const composerFocusNonce = useAssistantStore((s) => s.composerFocusNonce);
   const [agentIdCopied, setAgentIdCopied] = useState(false);
-
-  // Pull focus back to the composer when something requests it (e.g. attaching
-  // context from a card elsewhere on the page). rAF lets the sidebar mount first.
-  useEffect(() => {
-    if (composerFocusNonce === 0) return;
-    const frame = requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      const end = el.value.length;
-      el.setSelectionRange(end, end);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [composerFocusNonce]);
+  const agentId = `user-${auth.userId}:${conversation.id}`;
 
   useEffect(() => {
     return () => {
@@ -751,29 +730,6 @@ function ConversationView({
       }
     };
   }, []);
-
-  // The model belongs to the conversation. The store value is just the preferred
-  // default carried into the next new chat.
-  const preferredModel = useAssistantStore((s) => s.model);
-  const setPreferredModel = useAssistantStore((s) => s.setModel);
-  const model = resolveAssistantModelId(conversation.model);
-  const modelRef = useRef(model);
-  modelRef.current = model;
-
-  const agentId = `user-${auth.userId}:${conversation.id}`;
-  const agent = useAgent({ agent: "assistant-agent", name: agentId });
-  const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({
-    agent,
-    // Read from a ref so the selected model is always current without re-creating the chat.
-    body: () => ({ model: modelRef.current }),
-  });
-
-  function selectModel(next: AssistantModelId) {
-    // Persist on the conversation and remember it as the default for new chats.
-    setPreferredModel(next);
-    db.db.executeKysely((q) => q.updateTable("conversation").set({ model: next }).where("id", "=", conversation.id));
-  }
-  const isWorking = uploading || status === "submitted" || status === "streaming" || isServerStreaming;
 
   function deleteConversation(target: ConversationRow) {
     db.db.executeKysely((q) => q.deleteFrom("conversation").where("id", "=", target.id));
@@ -796,7 +752,7 @@ function ConversationView({
 
   function newConversation() {
     // An empty active conversation already is a "new" one — just stay on it.
-    if (messages.length === 0) return;
+    if (!conversation.title && conversation.totalTokens === 0) return;
     const id = generateId();
     const now = Date.now();
     db.db.executeKysely((q) =>
@@ -812,81 +768,6 @@ function ConversationView({
       }),
     );
     setActiveConversation(id);
-  }
-
-  async function uploadSelectedFiles() {
-    if (selectedFiles.length === 0) return [];
-
-    const formData = new FormData();
-    formData.set("conversationId", conversation.id);
-    for (const file of selectedFiles) {
-      formData.append("files", file);
-    }
-
-    const response = await fetch("/api/assistant/upload", {
-      method: "POST",
-      body: formData,
-    });
-    const body = (await response.json().catch(() => null)) as {
-      files?: UploadedWorkspaceFile[];
-      error?: string;
-    } | null;
-
-    if (!response.ok) {
-      throw new Error(body?.error ?? "Upload failed.");
-    }
-    return body?.files ?? [];
-  }
-
-  async function submit() {
-    const text = input.trim();
-    if ((!text && selectedFiles.length === 0) || isWorking) return;
-
-    setUploadError(null);
-    let uploadedFiles: UploadedWorkspaceFile[] = [];
-    if (selectedFiles.length > 0) {
-      setUploading(true);
-      try {
-        uploadedFiles = await uploadSelectedFiles();
-      } catch (error) {
-        setUploadError(error instanceof Error ? error.message : "Upload failed.");
-        return;
-      } finally {
-        setUploading(false);
-      }
-    }
-
-    const workspaceContext =
-      uploadedFiles.length > 0
-        ? [
-            "Uploaded files are available in the agent workspace:",
-            ...uploadedFiles.map((file) => `- ${file.filename}: ${file.path} (${file.mediaType}, ${file.size} bytes)`),
-          ].join("\n")
-        : "";
-    const messageText = [text, workspaceContext].filter(Boolean).join("\n\n");
-
-    sendMessage({ text: messageText });
-    if (messages.length === 0) {
-      db.db.executeKysely((q) =>
-        q
-          .updateTable("conversation")
-          .set({
-            title: (text || selectedFiles.map((file) => file.name).join(", ")).slice(0, 80),
-          })
-          .where("id", "=", conversation.id),
-      );
-    }
-    setInput("");
-    setSelectedFiles([]);
-  }
-
-  function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const files = getPastedImageFiles(event);
-    if (files.length === 0) return;
-
-    event.preventDefault();
-    setUploadError(null);
-    setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
   }
 
   return (
@@ -966,6 +847,143 @@ function ConversationView({
         </Tooltip>
       </div>
 
+      <Suspense
+        fallback={
+          <div className="flex min-h-0 flex-1 items-center justify-center bg-background">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          </div>
+        }
+      >
+        <ConversationChat agentId={agentId} conversation={conversation} />
+      </Suspense>
+    </div>
+  );
+}
+
+function ConversationChat({ agentId, conversation }: { agentId: string; conversation: ConversationRow }) {
+  const db = useDb();
+  // The draft lives in the store so off-screen rows can append context tokens to it.
+  const input = useAssistantStore((s) => s.inputDraft);
+  const setInput = useAssistantStore((s) => s.setInputDraft);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerFocusNonce = useAssistantStore((s) => s.composerFocusNonce);
+
+  // Pull focus back to the composer when something requests it (e.g. attaching
+  // context from a card elsewhere on the page). rAF lets the sidebar mount first.
+  useEffect(() => {
+    if (composerFocusNonce === 0) return;
+    const frame = requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [composerFocusNonce]);
+
+  // The model belongs to the conversation. Also remember changes as the default
+  // carried into the next new chat.
+  const setPreferredModel = useAssistantStore((s) => s.setModel);
+  const model = resolveAssistantModelId(conversation.model);
+  const modelRef = useRef(model);
+  modelRef.current = model;
+
+  const agent = useAgent({ agent: "assistant-agent", name: agentId });
+  const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({
+    agent,
+    // Read from a ref so the selected model is always current without re-creating the chat.
+    body: () => ({ model: modelRef.current }),
+  });
+
+  function selectModel(next: AssistantModelId) {
+    // Persist on the conversation and remember it as the default for new chats.
+    setPreferredModel(next);
+    db.db.executeKysely((q) => q.updateTable("conversation").set({ model: next }).where("id", "=", conversation.id));
+  }
+  const isWorking = uploading || status === "submitted" || status === "streaming" || isServerStreaming;
+
+  async function uploadSelectedFiles() {
+    if (selectedFiles.length === 0) return [];
+
+    const formData = new FormData();
+    formData.set("conversationId", conversation.id);
+    for (const file of selectedFiles) {
+      formData.append("files", file);
+    }
+
+    const response = await fetch("/api/assistant/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const body = (await response.json().catch(() => null)) as {
+      files?: UploadedWorkspaceFile[];
+      error?: string;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(body?.error ?? "Upload failed.");
+    }
+    return body?.files ?? [];
+  }
+
+  async function submit() {
+    const text = input.trim();
+    if ((!text && selectedFiles.length === 0) || isWorking) return;
+
+    setUploadError(null);
+    let uploadedFiles: UploadedWorkspaceFile[] = [];
+    if (selectedFiles.length > 0) {
+      setUploading(true);
+      try {
+        uploadedFiles = await uploadSelectedFiles();
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : "Upload failed.");
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    const workspaceContext =
+      uploadedFiles.length > 0
+        ? [
+            "Uploaded files are available in the agent workspace:",
+            ...uploadedFiles.map((file) => `- ${file.filename}: ${file.path} (${file.mediaType}, ${file.size} bytes)`),
+          ].join("\n")
+        : "";
+    const messageText = [text, workspaceContext].filter(Boolean).join("\n\n");
+
+    sendMessage({ text: messageText });
+    if (messages.length === 0) {
+      db.db.executeKysely((q) =>
+        q
+          .updateTable("conversation")
+          .set({
+            title: (text || selectedFiles.map((file) => file.name).join(", ")).slice(0, 80),
+          })
+          .where("id", "=", conversation.id),
+      );
+    }
+    setInput("");
+    setSelectedFiles([]);
+  }
+
+  function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = getPastedImageFiles(event);
+    if (files.length === 0) return;
+
+    event.preventDefault();
+    setUploadError(null);
+    setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       <StickToBottom className="relative min-h-0 flex-1 overflow-y-auto" resize="smooth" initial="instant">
         <StickToBottom.Content className="flex flex-col gap-4 p-3">
           {messages.length === 0 && (

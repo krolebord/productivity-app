@@ -1,7 +1,6 @@
 import { ORPCError } from "@orpc/client";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
-import { Suspense } from "react";
+import { useRef } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { AccountDialog } from "@/components/account-dialog";
 import { AppDndProvider } from "@/components/app-dnd";
@@ -63,18 +62,7 @@ function RightRailContent({ panel }: { panel: "assistant" | "today" }) {
     return <TodayPanel />;
   }
 
-  // useAgentChat suspends while fetching history — keep that contained to the panel
-  return (
-    <Suspense
-      fallback={
-        <div className="flex h-full items-center justify-center bg-background">
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        </div>
-      }
-    >
-      <AssistantSidebar />
-    </Suspense>
-  );
+  return <AssistantSidebar />;
 }
 
 function RouteComponent() {
@@ -89,6 +77,11 @@ function RouteComponent() {
       : activePanel === "assistant" || activePanel === "today"
         ? activePanel
         : null;
+  const mobileAssistantOpen = resolvedPanel === "assistant" && !isDesktop;
+  const hasMountedMobileAssistant = useRef(false);
+  if (mobileAssistantOpen) {
+    hasMountedMobileAssistant.current = true;
+  }
   const showRightPanel = resolvedPanel !== null && isDesktop;
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "assistant-layout" });
 
@@ -119,10 +112,19 @@ function RouteComponent() {
             )}
           </Group>
         </div>
-        {/* Mobile: the right panel fills the screen instead of docking. Its header X closes it. */}
-        {resolvedPanel && !isDesktop && (
+        {/* Keep the mobile assistant mounted after its first opening so closing it preserves chat state. */}
+        {hasMountedMobileAssistant.current && !isDesktop && (
+          <div
+            className={mobileAssistantOpen ? "fixed inset-0 z-50 bg-background md:hidden" : "hidden"}
+            aria-hidden={!mobileAssistantOpen}
+            inert={!mobileAssistantOpen}
+          >
+            <RightRailContent panel="assistant" />
+          </div>
+        )}
+        {resolvedPanel === "today" && !isDesktop && (
           <div className="fixed inset-0 z-50 bg-background md:hidden">
-            <RightRailContent panel={resolvedPanel} />
+            <RightRailContent panel="today" />
           </div>
         )}
         <CommandPalette />
