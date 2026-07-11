@@ -42,7 +42,7 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     label: "GPT-5.6 Luna",
     inputModalities: ["text", "image", "file"],
     pricing: { inputPerMillion: 1, outputPerMillion: 6, cacheReadPerMillion: 0.1 },
-    reasoningEffort: "medium",
+    reasoningEffort: "high",
   },
   {
     // Kept for backwards compatibility with existing selections; no longer selectable.
