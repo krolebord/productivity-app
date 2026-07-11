@@ -101,7 +101,7 @@ export function NoteCard({ note, onOpen, onTagClick, activeTags, disabled }: Not
         {...draggable.listeners}
       >
         {/* Hover actions */}
-        <div className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute top-1.5 right-1.5 hidden opacity-0 transition-opacity group-hover:opacity-100 md:block">
           <button
             type="button"
             className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"

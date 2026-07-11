@@ -1,14 +1,18 @@
 import { generateId } from "@sqlite-sync/core";
+import { Trash2Icon } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { parseTags, serializeTags } from "@/lib/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@/lib/use-debounced-callback";
+import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { NoteDueDateControl, type NoteDueFields } from "./note-due-date";
 import { NoteEditor, type NoteEditorHandle } from "./note-editor";
 import { TagInput } from "./tag-input";
+import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
+import { useInlineConfirm } from "./ui/inline-confirm";
 import { Input } from "./ui/input";
 
 export const useNoteDialogStore = create(
@@ -75,10 +79,12 @@ function NoteDialogContent({
   noteId,
   saveNote,
   onClose,
+  onDelete,
 }: {
   noteId: string;
   saveNote: DebouncedCallback<[NoteFields]>;
   onClose: () => void;
+  onDelete: () => void;
 }) {
   const {
     data: [note],
@@ -128,6 +134,8 @@ function NoteDialogContent({
     updateNote(fields);
   };
 
+  const deleteConfirm = useInlineConfirm({ onConfirm: onDelete });
+
   const isNew = !note?.title?.trim() && !note?.content?.trim();
 
   return (
@@ -159,8 +167,21 @@ function NoteDialogContent({
           onEscape={onClose}
         />
       </div>
-      <div className="shrink-0 border-t pt-2">
+      <div className="flex shrink-0 items-center justify-between border-t pt-2">
         <NoteDueDateControl dueAt={dueAt} hasDueTime={hasDueTime} onChange={handleDueChange} />
+        <Button
+          type="button"
+          variant={deleteConfirm.armed ? "destructive" : "ghost"}
+          size="icon-sm"
+          className={cn(
+            "md:hidden",
+            !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+          )}
+          aria-label={deleteConfirm.armed ? "Confirm delete note" : "Delete note"}
+          {...deleteConfirm.getButtonProps()}
+        >
+          <Trash2Icon />
+        </Button>
       </div>
     </>
   );
@@ -182,11 +203,23 @@ export function NoteDialog() {
     closeDialog();
   }
 
+  function deleteAndClose() {
+    saveNote.cancel();
+    db.db.executeKysely((q) => q.deleteFrom("item").where("id", "=", noteId));
+    closeDialog();
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && saveAndClose()}>
       <DialogContent className="flex flex-col gap-3 overflow-hidden pb-2 sm:max-w-lg sm:pb-2" showCloseButton={false}>
         {noteId ? (
-          <NoteDialogContent key={openRevision} noteId={noteId} saveNote={saveNote} onClose={saveAndClose} />
+          <NoteDialogContent
+            key={openRevision}
+            noteId={noteId}
+            saveNote={saveNote}
+            onClose={saveAndClose}
+            onDelete={deleteAndClose}
+          />
         ) : (
           <DialogTitle>Edit note</DialogTitle>
         )}
