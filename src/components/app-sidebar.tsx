@@ -62,6 +62,7 @@ import { useSidebarStore } from "@/lib/sidebar-store";
 import { type Theme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery, useDbState } from "@/user-db/user-db";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -83,8 +84,6 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 const navItems = [
-  { to: "/", label: "Dashboard", icon: Home },
-  { to: "/today", label: "Today", icon: CalendarCheck },
   { to: "/notes", label: "Notes", icon: StickyNote },
   { to: "/habits", label: "Habits", icon: Repeat },
 ] as const;
@@ -183,24 +182,53 @@ function SidebarNavLink({
   );
 }
 
-function TodayToggle({ collapsed }: { collapsed: boolean }) {
+function TodayNavItem({
+  currentPath,
+  collapsed,
+  onNavigate,
+}: {
+  currentPath: string | undefined;
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const isDesktop = useIsDesktop();
   const activePanel = useAssistantStore((s) => s.activePanel);
   const togglePanel = useAssistantStore((s) => s.togglePanel);
+
+  // The side panel only exists on desktop; on mobile the item links to the standalone page.
+  if (!isDesktop) {
+    return (
+      <SidebarNavLink
+        to="/today"
+        label="Today"
+        icon={CalendarCheck}
+        isActive={currentPath === "/today"}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+
   const open = activePanel === "today";
+  const isActive = open || currentPath === "/today";
 
   return (
     <SidebarTooltip label="Today" collapsed={collapsed}>
-      <Button
+      <button
         type="button"
-        variant="ghost"
-        size={collapsed ? "icon" : "sm"}
-        className={cn(!collapsed && "w-full justify-start gap-2", open && "text-primary")}
         onClick={() => togglePanel("today")}
         aria-label={open ? "Close today panel" : "Open today panel"}
+        className={cn(
+          "flex items-center rounded-md font-medium text-sm transition-colors",
+          collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+        )}
       >
-        <CalendarCheck className="size-4" />
-        {!collapsed && <span className="flex-1 text-left">Today</span>}
-      </Button>
+        <CalendarCheck className="size-4 shrink-0" />
+        {!collapsed && "Today"}
+      </button>
     </SidebarTooltip>
   );
 }
@@ -379,6 +407,15 @@ function SidebarContent({
         <SidebarActionRow collapsed={collapsed} />
 
         <nav className="flex flex-col gap-1 p-2">
+          <SidebarNavLink
+            to="/"
+            label="Dashboard"
+            icon={Home}
+            isActive={currentPath === "/"}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
+          <TodayNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
           {navItems.map((item) => (
             <SidebarNavLink
               key={item.to}
@@ -416,7 +453,6 @@ function SidebarContent({
       <div className={cn("flex p-2", collapsed ? "flex-col items-center gap-1" : "flex-col gap-1")}>
         {onToggleCollapse && (
           <>
-            <TodayToggle collapsed={collapsed} />
             <AssistantToggle collapsed={collapsed} />
             <SidebarTooltip
               label={
@@ -822,19 +858,6 @@ function MobileSidebar() {
           <SidebarContent onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
-
-      <Button
-        variant="secondary"
-        size="icon"
-        className={cn(
-          "!rounded-full fixed right-4 z-40 size-11 shadow-lg md:hidden",
-          assistantEnabled ? "bottom-[8.5rem]" : "bottom-[4.75rem]",
-        )}
-        aria-label="Open today panel"
-        onClick={() => togglePanel("today")}
-      >
-        <CalendarCheck className="size-5" />
-      </Button>
 
       {assistantEnabled && (
         <Button

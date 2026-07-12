@@ -122,11 +122,6 @@ function RouteComponent() {
             <RightRailContent panel="assistant" />
           </div>
         )}
-        {resolvedPanel === "today" && !isDesktop && (
-          <div className="fixed inset-0 z-50 bg-background md:hidden">
-            <RightRailContent panel="today" />
-          </div>
-        )}
         <CommandPalette />
         <NoteDialog />
         <AccountDialog />
