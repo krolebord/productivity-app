@@ -146,6 +146,7 @@ describe("buildAgendaSections", () => {
       {
         id: "over",
         title: "Old",
+        content: "",
         dueAt: new Date(2026, 6, 7, 10).getTime(),
         hasDueTime: true,
         completedAt: null,
@@ -154,6 +155,7 @@ describe("buildAgendaSections", () => {
       {
         id: "today-am",
         title: "Call",
+        content: "",
         dueAt: new Date(2026, 6, 9, 9).getTime(),
         hasDueTime: true,
         completedAt: null,
@@ -162,6 +164,7 @@ describe("buildAgendaSections", () => {
       {
         id: "allday",
         title: "Errand",
+        content: "",
         dueAt: new Date(2026, 6, 9).getTime(),
         hasDueTime: false,
         completedAt: null,
@@ -190,6 +193,7 @@ describe("buildAgendaSections", () => {
       {
         id: "over",
         title: "Old",
+        content: "",
         dueAt: new Date(2026, 6, 7, 10).getTime(),
         hasDueTime: true,
         completedAt: null,
@@ -198,6 +202,7 @@ describe("buildAgendaSections", () => {
       {
         id: "fri",
         title: "Fri",
+        content: "",
         dueAt: new Date(2026, 6, 10).getTime(),
         hasDueTime: false,
         completedAt: null,
@@ -224,6 +229,7 @@ describe("buildAgendaSections", () => {
       {
         id: "done",
         title: "Done",
+        content: "",
         dueAt: new Date(2026, 6, 9, 8).getTime(),
         hasDueTime: true,
         completedAt: Date.now(),
@@ -232,6 +238,7 @@ describe("buildAgendaSections", () => {
       {
         id: "open",
         title: "Open",
+        content: "",
         dueAt: new Date(2026, 6, 9, 10).getTime(),
         hasDueTime: true,
         completedAt: null,

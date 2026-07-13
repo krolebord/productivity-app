@@ -58,7 +58,7 @@ export function useAgenda() {
   const { data: notes } = useDbQuery((q) =>
     q
       .selectFrom("item")
-      .select(["id", "title", "dueAt", "hasDueTime", "completedAt", "order"])
+      .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order"])
       .where("type", "=", "note")
       .where("dueAt", "is not", null)
       .where((eb) =>

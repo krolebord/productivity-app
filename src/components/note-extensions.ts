@@ -77,6 +77,35 @@ export function parseNoteMarkdown(markdown: string): JSONContent {
   return { ...doc, content: stampDragIds(splitMisparsedTaskItems(doc.content ?? [])) };
 }
 
+/**
+ * A single-line, plain-text preview of a note's markdown content — used as a
+ * fallback label when a note has no title. Parses with the shared markdown
+ * pipeline and joins the text nodes, so it stays in sync with how notes render.
+ *
+ * Pass `maxLength` to stop walking once enough text is collected — handy for
+ * long notes where only a short preview is displayed.
+ */
+export function noteContentToPlainText(markdown: string, maxLength?: number): string {
+  const parts: string[] = [];
+  let length = 0;
+  const walk = (node: JSONContent): boolean => {
+    if (node.text) {
+      parts.push(node.text);
+      length += node.text.length + 1; // +1 for the joining space
+      if (maxLength != null && length >= maxLength) return true;
+    }
+    for (const child of node.content ?? []) {
+      if (walk(child)) return true;
+    }
+    return false;
+  };
+  for (const node of parseNoteMarkdown(markdown).content ?? []) {
+    if (walk(node)) break;
+  }
+  const text = parts.join(" ").replace(/\s+/g, " ").trim();
+  return maxLength != null ? text.slice(0, maxLength) : text;
+}
+
 /** Give every task item a stable dragId up front (the editor reorders by it). */
 function stampDragIds(nodes: JSONContent[]): JSONContent[] {
   return nodes.map((node) => {

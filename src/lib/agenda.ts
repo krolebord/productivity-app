@@ -46,6 +46,7 @@ export type HabitEntryValuesByDate = ReadonlyMap<string, number>;
 export type AgendaNote = {
   id: string;
   title: string;
+  content: string;
   dueAt: number | null;
   hasDueTime: boolean;
   completedAt: number | null;

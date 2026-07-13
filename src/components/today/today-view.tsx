@@ -10,8 +10,10 @@ import {
   ChevronUp,
   PlusIcon,
 } from "lucide-react";
+import { useMemo } from "react";
 import { calendarDayDroppableId, TODAY_AREA_DROPPABLE_ID } from "@/components/app-dnd";
 import { useNoteDialogStore } from "@/components/note-dialog";
+import { noteContentToPlainText } from "@/components/note-extensions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { AgendaHabitRow, AgendaNoteRow, AgendaSection, DayHabitProgress } from "@/lib/agenda";
@@ -337,6 +339,10 @@ function NoteRow({
   onMoveToToday: () => void;
 }) {
   const { note, completed } = row;
+  const title = note.title.trim();
+  // Only parse the body when we actually need a fallback (no title).
+  const preview = useMemo(() => (title ? "" : noteContentToPlainText(note.content, 100)), [title, note.content]);
+  const label = title || preview || "Untitled";
   const timeLabel = note.hasDueTime && note.dueAt != null ? format(note.dueAt, "HH:mm") : null;
   const dueLabel = overdue && note.dueAt != null ? formatDueDateLabel(note.dueAt, note.hasDueTime) : null;
 
@@ -356,8 +362,14 @@ function NoteRow({
       />
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className={cn("min-w-0 truncate text-sm", completed && "line-through")}>
-            {note.title.trim() || "Untitled"}
+          <span
+            className={cn(
+              "min-w-0 truncate text-sm",
+              completed && "line-through",
+              !title && preview && "text-muted-foreground",
+            )}
+          >
+            {label}
           </span>
           {timeLabel && !overdue && (
             <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">{timeLabel}</span>
