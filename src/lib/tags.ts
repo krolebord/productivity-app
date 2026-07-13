@@ -4,6 +4,13 @@
  * like "Work" / "work " / "side project" vs "side-project").
  */
 
+/**
+ * Pseudo-tag used by note filters to match notes without any tags. The
+ * leading ":" can never occur in a stored tag (normalizeTag strips it), so it
+ * can't collide with real ones.
+ */
+export const UNTAGGED = ":untagged";
+
 /** Lowercase, trim, slugify whitespace, and strip a leading "#". */
 export function normalizeTag(raw: string): string {
   return raw

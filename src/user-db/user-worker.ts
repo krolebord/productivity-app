@@ -12,7 +12,9 @@ await startDbWorker({
   createRemoteSource: createWsRemoteSource({
     createWebSocket: () =>
       new PartySocket({
-        host: import.meta.env.VITE_APP_URL,
+        // Worker scripts share the app's origin, so sync follows whatever
+        // host the app is served on instead of the canonical VITE_APP_URL.
+        host: globalThis.location.origin,
         prefix: "user-db",
         party: "user-db-server",
         room: `user-${workerConfig.props.userId}`,

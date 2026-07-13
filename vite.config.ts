@@ -53,6 +53,13 @@ const config = defineConfig({
   },
   server: {
     allowedHosts: ["local.krolebord.com"],
+    // Bind loopback explicitly and fail loudly instead of hopping ports.
+    // Vite's default availability probe binds a wildcard address, which
+    // collides with anything holding the port on a specific IP (e.g.
+    // tailscaled while `tailscale serve` proxies to this port), silently
+    // moving the dev server and breaking proxies pointed at it.
+    host: "127.0.0.1",
+    strictPort: true,
   },
   optimizeDeps: {
     // sqlite-wasm can't be pre-bundled (WASM). The packages that import it must

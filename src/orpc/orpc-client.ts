@@ -17,7 +17,9 @@ export type ORPCClient = RouterUtils<BaseORPCClient>;
 
 const link = new RPCLink<ORPCClientContext>({
   url: () => {
-    return `${import.meta.env.VITE_APP_URL}/rpc`;
+    // Origin-relative so the app works from any host it's served on;
+    // VITE_APP_URL stays the canonical URL for server-side use (emails, OAuth).
+    return `${globalThis.location.origin}/rpc`;
   },
 });
 

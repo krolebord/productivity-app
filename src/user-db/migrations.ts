@@ -321,6 +321,20 @@ const migrations = createMigrations((b) => ({
     ),
     b.createIndex("item_due", (idx) => idx.on("_item").columns(["dueAt"]).where(sql.ref("tombstone"), "=", 0)),
   ],
+  18: [
+    b.createTable("_note_view", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("name", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("include", "text", (col) => col.notNull().defaultTo("[]"))
+        .addColumn("exclude", "text", (col) => col.notNull().defaultTo("[]"))
+        .addColumn("match", "text", (col) => col.notNull().defaultTo("all"))
+        .addColumn("order", "real", (col) => col.notNull().defaultTo(0))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -662,6 +676,33 @@ export const syncDbSchema = defineSyncSchema({
           "archivedAt rather than deleting.",
         ].join(" "),
       ),
+    note_view: t
+      .table({
+        name: t.text().default("").describe("Display name of the saved view."),
+        include: t
+          .text()
+          .default("[]")
+          .describe(
+            'JSON array of tags a note must carry to appear in this view. The pseudo-tag ":untagged" matches notes without any tags.',
+          ),
+        exclude: t
+          .text()
+          .default("[]")
+          .describe("JSON array of tags that hide a note from this view; always applied regardless of `match`."),
+        match: t
+          .enum(["all", "any"])
+          .default("all")
+          .describe("Whether a note must carry all of the included tags or any one of them."),
+        order: t.real().default(0).describe("Manual sort position, ascending."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "Saved tag-filter presets for the Notes page, shown as one-click view pills above the filter bar.",
+          "A view is purely a named filter; it stores no notes itself.",
+        ].join(" "),
+      ),
     habit_entry: t
       .table({
         habitId: t.text().describe("References habit.id."),
@@ -696,6 +737,7 @@ export type MonobankConnectionMetaItem = typeof syncDbSchema.tables.monobank_con
 export type MonobankAccountItem = typeof syncDbSchema.tables.monobank_account.$row;
 export type DashboardSettingsItem = typeof syncDbSchema.tables.dashboard_settings.$row;
 export type HabitItem = typeof syncDbSchema.tables.habit.$row;
+export type NoteViewItem = typeof syncDbSchema.tables.note_view.$row;
 export type HabitEntryItem = typeof syncDbSchema.tables.habit_entry.$row;
 
 export type UserDb = (typeof syncDbSchema)["~clientSchema"];

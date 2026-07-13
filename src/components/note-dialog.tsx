@@ -1,9 +1,10 @@
 import { generateId } from "@sqlite-sync/core";
+import { useMatches } from "@tanstack/react-router";
 import { Trash2Icon } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
-import { parseTags, serializeTags } from "@/lib/tags";
+import { parseTags, serializeTags, UNTAGGED } from "@/lib/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@/lib/use-debounced-callback";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
@@ -33,6 +34,17 @@ export function useCreateNote() {
   const db = useDb();
   const openNoteDialog = useNoteDialogStore((s) => s.open);
 
+  // When creating from the notes page with a tag filter active, prefill the
+  // included tags so the new note appears in the view being looked at (this
+  // covers every entry point: page button, hotkey, sidebar, command palette).
+  const matches = useMatches();
+  const lastMatch = matches[matches.length - 1];
+  const filterTags =
+    lastMatch?.fullPath === "/notes"
+      ? ((lastMatch.search as { tags?: string[] }).tags ?? []).filter((tag) => tag !== UNTAGGED)
+      : [];
+  const initialTags = serializeTags(filterTags);
+
   return useCallback(() => {
     const id = generateId();
     const createdAt = Date.now();
@@ -55,7 +67,7 @@ export function useCreateNote() {
           content: "",
           order: maxOrder + 1,
           createdAt,
-          tags: "[]",
+          tags: initialTags,
           hasDueTime: false,
           tombstone: false,
         }),
@@ -63,7 +75,7 @@ export function useCreateNote() {
     });
 
     openNoteDialog(id);
-  }, [db, openNoteDialog]);
+  }, [db, openNoteDialog, initialTags]);
 }
 
 type NoteFields = {

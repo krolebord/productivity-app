@@ -58,6 +58,7 @@ import {
   TOGGLE_ASSISTANT_HOTKEY,
   TOGGLE_SIDEBAR_HOTKEY,
 } from "@/lib/hotkeys";
+import { type NoteViewSearch, noteViewSearch, viewMatchesSearch } from "@/lib/note-views";
 import { useSidebarStore } from "@/lib/sidebar-store";
 import { type Theme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
@@ -83,10 +84,7 @@ import { Separator } from "./ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
-const navItems = [
-  { to: "/notes", label: "Notes", icon: StickyNote },
-  { to: "/habits", label: "Habits", icon: Repeat },
-] as const;
+const navItems = [{ to: "/habits", label: "Habits", icon: Repeat }] as const;
 
 const agentNavItems = [
   { to: "/memories", label: "Memories", icon: Brain },
@@ -416,6 +414,7 @@ function SidebarContent({
             onNavigate={onNavigate}
           />
           <TodayNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
+          <NotesNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
           {navItems.map((item) => (
             <SidebarNavLink
               key={item.to}
@@ -743,6 +742,94 @@ function AccountsNavItem({
             </div>
           </SortableContext>
         </DndContext>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function NotesNavItem({
+  currentPath,
+  collapsed,
+  onNavigate,
+}: {
+  currentPath: string | undefined;
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const { data: views } = useDbQuery((db) =>
+    db.selectFrom("note_view").selectAll().orderBy("order", "asc").orderBy("createdAt", "asc"),
+  );
+
+  const groupOpen = useSidebarStore((s) => s.groups.notes);
+  const setGroupOpen = useSidebarStore((s) => s.setGroupOpen);
+
+  const matches = useMatches();
+  const lastMatch = matches[matches.length - 1];
+  const notesSearch = lastMatch?.fullPath === "/notes" ? (lastMatch.search as NoteViewSearch) : undefined;
+
+  const isActive = currentPath === "/notes";
+
+  if (collapsed || views.length === 0) {
+    return (
+      <SidebarNavLink
+        to="/notes"
+        label="Notes"
+        icon={StickyNote}
+        isActive={isActive}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+
+  // The bare Notes link is active only without a view filter, so it reads as
+  // "All notes" next to the view sub-links.
+  const activeViewId = notesSearch ? views.find((view) => viewMatchesSearch(view, notesSearch))?.id : undefined;
+
+  return (
+    <Collapsible open={groupOpen ?? true} onOpenChange={(open) => setGroupOpen("notes", open)}>
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-md font-medium text-sm transition-colors",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+        )}
+      >
+        <Link to="/notes" viewTransition onClick={onNavigate} className="flex flex-1 items-center gap-2 px-3 py-2">
+          <StickyNote className="size-4 shrink-0" />
+          Notes
+        </Link>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
+            aria-label="Toggle notes views"
+          >
+            <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
+          </button>
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent>
+        <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-sidebar-border/50 border-l pl-3">
+          {views.map((view) => (
+            <Link
+              key={view.id}
+              to="/notes"
+              search={noteViewSearch(view)}
+              viewTransition
+              onClick={onNavigate}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                activeViewId === view.id
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70",
+              )}
+            >
+              <span className="flex-1 truncate text-left">{view.name || "Untitled"}</span>
+            </Link>
+          ))}
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );
