@@ -416,6 +416,7 @@ function HabitRow({
 }) {
   const { habit, value, done, editable } = row;
   const isSimple = habit.target <= 1;
+  const ratio = habit.target > 0 ? Math.min(1, value / habit.target) : 0;
   const unitLabel = habit.unit.trim();
   const progressLabel = unitLabel ? `${value}/${habit.target} ${unitLabel}` : `${value}/${habit.target}`;
 
@@ -442,12 +443,19 @@ function HabitRow({
       ) : (
         <span
           className={cn(
-            "flex size-4 shrink-0 items-center justify-center rounded-full border font-medium text-[9px]",
-            done ? "border-primary bg-primary text-primary-foreground" : "border-input text-muted-foreground",
+            "relative flex size-4 shrink-0 items-center justify-center rounded-full border",
+            done ? "border-primary bg-primary text-primary-foreground" : "border-input",
           )}
           aria-hidden
         >
-          {done ? <CheckIcon className="size-3" /> : Math.min(99, Math.round((value / habit.target) * 100))}
+          {done ? (
+            <CheckIcon className="size-3" />
+          ) : (
+            <span
+              className="absolute inset-0.5 rounded-full"
+              style={{ background: `conic-gradient(var(--primary) ${ratio * 360}deg, transparent 0)` }}
+            />
+          )}
         </span>
       )}
 
