@@ -171,7 +171,10 @@ describe("buildAgendaSections", () => {
         order: 3,
       },
     ];
-    const habits = [habit({ id: "h1", scheduleType: "daily", timeOfDay: "evening", order: 1 })];
+    const habits = [
+      habit({ id: "h1", scheduleType: "daily", timeOfDay: "afternoon", order: 1 }),
+      habit({ id: "h2", scheduleType: "daily", timeOfDay: "evening", order: 1 }),
+    ];
 
     const sections = buildAgendaSections({
       selectedKey: today,
@@ -181,7 +184,7 @@ describe("buildAgendaSections", () => {
       entriesByHabit: new Map(),
     });
 
-    expect(sections.map((s) => s.bucket)).toEqual(["overdue", "anytime", "morning", "evening"]);
+    expect(sections.map((s) => s.bucket)).toEqual(["overdue", "morning", "afternoon", "anytime", "evening"]);
     expect(sections[0]?.rows[0]?.id).toBe("over");
     expect(sections.find((s) => s.bucket === "morning")?.rows[0]?.id).toBe("today-am");
     expect(sections.find((s) => s.bucket === "anytime")?.rows[0]?.id).toBe("allday");

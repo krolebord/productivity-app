@@ -5,9 +5,9 @@ export type AgendaBucket = "overdue" | "morning" | "afternoon" | "evening" | "ni
 
 export const AGENDA_BUCKETS: readonly AgendaBucket[] = [
   "overdue",
-  "anytime",
   "morning",
   "afternoon",
+  "anytime",
   "evening",
   "night",
 ] as const;
