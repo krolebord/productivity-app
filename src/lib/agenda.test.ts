@@ -181,7 +181,7 @@ describe("buildAgendaSections", () => {
       entriesByHabit: new Map(),
     });
 
-    expect(sections.map((s) => s.bucket)).toEqual(["overdue", "morning", "evening", "anytime"]);
+    expect(sections.map((s) => s.bucket)).toEqual(["overdue", "anytime", "morning", "evening"]);
     expect(sections[0]?.rows[0]?.id).toBe("over");
     expect(sections.find((s) => s.bucket === "morning")?.rows[0]?.id).toBe("today-am");
     expect(sections.find((s) => s.bucket === "anytime")?.rows[0]?.id).toBe("allday");
