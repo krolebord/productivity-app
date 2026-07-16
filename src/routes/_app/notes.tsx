@@ -4,7 +4,7 @@ import { generateId } from "@sqlite-sync/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CalendarDays, CheckIcon, MinusIcon, PlusIcon, SearchIcon, StickyNote, XIcon } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { isCalendarDropTarget, useDndDelegate } from "@/components/app-dnd";
 import { useMasonryLayout } from "@/components/masonry-grid";
@@ -14,7 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NEW_NOTE_HOTKEY } from "@/lib/hotkeys";
-import { effectiveMatch, noteViewSearch, viewMatchesSearch } from "@/lib/note-views";
+import {
+  effectiveMatch,
+  matchesNoteStatus,
+  type NoteStatusFilter,
+  noteViewSearch,
+  viewMatchesSearch,
+} from "@/lib/note-views";
 import { parseTags, UNTAGGED } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import type { NoteItem, NoteViewItem } from "@/user-db/migrations";
@@ -46,8 +52,16 @@ const notesSearchSchema = z.object({
   tags: z.array(z.string()).optional(),
   not: z.array(z.string()).optional(),
   match: z.enum(["any"]).optional(),
+  status: z.enum(["pending", "completed", "overdue"]).optional(),
   q: z.string().optional(),
 });
+
+const STATUS_OPTIONS: { value: NoteStatusFilter | undefined; label: string }[] = [
+  { value: undefined, label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "overdue", label: "Overdue" },
+  { value: "completed", label: "Done" },
+];
 
 type NotesSearch = z.infer<typeof notesSearchSchema>;
 
@@ -165,7 +179,16 @@ function NotesPage() {
   const include = useMemo(() => search.tags ?? [], [search.tags]);
   const exclude = useMemo(() => search.not ?? [], [search.not]);
   const matchMode: TagFilter["match"] = search.match === "any" ? "any" : "all";
+  const status = search.status;
   const query = search.q ?? "";
+
+  // "Overdue" is time-dependent; tick every minute so notes crossing their due
+  // time (and the segment counts) stay current while the page is open.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const createNote = useCreateNote();
   const openNoteDialog = useNoteDialogStore((s) => s.open);
 
@@ -187,6 +210,7 @@ function NotesPage() {
             not: merged.not?.length ? merged.not : undefined,
             // "any" vs "all" only matters with 2+ included tags; drop it otherwise.
             match: tags && tags.length >= 2 && merged.match === "any" ? ("any" as const) : undefined,
+            status: merged.status,
             q: merged.q || undefined,
           };
         },
@@ -216,7 +240,7 @@ function NotesPage() {
   );
 
   const clearFilters = useCallback(() => {
-    patchSearch({ tags: undefined, not: undefined, match: undefined, q: undefined });
+    patchSearch({ tags: undefined, not: undefined, match: undefined, status: undefined, q: undefined });
   }, [patchSearch]);
 
   const { data: views } = useDbQuery((db) =>
@@ -226,9 +250,9 @@ function NotesPage() {
   // The view whose stored filter equals the current one; drives pill highlight
   // and hides "Save view" when the current filter is already saved.
   const activeViewId = useMemo(() => {
-    const current = { tags: include, not: exclude, match: matchMode === "any" ? ("any" as const) : undefined };
+    const current = { tags: include, not: exclude, match: matchMode === "any" ? ("any" as const) : undefined, status };
     return views.find((view) => viewMatchesSearch(view, current))?.id ?? null;
-  }, [views, include, exclude, matchMode]);
+  }, [views, include, exclude, matchMode, status]);
 
   const applyView = useCallback(
     (view: NoteViewItem) => {
@@ -257,6 +281,7 @@ function NotesPage() {
           include: JSON.stringify(include),
           exclude: JSON.stringify(exclude),
           match: effectiveMatch(include, matchMode),
+          status: status ?? null,
           order: Number(maxOrderRow?.maxOrder ?? 0) + 1,
           createdAt: now,
           updatedAt: now,
@@ -265,7 +290,7 @@ function NotesPage() {
     });
     setViewName("");
     setSaveViewOpen(false);
-  }, [db, viewName, include, exclude, matchMode]);
+  }, [db, viewName, include, exclude, matchMode, status]);
 
   const deleteView = useCallback(
     (id: string) => {
@@ -296,14 +321,36 @@ function NotesPage() {
 
   const filter = useMemo<TagFilter>(() => ({ include, exclude, match: matchMode }), [include, exclude, matchMode]);
 
-  const isFiltering = include.length > 0 || exclude.length > 0 || query.length > 0;
+  const hasTagFilter = include.length > 0 || exclude.length > 0;
+  const isFiltering = hasTagFilter || status != null || query.length > 0;
 
-  // Notes passing the tag filter, before the text query. Kept separate so tag
-  // counts in the editor reflect the tag filter only, not the search box.
+  // Status applies before tags so the tag counts in the editor reflect it.
+  const statusNotes = useMemo(() => {
+    if (!status) return notes;
+    return notes.filter((note) => matchesNoteStatus(note, status, now));
+  }, [notes, status, now]);
+
+  // Notes passing the status + tag filters, before the text query. Kept
+  // separate so tag counts in the editor don't reflect the search box.
   const tagMatchedNotes = useMemo(() => {
-    if (include.length === 0 && exclude.length === 0) return notes;
-    return notes.filter((note) => matchesTagFilter(note, filter));
-  }, [notes, include, exclude, filter]);
+    if (!hasTagFilter) return statusNotes;
+    return statusNotes.filter((note) => matchesTagFilter(note, filter));
+  }, [statusNotes, hasTagFilter, filter]);
+
+  // Per-segment counts for the status control, within the current tag filter
+  // (but ignoring the active status, so every segment shows its own reach).
+  const statusCounts = useMemo(() => {
+    const base = hasTagFilter ? notes.filter((note) => matchesTagFilter(note, filter)) : notes;
+    const counts: Record<NoteStatusFilter, number> = { pending: 0, overdue: 0, completed: 0 };
+    for (const note of base) {
+      if (note.completedAt != null) counts.completed += 1;
+      else {
+        counts.pending += 1;
+        if (matchesNoteStatus(note, "overdue", now)) counts.overdue += 1;
+      }
+    }
+    return counts;
+  }, [notes, hasTagFilter, filter, now]);
 
   const visibleNotes = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -340,15 +387,16 @@ function NotesPage() {
   const rowCount = useCallback(
     (tag: string) => {
       if (exclude.includes(tag)) {
-        return notes.filter((note) => noteFilterTags(note).includes(tag) && matchesTagFilter(note, filter, tag)).length;
+        return statusNotes.filter((note) => noteFilterTags(note).includes(tag) && matchesTagFilter(note, filter, tag))
+          .length;
       }
       if (matchMode === "any" && include.length > 0 && !include.includes(tag)) {
         const alone: TagFilter = { include: [tag], exclude, match: "any" };
-        return notes.filter((note) => matchesTagFilter(note, alone)).length;
+        return statusNotes.filter((note) => matchesTagFilter(note, alone)).length;
       }
       return tagMatchedNotes.filter((note) => noteFilterTags(note).includes(tag)).length;
     },
-    [notes, tagMatchedNotes, filter, include, exclude, matchMode],
+    [statusNotes, tagMatchedNotes, filter, include, exclude, matchMode],
   );
 
   // While a drag is in progress the order lives here, updated on every
@@ -556,14 +604,14 @@ function NotesPage() {
         </Button>
       </div>
 
-      {(views.length > 0 || (isFiltering && (include.length > 0 || exclude.length > 0) && activeViewId === null)) && (
+      {(views.length > 0 || ((hasTagFilter || status != null) && activeViewId === null)) && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
           <button
             type="button"
-            onClick={() => patchSearch({ tags: undefined, not: undefined, match: undefined })}
+            onClick={() => patchSearch({ tags: undefined, not: undefined, match: undefined, status: undefined })}
             className={cn(
               "inline-flex h-7 items-center rounded-full border px-3 font-medium text-xs transition-colors",
-              include.length === 0 && exclude.length === 0
+              !hasTagFilter && status == null
                 ? "border-primary bg-primary text-primary-foreground"
                 : "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
             )}
@@ -612,7 +660,7 @@ function NotesPage() {
             );
           })}
 
-          {(include.length > 0 || exclude.length > 0) && activeViewId === null && (
+          {(hasTagFilter || status != null) && activeViewId === null && (
             <Popover open={saveViewOpen} onOpenChange={setSaveViewOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -763,10 +811,34 @@ function NotesPage() {
             </PopoverContent>
           </Popover>
 
-          {(include.length > 0 || exclude.length > 0) && (
+          <div className="flex h-8 items-center overflow-hidden rounded-full border bg-card text-xs">
+            {STATUS_OPTIONS.map((option) => {
+              const active = status === option.value;
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => patchSearch({ status: option.value })}
+                  className={cn(
+                    "flex h-full items-center gap-1 px-2.5 transition-colors sm:px-3",
+                    active ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {option.label}
+                  {option.value && (
+                    <span className={cn("tabular-nums", active ? "text-muted-foreground" : "text-muted-foreground/60")}>
+                      {statusCounts[option.value]}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {(hasTagFilter || status != null) && (
             <button
               type="button"
-              onClick={() => patchSearch({ tags: undefined, not: undefined, match: undefined })}
+              onClick={() => patchSearch({ tags: undefined, not: undefined, match: undefined, status: undefined })}
               className="ml-1 text-muted-foreground text-sm underline-offset-2 hover:text-foreground hover:underline"
             >
               Clear all

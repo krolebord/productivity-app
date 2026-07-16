@@ -335,6 +335,14 @@ const migrations = createMigrations((b) => ({
         .addColumn("updatedAt", "integer", (col) => col.notNull()),
     ),
   ],
+  19: [
+    b.addColumn({
+      table: "_note_view",
+      column: "status",
+      type: "text",
+      defaultValue: null,
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -693,6 +701,13 @@ export const syncDbSchema = defineSyncSchema({
           .enum(["all", "any"])
           .default("all")
           .describe("Whether a note must carry all of the included tags or any one of them."),
+        status: t
+          .enum(["pending", "completed", "overdue"])
+          .nullable()
+          .default(null)
+          .describe(
+            'Optional completion-status filter: "pending" (not completed), "overdue" (dated, past due, not completed), "completed". Null means all notes.',
+          ),
         order: t.real().default(0).describe("Manual sort position, ascending."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
