@@ -392,6 +392,11 @@ function NotesPage() {
   // neighbors at boundaries.
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
+      // While filtering (including saved views), the grid isn't reorderable:
+      // hidden notes make drop positions ambiguous. Report no collision so
+      // the drag can only land on Today-panel calendar days (handled before
+      // this delegate in AppDndProvider).
+      if (isFiltering) return [];
       const inner = masonry.innerEl;
       const pointer = args.pointerCoordinates;
       if (!inner || !pointer || masonry.rects.size === 0) return closestCenter(args);
@@ -415,7 +420,7 @@ function NotesPage() {
       }
       return bestId ? [{ id: bestId }] : [];
     },
-    [masonry.innerEl, masonry.rects],
+    [isFiltering, masonry.innerEl, masonry.rects],
   );
 
   function handleDragStart(event: DragStartEvent) {
@@ -443,7 +448,7 @@ function NotesPage() {
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
     setOverCalendar(over != null && isCalendarDropTarget(String(over.id)));
-    if (!over || over.id === active.id) return;
+    if (isFiltering || !over || over.id === active.id) return;
 
     // Reordering reflows the masonry, which can change the collision result
     // and fire another drag-over without the pointer moving. Only reorder
@@ -806,7 +811,7 @@ function NotesPage() {
               <div key={note.id} ref={itemProps.ref} style={itemProps.style}>
                 <NoteCard
                   note={note}
-                  disabled={isFiltering}
+                  reorderDisabled={isFiltering}
                   onTagClick={toggleInclude}
                   activeTags={include}
                   onOpen={() => {

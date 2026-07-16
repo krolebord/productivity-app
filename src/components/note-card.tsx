@@ -73,12 +73,14 @@ type NoteCardProps = {
   onOpen: () => void;
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
-  disabled?: boolean;
+  /** Disables this card as a reorder drop target; the card itself stays
+   * draggable so it can still be dropped on Today-panel calendar days. */
+  reorderDisabled?: boolean;
 };
 
-export function NoteCard({ note, onOpen, onTagClick, activeTags, disabled }: NoteCardProps) {
-  const draggable = useDraggable({ id: note.id, disabled });
-  const droppable = useDroppable({ id: note.id, disabled });
+export function NoteCard({ note, onOpen, onTagClick, activeTags, reorderDisabled }: NoteCardProps) {
+  const draggable = useDraggable({ id: note.id });
+  const droppable = useDroppable({ id: note.id, disabled: reorderDisabled });
 
   const db = useDb();
   const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
