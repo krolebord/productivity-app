@@ -58,11 +58,16 @@ describe("isHabitDueOnDay", () => {
   describe("weekly", () => {
     const h = habit({ id: "wk", scheduleType: "weekly" });
 
-    it("shows on today/future until done that week", () => {
+    it("always shows on today, even once done earlier in the week", () => {
       expect(isHabitDueOnDay(h, "2026-07-09", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-09", today, entries(["2026-07-08", 1]))).toBe(true);
+    });
+
+    it("shows on future days until the week is complete", () => {
       expect(isHabitDueOnDay(h, "2026-07-10", today, undefined)).toBe(true);
-      expect(isHabitDueOnDay(h, "2026-07-09", today, entries(["2026-07-08", 1]))).toBe(false);
-      expect(isHabitDueOnDay(h, "2026-07-08", today, entries(["2026-07-08", 1]))).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-10", today, entries(["2026-07-08", 1]))).toBe(false);
+      // Next week is unaffected by this week's completion.
+      expect(isHabitDueOnDay(h, "2026-07-13", today, entries(["2026-07-08", 1]))).toBe(true);
     });
 
     it("past incomplete week shows only on Sunday", () => {
@@ -71,11 +76,30 @@ describe("isHabitDueOnDay", () => {
       expect(isHabitDueOnDay(h, "2026-07-05", today, undefined)).toBe(true);
     });
 
-    it("past completed week shows only on the completion day", () => {
+    it("past completed week shows only on days with logged entries", () => {
       const e = entries(["2026-07-02", 1]);
       expect(isHabitDueOnDay(h, "2026-07-02", today, e)).toBe(true);
       expect(isHabitDueOnDay(h, "2026-07-05", today, e)).toBe(false);
       expect(isHabitDueOnDay(h, "2026-07-01", today, e)).toBe(false);
+    });
+
+    it("target accumulates across the week", () => {
+      const h3 = habit({ id: "wk3", scheduleType: "weekly", target: 3 });
+      // Week of Jun 29 – Jul 5: 1+1+1 across three days completes the week.
+      const done = entries(["2026-06-29", 1], ["2026-07-01", 1], ["2026-07-03", 1]);
+      expect(isHabitDueOnDay(h3, "2026-07-05", today, done)).toBe(false); // not missed on Sunday
+      expect(isHabitDueOnDay(h3, "2026-07-01", today, done)).toBe(true); // contribution day shows
+      expect(isHabitDueOnDay(h3, "2026-06-30", today, done)).toBe(false); // no entry that day
+
+      // Only 2/3 logged: still missed on Sunday, partial days still show.
+      const partial = entries(["2026-06-29", 1], ["2026-07-01", 1]);
+      expect(isHabitDueOnDay(h3, "2026-07-05", today, partial)).toBe(true);
+      expect(isHabitDueOnDay(h3, "2026-07-01", today, partial)).toBe(true);
+
+      // Current week complete via sum: hidden on future days, still shown today.
+      const thisWeek = entries(["2026-07-06", 2], ["2026-07-08", 1]);
+      expect(isHabitDueOnDay(h3, "2026-07-09", today, thisWeek)).toBe(true);
+      expect(isHabitDueOnDay(h3, "2026-07-10", today, thisWeek)).toBe(false);
     });
   });
 
@@ -136,6 +160,13 @@ describe("getDayHabitProgress", () => {
       ["c", entries(["2026-07-09", 4])],
     ]);
     expect(getDayHabitProgress(habits, today, today, entriesByHabit)).toEqual({ due: 2, done: 1 });
+  });
+
+  it("counts weekly habits done from the week's summed value", () => {
+    const today = "2026-07-09"; // Thursday
+    const habits = [habit({ id: "wk", scheduleType: "weekly", target: 3 })];
+    const entriesByHabit = new Map([["wk", entries(["2026-07-06", 2], ["2026-07-08", 1])]]);
+    expect(getDayHabitProgress(habits, today, today, entriesByHabit)).toEqual({ due: 1, done: 1 });
   });
 });
 
@@ -224,6 +255,22 @@ describe("buildAgendaSections", () => {
     expect(sections.some((s) => s.bucket === "overdue")).toBe(false);
     const habitRow = sections.flatMap((s) => s.rows).find((r) => r.kind === "habit");
     expect(habitRow?.kind === "habit" && habitRow.editable).toBe(false);
+  });
+
+  it("carries week-sum progress and per-day value for weekly habits", () => {
+    const today = "2026-07-09"; // Thursday
+    const habits = [habit({ id: "wk", scheduleType: "weekly", target: 3 })];
+    const sections = buildAgendaSections({
+      selectedKey: today,
+      todayKey: today,
+      notes: [],
+      habits,
+      entriesByHabit: new Map([["wk", entries(["2026-07-06", 1], ["2026-07-09", 1])]]),
+    });
+    const row = sections.flatMap((s) => s.rows).find((r) => r.kind === "habit");
+    expect(row?.kind === "habit" && row.value).toBe(2);
+    expect(row?.kind === "habit" && row.dayValue).toBe(1);
+    expect(row?.kind === "habit" && row.done).toBe(false);
   });
 
   it("sorts completed rows to the bottom of a section", () => {

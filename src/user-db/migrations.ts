@@ -640,8 +640,9 @@ export const syncDbSchema = defineSyncSchema({
           .describe(
             [
               'How often the habit is due: "daily" = every day; "weekdays" = only on the ISO weekdays listed',
-              'in scheduleWeekdays; "weekly" = once per calendar week (Monday-start), shown until done that',
-              'week; "everyNDays" = due scheduleInterval days after the last completed day, shown until done.',
+              'in scheduleWeekdays; "weekly" = target accumulates over the calendar week (Monday-start), shown',
+              'until the week sum reaches target; "everyNDays" = due scheduleInterval days after the last',
+              "completed day, shown until done.",
             ].join(" "),
           ),
         scheduleInterval: t
@@ -663,7 +664,7 @@ export const syncDbSchema = defineSyncSchema({
           .real()
           .default(1)
           .describe(
-            "Daily quantity target. A habit counts as done for a day when the sum of that day's habit_entry.value is >= target. 1 means a simple check-off.",
+            "Quantity target. For weekly habits it applies to the whole Monday-start week (done when the week's summed habit_entry.value is >= target); for all other schedules it applies per day. 1 means a simple check-off.",
           ),
         unit: t.text().default("").describe('Optional unit label for the target, e.g. "pages". Empty when unused.'),
         order: t.real().default(0).describe("Manual sort position, ascending."),
@@ -678,10 +679,10 @@ export const syncDbSchema = defineSyncSchema({
       .describe(
         [
           "Recurring habits shown on the Today view. Schedule semantics: daily = every day; weekdays = on the",
-          "days listed in scheduleWeekdays; weekly = once per Monday-start calendar week (shown until done that",
-          "week); everyNDays = due scheduleInterval days after the last completed day (shown until done).",
-          "Done-for-a-day means the sum of habit_entry.value for that date is >= target. Soft-archive via",
-          "archivedAt rather than deleting.",
+          "days listed in scheduleWeekdays; weekly = target summed over the Monday-start calendar week (shown",
+          "until the week sum reaches target); everyNDays = due scheduleInterval days after the last completed",
+          "day (shown until done). Except for weekly habits, done-for-a-day means the sum of habit_entry.value",
+          "for that date is >= target. Soft-archive via archivedAt rather than deleting.",
         ].join(" "),
       ),
     note_view: t
@@ -726,7 +727,7 @@ export const syncDbSchema = defineSyncSchema({
           .real()
           .default(0)
           .describe(
-            "Accumulated amount logged for this habit on this date. The habit counts as done for the day when value >= habit.target.",
+            "Accumulated amount logged for this habit on this date. Counts toward habit.target per day, or summed over the Monday-start week for weekly habits.",
           ),
         createdAt: t.integer(),
         updatedAt: t.integer(),
@@ -734,7 +735,7 @@ export const syncDbSchema = defineSyncSchema({
       .describe(
         [
           "Per-day progress toward a habit. One logical entry per (habitId, date); value accumulates toward",
-          "habit.target. The habit is done for that day when value >= target.",
+          "habit.target — per day for most schedules, summed across the Monday-start week for weekly habits.",
         ].join(" "),
       ),
   },

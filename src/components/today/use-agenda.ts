@@ -13,6 +13,7 @@ import {
   getMonthGridDays,
   getWeekDays,
   type HabitEntryValuesByDate,
+  parseDateKey,
   startOfLocalDay,
   toAgendaHabit,
   toDateKey,
@@ -217,8 +218,19 @@ export function useAgenda() {
   );
 
   const toggleHabitDone = useCallback(
-    (habitId: string, dateKey: string, done: boolean) => {
-      setHabitEntryValue(habitId, dateKey, done ? 1 : 0);
+    (habit: AgendaHabit, dateKey: string, done: boolean) => {
+      if (done) {
+        setHabitEntryValue(habit.id, dateKey, 1);
+        return;
+      }
+      if (habit.scheduleType === "weekly") {
+        // A weekly habit's completion may live on another day of the week.
+        for (const day of getWeekDays(parseDateKey(dateKey))) {
+          setHabitEntryValue(habit.id, toDateKey(day), 0);
+        }
+        return;
+      }
+      setHabitEntryValue(habit.id, dateKey, 0);
     },
     [setHabitEntryValue],
   );

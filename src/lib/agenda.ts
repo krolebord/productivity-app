@@ -68,7 +68,10 @@ export type AgendaHabitRow = {
   habit: AgendaHabit;
   bucket: Exclude<AgendaBucket, "overdue">;
   dateKey: string;
+  /** Progress toward target: week sum for weekly habits, day value otherwise. */
   value: number;
+  /** Value logged on this specific day (what entry edits operate on). */
+  dayValue: number;
   done: boolean;
   /** False for future days — no entry controls. */
   editable: boolean;
@@ -169,8 +172,32 @@ function anyDoneInRange(
   return false;
 }
 
+function sumValuesInRange(entries: HabitEntryValuesByDate | undefined, startKey: string, endKey: string): number {
+  if (!entries) return 0;
+  let sum = 0;
+  for (const [dateKey, value] of entries) {
+    if (dateKey < startKey || dateKey > endKey) continue;
+    sum += value;
+  }
+  return sum;
+}
+
 function weekDateKeys(dateKey: string): string[] {
   return getWeekDays(parseDateKey(dateKey)).map(toDateKey);
+}
+
+/**
+ * Progress value shown for a habit on a day: weekly habits accumulate their
+ * target over the Mon–Sun week containing the day; others count per day.
+ */
+export function getHabitProgressValue(
+  habit: Pick<AgendaHabit, "scheduleType">,
+  dateKey: string,
+  entries: HabitEntryValuesByDate | undefined,
+): number {
+  if (habit.scheduleType !== "weekly") return getEntryValue(entries, dateKey);
+  const keys = weekDateKeys(dateKey);
+  return sumValuesInRange(entries, keys[0] ?? dateKey, keys[6] ?? dateKey);
 }
 
 /**
@@ -199,7 +226,7 @@ export function isHabitDueOnDay(
     }
 
     case "weekly":
-      return isWeeklyDueOnDay(habit, dateKey, todayKey, entries, doneOnDay);
+      return isWeeklyDueOnDay(habit, dateKey, todayKey, entries, valueOnDay);
 
     case "everyNDays":
       return isEveryNDaysDueOnDay(habit, dateKey, entries, doneOnDay);
@@ -214,22 +241,24 @@ function isWeeklyDueOnDay(
   dateKey: string,
   todayKey: string,
   entries: HabitEntryValuesByDate | undefined,
-  doneOnDay: boolean,
+  valueOnDay: number,
 ): boolean {
-  if (doneOnDay) return true;
-
   const keys = weekDateKeys(dateKey);
   const weekStart = keys[0] ?? dateKey;
   const weekEnd = keys[6] ?? dateKey;
+  const weekDone = sumValuesInRange(entries, weekStart, weekEnd) >= habit.target;
 
   if (dateKey < todayKey) {
-    // Past day: show completion day, or missed on the week's last day.
-    if (anyDoneInRange(habit, entries, weekStart, weekEnd)) return false;
-    return dateKey === weekEnd;
+    // Past day: show days that logged progress, or missed on the week's last day.
+    if (valueOnDay > 0) return true;
+    return !weekDone && dateKey === weekEnd;
   }
 
-  // Today or future: show until done (no completion in this week up to D).
-  return !anyDoneInRange(habit, entries, weekStart, dateKey);
+  // Today stays visible all week, shown as done once the week's sum hits target.
+  if (dateKey === todayKey) return true;
+
+  // Future days show until the week is complete.
+  return !weekDone;
 }
 
 function isEveryNDaysDueOnDay(
@@ -298,7 +327,7 @@ export function getDayHabitProgress(
   for (const habit of habits) {
     if (!isHabitDueOnDay(habit, dateKey, todayKey, entriesByHabit.get(habit.id))) continue;
     due += 1;
-    const value = getEntryValue(entriesByHabit.get(habit.id), dateKey);
+    const value = getHabitProgressValue(habit, dateKey, entriesByHabit.get(habit.id));
     if (isHabitDoneOnDay(habit.target, value)) done += 1;
   }
   return { due, done };
@@ -391,7 +420,7 @@ export function buildAgendaSections(args: {
     const entries = entriesByHabit.get(habit.id);
     if (!isHabitDueOnDay(habit, selectedKey, todayKey, entries)) continue;
 
-    const value = getEntryValue(entries, selectedKey);
+    const value = getHabitProgressValue(habit, selectedKey, entries);
     const done = isHabitDoneOnDay(habit.target, value);
     const bucket = habitBucket(habit.timeOfDay);
     rowsByBucket[bucket].push({
@@ -401,6 +430,7 @@ export function buildAgendaSections(args: {
       bucket,
       dateKey: selectedKey,
       value,
+      dayValue: getEntryValue(entries, selectedKey),
       done,
       editable: !isFuture,
     });

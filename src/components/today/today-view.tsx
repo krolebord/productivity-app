@@ -16,7 +16,7 @@ import { useNoteDialogStore } from "@/components/note-dialog";
 import { noteContentToPlainText } from "@/components/note-extensions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { AgendaHabitRow, AgendaNoteRow, AgendaSection, DayHabitProgress } from "@/lib/agenda";
+import type { AgendaHabit, AgendaHabitRow, AgendaNoteRow, AgendaSection, DayHabitProgress } from "@/lib/agenda";
 import { formatDueDateLabel } from "@/lib/date-time";
 import { cn } from "@/lib/utils";
 import { type CalendarDayInfo, useAgenda } from "./use-agenda";
@@ -287,7 +287,7 @@ function AgendaSectionBlock({
   onOpenNote: (id: string) => void;
   onToggleNote: (id: string, completed: boolean) => void;
   onMoveNoteToToday: (note: AgendaNoteRow["note"]) => void;
-  onToggleHabit: (habitId: string, dateKey: string, done: boolean) => void;
+  onToggleHabit: (habit: AgendaHabit, dateKey: string, done: boolean) => void;
   onIncrementHabit: (habitId: string, dateKey: string, currentValue: number) => void;
 }) {
   return (
@@ -314,8 +314,8 @@ function AgendaSectionBlock({
             ) : (
               <HabitRow
                 row={row}
-                onToggle={(done) => onToggleHabit(row.id, row.dateKey, done)}
-                onIncrement={() => onIncrementHabit(row.id, row.dateKey, row.value)}
+                onToggle={(done) => onToggleHabit(row.habit, row.dateKey, done)}
+                onIncrement={() => onIncrementHabit(row.id, row.dateKey, row.dayValue)}
               />
             )}
           </li>

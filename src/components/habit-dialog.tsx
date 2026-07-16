@@ -343,7 +343,10 @@ function HabitDialogContent() {
         <div className="flex gap-3">
           <form.AppField name="target">
             {(field) => (
-              <field.FieldContainer labelText="Target" className="flex-1">
+              <field.FieldContainer
+                labelText={scheduleType === "weekly" ? "Target (per week)" : "Target (per day)"}
+                className="flex-1"
+              >
                 <field.FormInput
                   type="number"
                   min={1}
