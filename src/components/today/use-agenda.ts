@@ -4,11 +4,11 @@ import { useCallback, useMemo, useState } from "react";
 import { parseScheduleWeekdays } from "@/components/habit-dialog";
 import {
   type AgendaHabit,
-  type AgendaNote,
   type AgendaSection,
+  type AgendaTask,
   addLocalDays,
   buildAgendaSections,
-  dayHasIncompleteNotes,
+  dayHasIncompleteTasks,
   getDayHabitProgress,
   getMonthGridDays,
   getWeekDays,
@@ -24,7 +24,7 @@ import { useDb, useDbQuery } from "@/user-db/user-db";
 export type CalendarDayInfo = {
   date: Date;
   dateKey: string;
-  hasIncompleteNotes: boolean;
+  hasIncompleteTasks: boolean;
   habitProgress: { due: number; done: number } | null;
 };
 
@@ -55,12 +55,14 @@ export function useAgenda() {
     [habitsRaw],
   );
 
-  // Notes due in the visible calendar range, plus incomplete notes before today (overdue).
-  const { data: notes } = useDbQuery((q) =>
+  // Scheduled tasks in the visible range, plus incomplete tasks before today
+  // (overdue). The legacy clause keeps dated notes visible until the synced
+  // item-kind migration has reached this replica.
+  const { data: scheduledTasks } = useDbQuery((q) =>
     q
       .selectFrom("item")
       .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order"])
-      .where("type", "=", "note")
+      .where((eb) => eb.or([eb("type", "=", "task"), eb.and([eb("type", "=", "note"), eb("dueAt", "is not", null)])]))
       .where("dueAt", "is not", null)
       .where((eb) =>
         eb.or([
@@ -70,7 +72,18 @@ export function useAgenda() {
       ),
   );
 
-  const agendaNotes = notes as AgendaNote[];
+  const agendaTasks = scheduledTasks as AgendaTask[];
+
+  const { data: inboxTasks } = useDbQuery((q) =>
+    q
+      .selectFrom("item")
+      .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order"])
+      .where("type", "=", "task")
+      .where("dueAt", "is", null)
+      .where("completedAt", "is", null)
+      .orderBy("order", "asc")
+      .orderBy("createdAt", "asc"),
+  );
 
   // All entries (local SQLite is cheap). Needed so everyNDays can find the last
   // completion even when it falls outside the visible week.
@@ -107,11 +120,11 @@ export function useAgenda() {
         return {
           date,
           dateKey,
-          hasIncompleteNotes: dayHasIncompleteNotes(agendaNotes, dateKey),
+          hasIncompleteTasks: dayHasIncompleteTasks(agendaTasks, dateKey),
           habitProgress: progress.due > 0 && dateKey <= todayKey ? progress : null,
         };
       }),
-    [visibleDays, habits, todayKey, entriesByHabit, agendaNotes],
+    [visibleDays, habits, todayKey, entriesByHabit, agendaTasks],
   );
 
   const sections: AgendaSection[] = useMemo(
@@ -119,11 +132,11 @@ export function useAgenda() {
       buildAgendaSections({
         selectedKey,
         todayKey,
-        notes: agendaNotes,
+        tasks: agendaTasks,
         habits,
         entriesByHabit,
       }),
-    [selectedKey, todayKey, agendaNotes, habits, entriesByHabit],
+    [selectedKey, todayKey, agendaTasks, habits, entriesByHabit],
   );
 
   const selectDateKey = useCallback((dateKey: string) => {
@@ -149,26 +162,26 @@ export function useAgenda() {
     setCalendarExpanded((prev) => !prev);
   }, []);
 
-  const toggleNoteCompleted = useCallback(
-    (noteId: string, completed: boolean) => {
+  const toggleTaskCompleted = useCallback(
+    (taskId: string, completed: boolean) => {
       db.db.executeKysely((q) =>
         q
           .updateTable("item")
           .set({ completedAt: completed ? Date.now() : null })
-          .where("id", "=", noteId),
+          .where("id", "=", taskId),
       );
     },
     [db],
   );
 
-  const moveNoteToToday = useCallback(
-    (note: AgendaNote) => {
-      if (note.dueAt == null) return;
+  const moveTaskToToday = useCallback(
+    (task: AgendaTask) => {
+      if (task.dueAt == null) return;
       const todayDate = startOfLocalDay(new Date());
       let nextDueAt: number;
-      if (note.hasDueTime) {
-        const hours = new Date(note.dueAt).getHours();
-        const minutes = new Date(note.dueAt).getMinutes();
+      if (task.hasDueTime) {
+        const hours = new Date(task.dueAt).getHours();
+        const minutes = new Date(task.dueAt).getMinutes();
         nextDueAt = combineLocalDateAndTime(
           todayDate,
           `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
@@ -177,10 +190,73 @@ export function useAgenda() {
         nextDueAt = localMidnightMs(todayDate);
       }
       db.db.executeKysely((q) =>
-        q.updateTable("item").set({ dueAt: nextDueAt, completedAt: null }).where("id", "=", note.id),
+        q.updateTable("item").set({ dueAt: nextDueAt, completedAt: null }).where("id", "=", task.id),
       );
     },
     [db],
+  );
+
+  const createTask = useCallback(
+    (title: string, scheduled: boolean) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+
+      const id = generateId();
+      const createdAt = Date.now();
+      db.db.executeTransaction((trx) => {
+        const [maxOrderRow] = trx.executeKysely((q) =>
+          q
+            .selectFrom("item")
+            .select((eb) => eb.fn.max("order").as("maxOrder"))
+            .where("type", "=", "task"),
+        ).rows;
+        trx.executeKysely((q) =>
+          q.insertInto("item").values({
+            id,
+            type: "task",
+            title: trimmed,
+            content: "",
+            tags: "[]",
+            dueAt: scheduled ? localMidnightMs(selectedDate) : null,
+            hasDueTime: false,
+            completedAt: null,
+            order: Number(maxOrderRow?.maxOrder ?? 0) + 1,
+            createdAt,
+            tombstone: false,
+          }),
+        );
+      });
+    },
+    [db, selectedDate],
+  );
+
+  const scheduleInboxTask = useCallback(
+    (taskId: string) => {
+      db.db.executeKysely((q) =>
+        q
+          .updateTable("item")
+          .set({ dueAt: localMidnightMs(selectedDate), hasDueTime: false, completedAt: null })
+          .where("id", "=", taskId),
+      );
+    },
+    [db, selectedDate],
+  );
+
+  const completeInboxTask = useCallback(
+    (taskId: string, completed: boolean) => {
+      if (!completed) return;
+      db.db.executeKysely((q) =>
+        q
+          .updateTable("item")
+          .set({
+            dueAt: localMidnightMs(selectedDate),
+            hasDueTime: false,
+            completedAt: Date.now(),
+          })
+          .where("id", "=", taskId),
+      );
+    },
+    [db, selectedDate],
   );
 
   const setHabitEntryValue = useCallback(
@@ -251,11 +327,15 @@ export function useAgenda() {
     toggleCalendarExpanded,
     dayInfos,
     sections,
+    inboxTasks: inboxTasks as AgendaTask[],
     selectDateKey,
     goToToday,
     shiftCalendar,
-    toggleNoteCompleted,
-    moveNoteToToday,
+    createTask,
+    scheduleInboxTask,
+    completeInboxTask,
+    toggleTaskCompleted,
+    moveTaskToToday,
     toggleHabitDone,
     incrementHabit,
   };

@@ -22,6 +22,7 @@ import {
   ChevronsUpDown,
   Coins,
   Home,
+  ListTodoIcon,
   Loader2,
   LogOut,
   Menu,
@@ -44,6 +45,7 @@ import {
 import { useEffect, useState } from "react";
 import { useCreateAccount } from "@/components/account-dialog";
 import { useCreateNote } from "@/components/note-dialog";
+import { useCreateTask } from "@/components/task-dialog";
 import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/components/transaction-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth, useSignOut } from "@/lib/auth-client";
@@ -269,6 +271,7 @@ function AssistantToggle({ collapsed }: { collapsed: boolean }) {
 function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
   const openCommand = useCommandStore((s) => s.open);
   const createNote = useCreateNote();
+  const createTask = useCreateTask();
   const createExpense = useCreateExpense();
   const createIncome = useCreateIncome();
   const createTransfer = useCreateTransfer();
@@ -280,6 +283,10 @@ function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
         <StickyNote className="size-4" />
         New note
         <DropdownMenuShortcut>{formatForDisplay(NEW_NOTE_HOTKEY)}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={createTask}>
+        <ListTodoIcon className="size-4" />
+        New task
       </DropdownMenuItem>
       <DropdownMenuItem onClick={createExpense}>
         <ArrowDownLeftIcon className="size-4 text-red-500" />

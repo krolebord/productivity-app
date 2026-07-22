@@ -1,22 +1,32 @@
-import { useDroppable } from "@dnd-kit/core";
 import { format } from "date-fns";
 import {
   CalendarDays,
   CalendarPlus,
+  CheckCircle2Icon,
   CheckIcon,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  InboxIcon,
+  ListTodoIcon,
   PlusIcon,
 } from "lucide-react";
-import { useMemo } from "react";
-import { calendarDayDroppableId, TODAY_AREA_DROPPABLE_ID } from "@/components/app-dnd";
-import { useNoteDialogStore } from "@/components/note-dialog";
+import { type FormEvent, useMemo, useState } from "react";
 import { noteContentToPlainText } from "@/components/note-extensions";
+import { useTaskDialogStore } from "@/components/task-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { AgendaHabit, AgendaHabitRow, AgendaNoteRow, AgendaSection, DayHabitProgress } from "@/lib/agenda";
+import { Input } from "@/components/ui/input";
+import type {
+  AgendaHabit,
+  AgendaHabitRow,
+  AgendaRow,
+  AgendaSection,
+  AgendaTask,
+  AgendaTaskRow,
+  DayHabitProgress,
+} from "@/lib/agenda";
 import { formatDueDateLabel } from "@/lib/date-time";
 import { cn } from "@/lib/utils";
 import { type CalendarDayInfo, useAgenda } from "./use-agenda";
@@ -25,16 +35,29 @@ const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 
 export function TodayView() {
   const agenda = useAgenda();
-  const openNoteDialog = useNoteDialogStore((s) => s.open);
-
-  // No-op drop target covering the whole view: keeps a dragged note's overlay
-  // in calendar mode while it moves between day cells instead of flickering.
-  const areaDroppable = useDroppable({ id: TODAY_AREA_DROPPABLE_ID });
+  const openTaskDialog = useTaskDialogStore((s) => s.open);
 
   const headerLabel = agenda.isSelectedToday ? "Today" : format(agenda.selectedDate, "EEE, MMM d");
+  const activeSections = useMemo(
+    () =>
+      agenda.sections
+        .map((section) => ({
+          ...section,
+          rows: section.rows.filter((row) => (row.kind === "task" ? !row.completed : !row.done)),
+        }))
+        .filter((section) => section.rows.length > 0),
+    [agenda.sections],
+  );
+  const completedRows = useMemo(
+    () =>
+      agenda.sections.flatMap((section) =>
+        section.rows.filter((row) => (row.kind === "task" ? row.completed : row.done)),
+      ),
+    [agenda.sections],
+  );
 
   return (
-    <div ref={areaDroppable.setNodeRef} className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <h1 className="min-w-0 flex-1 truncate font-semibold text-xl">{headerLabel}</h1>
         {/* Always mounted so appearing/disappearing doesn't shift the header */}
@@ -72,21 +95,45 @@ export function TodayView() {
         onShift={agenda.shiftCalendar}
       />
 
-      {agenda.sections.length === 0 ? (
+      <QuickAddTask
+        selectedLabel={headerLabel}
+        onCreate={(title, sendToInbox) => agenda.createTask(title, !sendToInbox)}
+      />
+
+      {agenda.inboxTasks.length > 0 && (
+        <InboxSection
+          tasks={agenda.inboxTasks}
+          selectedLabel={headerLabel}
+          onOpen={openTaskDialog}
+          onToggle={agenda.completeInboxTask}
+          onSchedule={agenda.scheduleInboxTask}
+        />
+      )}
+
+      {activeSections.length === 0 && completedRows.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="flex flex-col gap-5">
-          {agenda.sections.map((section) => (
+          {activeSections.map((section) => (
             <AgendaSectionBlock
               key={section.bucket}
               section={section}
-              onOpenNote={openNoteDialog}
-              onToggleNote={agenda.toggleNoteCompleted}
-              onMoveNoteToToday={agenda.moveNoteToToday}
+              onOpenTask={openTaskDialog}
+              onToggleTask={agenda.toggleTaskCompleted}
+              onMoveTaskToToday={agenda.moveTaskToToday}
               onToggleHabit={agenda.toggleHabitDone}
               onIncrementHabit={agenda.incrementHabit}
             />
           ))}
+          {completedRows.length > 0 && (
+            <CompletedSection
+              rows={completedRows}
+              onOpenTask={openTaskDialog}
+              onToggleTask={agenda.toggleTaskCompleted}
+              onToggleHabit={agenda.toggleHabitDone}
+              onIncrementHabit={agenda.incrementHabit}
+            />
+          )}
         </div>
       )}
     </div>
@@ -192,12 +239,8 @@ function DayCell({
   muted?: boolean;
   onSelect: (dateKey: string) => void;
 }) {
-  // Notes dragged from the notes grid can be dropped here to reschedule them.
-  const droppable = useDroppable({ id: calendarDayDroppableId(day.dateKey) });
-
   return (
     <button
-      ref={droppable.setNodeRef}
       type="button"
       onClick={() => onSelect(day.dateKey)}
       aria-label={format(day.date, "EEEE, MMMM d")}
@@ -208,7 +251,6 @@ function DayCell({
         selected ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         !selected && isToday && "text-foreground",
         muted && !selected && "opacity-40",
-        droppable.isOver && "opacity-100 ring-2 ring-ring",
       )}
     >
       {initial && <span className="font-medium text-[10px] uppercase leading-none">{initial}</span>}
@@ -229,7 +271,7 @@ function DayCell({
       <span
         className={cn(
           "size-1 rounded-full",
-          day.hasIncompleteNotes ? (selected ? "bg-primary-foreground" : "bg-primary") : "bg-transparent",
+          day.hasIncompleteTasks ? (selected ? "bg-primary-foreground" : "bg-primary") : "bg-transparent",
         )}
       />
     </button>
@@ -265,28 +307,140 @@ function HabitProgressRing({
   );
 }
 
+function QuickAddTask({
+  selectedLabel,
+  onCreate,
+}: {
+  selectedLabel: string;
+  onCreate: (title: string, sendToInbox: boolean) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [sendToInbox, setSendToInbox] = useState(false);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    onCreate(title, sendToInbox);
+    setTitle("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex items-center gap-1 rounded-lg border bg-card p-1 shadow-xs">
+      <ListTodoIcon className="ml-2 size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <Input
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        placeholder="Add a task..."
+        aria-label="Task title"
+        className="min-w-0 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-8 shrink-0 gap-1 px-2 text-muted-foreground text-xs"
+        onClick={() => setSendToInbox((value) => !value)}
+        aria-label={sendToInbox ? "Send new task to Inbox" : `Schedule new task for ${selectedLabel}`}
+        title="Change task destination"
+      >
+        {sendToInbox ? <InboxIcon className="size-3.5" /> : <CalendarDays className="size-3.5" />}
+        <span className="hidden sm:inline">{sendToInbox ? "Inbox" : selectedLabel}</span>
+      </Button>
+      <Button type="submit" size="icon-sm" disabled={!title.trim()} aria-label="Add task">
+        <PlusIcon className="size-4" />
+      </Button>
+    </form>
+  );
+}
+
+function InboxSection({
+  tasks,
+  selectedLabel,
+  onOpen,
+  onToggle,
+  onSchedule,
+}: {
+  tasks: AgendaTask[];
+  selectedLabel: string;
+  onOpen: (id: string) => void;
+  onToggle: (id: string, completed: boolean) => void;
+  onSchedule: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <section className="rounded-lg border border-dashed bg-muted/20">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+      >
+        <InboxIcon className="size-4 text-muted-foreground" />
+        <span className="font-medium text-sm">Inbox</span>
+        <span className="text-muted-foreground text-xs tabular-nums">{tasks.length}</span>
+        <span className="ml-auto text-muted-foreground text-xs">Not scheduled</span>
+        <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", !expanded && "-rotate-90")} />
+      </button>
+      {expanded && (
+        <ul className="border-t px-1.5 py-1">
+          {tasks.map((task) => (
+            <li key={task.id}>
+              <div className="group flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-muted/60">
+                <Checkbox
+                  checked={false}
+                  onCheckedChange={(value) => onToggle(task.id, value === true)}
+                  aria-label={`Complete ${task.title || "untitled task"}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => onOpen(task.id)}
+                  className="min-w-0 flex-1 truncate text-left text-sm"
+                >
+                  {task.title.trim() || noteContentToPlainText(task.content, 100) || "Untitled"}
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                  aria-label={`Schedule for ${selectedLabel}`}
+                  title={`Schedule for ${selectedLabel}`}
+                  onClick={() => onSchedule(task.id)}
+                >
+                  <CalendarPlus className="size-3.5" />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed bg-card px-6 py-14 text-center">
       <CalendarDays className="size-8 text-muted-foreground" />
       <p className="font-medium">Nothing scheduled</p>
-      <p className="text-muted-foreground text-sm">No notes or habits due on this day.</p>
+      <p className="text-muted-foreground text-sm">Add a task or enjoy the open space.</p>
     </div>
   );
 }
 
 function AgendaSectionBlock({
   section,
-  onOpenNote,
-  onToggleNote,
-  onMoveNoteToToday,
+  onOpenTask,
+  onToggleTask,
+  onMoveTaskToToday,
   onToggleHabit,
   onIncrementHabit,
 }: {
   section: AgendaSection;
-  onOpenNote: (id: string) => void;
-  onToggleNote: (id: string, completed: boolean) => void;
-  onMoveNoteToToday: (note: AgendaNoteRow["note"]) => void;
+  onOpenTask: (id: string) => void;
+  onToggleTask: (id: string, completed: boolean) => void;
+  onMoveTaskToToday: (task: AgendaTaskRow["task"]) => void;
   onToggleHabit: (habit: AgendaHabit, dateKey: string, done: boolean) => void;
   onIncrementHabit: (habitId: string, dateKey: string, currentValue: number) => void;
 }) {
@@ -303,13 +457,13 @@ function AgendaSectionBlock({
       <ul className="flex flex-col gap-0.5">
         {section.rows.map((row) => (
           <li key={`${row.kind}-${row.id}`}>
-            {row.kind === "note" ? (
-              <NoteRow
+            {row.kind === "task" ? (
+              <TaskRow
                 row={row}
                 overdue={section.bucket === "overdue"}
-                onOpen={() => onOpenNote(row.id)}
-                onToggle={(completed) => onToggleNote(row.id, completed)}
-                onMoveToToday={() => onMoveNoteToToday(row.note)}
+                onOpen={() => onOpenTask(row.id)}
+                onToggle={(completed) => onToggleTask(row.id, completed)}
+                onMoveToToday={() => onMoveTaskToToday(row.task)}
               />
             ) : (
               <HabitRow
@@ -325,26 +479,80 @@ function AgendaSectionBlock({
   );
 }
 
-function NoteRow({
+function CompletedSection({
+  rows,
+  onOpenTask,
+  onToggleTask,
+  onToggleHabit,
+  onIncrementHabit,
+}: {
+  rows: AgendaRow[];
+  onOpenTask: (id: string) => void;
+  onToggleTask: (id: string, completed: boolean) => void;
+  onToggleHabit: (habit: AgendaHabit, dateKey: string, done: boolean) => void;
+  onIncrementHabit: (habitId: string, dateKey: string, currentValue: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <section className="border-t pt-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      >
+        <CheckCircle2Icon className="size-4" />
+        <span className="font-medium text-sm">Completed</span>
+        <span className="text-xs tabular-nums">{rows.length}</span>
+        <ChevronDown className={cn("ml-auto size-4 transition-transform", !expanded && "-rotate-90")} />
+      </button>
+      {expanded && (
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {rows.map((row) => (
+            <li key={`${row.kind}-${row.id}`}>
+              {row.kind === "task" ? (
+                <TaskRow
+                  row={row}
+                  overdue={false}
+                  onOpen={() => onOpenTask(row.id)}
+                  onToggle={(completed) => onToggleTask(row.id, completed)}
+                />
+              ) : (
+                <HabitRow
+                  row={row}
+                  onToggle={(done) => onToggleHabit(row.habit, row.dateKey, done)}
+                  onIncrement={() => onIncrementHabit(row.id, row.dateKey, row.dayValue)}
+                />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function TaskRow({
   row,
   overdue,
   onOpen,
   onToggle,
   onMoveToToday,
 }: {
-  row: AgendaNoteRow;
+  row: AgendaTaskRow;
   overdue: boolean;
   onOpen: () => void;
   onToggle: (completed: boolean) => void;
-  onMoveToToday: () => void;
+  onMoveToToday?: () => void;
 }) {
-  const { note, completed } = row;
-  const title = note.title.trim();
+  const { task, completed } = row;
+  const title = task.title.trim();
   // Only parse the body when we actually need a fallback (no title).
-  const preview = useMemo(() => (title ? "" : noteContentToPlainText(note.content, 100)), [title, note.content]);
+  const preview = useMemo(() => (title ? "" : noteContentToPlainText(task.content, 100)), [title, task.content]);
   const label = title || preview || "Untitled";
-  const timeLabel = note.hasDueTime && note.dueAt != null ? format(note.dueAt, "HH:mm") : null;
-  const dueLabel = overdue && note.dueAt != null ? formatDueDateLabel(note.dueAt, note.hasDueTime) : null;
+  const timeLabel = task.hasDueTime && task.dueAt != null ? format(task.dueAt, "HH:mm") : null;
+  const dueLabel = overdue && task.dueAt != null ? formatDueDateLabel(task.dueAt, task.hasDueTime) : null;
 
   return (
     <div

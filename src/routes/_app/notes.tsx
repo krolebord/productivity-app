@@ -1,12 +1,12 @@
-import type { CollisionDetection, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
+import type { CollisionDetection, DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
 import { closestCenter, DragOverlay } from "@dnd-kit/core";
 import { generateId } from "@sqlite-sync/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { CalendarDays, CheckIcon, MinusIcon, PlusIcon, SearchIcon, StickyNote, XIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CheckIcon, MinusIcon, PlusIcon, SearchIcon, StickyNote, XIcon } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import { isCalendarDropTarget, useDndDelegate } from "@/components/app-dnd";
+import { useDndDelegate } from "@/components/app-dnd";
 import { useMasonryLayout } from "@/components/masonry-grid";
 import { NoteCard, NoteCardContent } from "@/components/note-card";
 import { useCreateNote, useNoteDialogStore } from "@/components/note-dialog";
@@ -14,13 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NEW_NOTE_HOTKEY } from "@/lib/hotkeys";
-import {
-  effectiveMatch,
-  matchesNoteStatus,
-  type NoteStatusFilter,
-  noteViewSearch,
-  viewMatchesSearch,
-} from "@/lib/note-views";
+import { effectiveMatch, noteViewSearch, viewMatchesSearch } from "@/lib/note-views";
 import { parseTags, UNTAGGED } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import type { NoteItem, NoteViewItem } from "@/user-db/migrations";
@@ -52,16 +46,8 @@ const notesSearchSchema = z.object({
   tags: z.array(z.string()).optional(),
   not: z.array(z.string()).optional(),
   match: z.enum(["any"]).optional(),
-  status: z.enum(["pending", "completed", "overdue"]).optional(),
   q: z.string().optional(),
 });
-
-const STATUS_OPTIONS: { value: NoteStatusFilter | undefined; label: string }[] = [
-  { value: undefined, label: "All" },
-  { value: "pending", label: "Pending" },
-  { value: "overdue", label: "Overdue" },
-  { value: "completed", label: "Done" },
-];
 
 type NotesSearch = z.infer<typeof notesSearchSchema>;
 
@@ -179,16 +165,7 @@ function NotesPage() {
   const include = useMemo(() => search.tags ?? [], [search.tags]);
   const exclude = useMemo(() => search.not ?? [], [search.not]);
   const matchMode: TagFilter["match"] = search.match === "any" ? "any" : "all";
-  const status = search.status;
   const query = search.q ?? "";
-
-  // "Overdue" is time-dependent; tick every minute so notes crossing their due
-  // time (and the segment counts) stay current while the page is open.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(id);
-  }, []);
   const createNote = useCreateNote();
   const openNoteDialog = useNoteDialogStore((s) => s.open);
 
@@ -210,7 +187,6 @@ function NotesPage() {
             not: merged.not?.length ? merged.not : undefined,
             // "any" vs "all" only matters with 2+ included tags; drop it otherwise.
             match: tags && tags.length >= 2 && merged.match === "any" ? ("any" as const) : undefined,
-            status: merged.status,
             q: merged.q || undefined,
           };
         },
@@ -240,7 +216,7 @@ function NotesPage() {
   );
 
   const clearFilters = useCallback(() => {
-    patchSearch({ tags: undefined, not: undefined, match: undefined, status: undefined, q: undefined });
+    patchSearch({ tags: undefined, not: undefined, match: undefined, q: undefined });
   }, [patchSearch]);
 
   const { data: views } = useDbQuery((db) =>
@@ -250,9 +226,9 @@ function NotesPage() {
   // The view whose stored filter equals the current one; drives pill highlight
   // and hides "Save view" when the current filter is already saved.
   const activeViewId = useMemo(() => {
-    const current = { tags: include, not: exclude, match: matchMode === "any" ? ("any" as const) : undefined, status };
+    const current = { tags: include, not: exclude, match: matchMode === "any" ? ("any" as const) : undefined };
     return views.find((view) => viewMatchesSearch(view, current))?.id ?? null;
-  }, [views, include, exclude, matchMode, status]);
+  }, [views, include, exclude, matchMode]);
 
   const applyView = useCallback(
     (view: NoteViewItem) => {
@@ -281,7 +257,7 @@ function NotesPage() {
           include: JSON.stringify(include),
           exclude: JSON.stringify(exclude),
           match: effectiveMatch(include, matchMode),
-          status: status ?? null,
+          status: null,
           order: Number(maxOrderRow?.maxOrder ?? 0) + 1,
           createdAt: now,
           updatedAt: now,
@@ -290,7 +266,7 @@ function NotesPage() {
     });
     setViewName("");
     setSaveViewOpen(false);
-  }, [db, viewName, include, exclude, matchMode, status]);
+  }, [db, viewName, include, exclude, matchMode]);
 
   const deleteView = useCallback(
     (id: string) => {
@@ -300,7 +276,15 @@ function NotesPage() {
   );
 
   const { data: list } = useDbQuery(
-    (db) => db.selectFrom("item").selectAll().where("type", "=", "note").orderBy("order", "asc"),
+    (db) =>
+      db
+        .selectFrom("item")
+        .selectAll()
+        .where("type", "=", "note")
+        // Legacy dated notes are tasks and stay out of Notes while their
+        // synced item-kind conversion runs.
+        .where("dueAt", "is", null)
+        .orderBy("order", "asc"),
     {
       mapData: (notes) => ({
         notes: notes,
@@ -322,35 +306,14 @@ function NotesPage() {
   const filter = useMemo<TagFilter>(() => ({ include, exclude, match: matchMode }), [include, exclude, matchMode]);
 
   const hasTagFilter = include.length > 0 || exclude.length > 0;
-  const isFiltering = hasTagFilter || status != null || query.length > 0;
+  const isFiltering = hasTagFilter || query.length > 0;
 
-  // Status applies before tags so the tag counts in the editor reflect it.
-  const statusNotes = useMemo(() => {
-    if (!status) return notes;
-    return notes.filter((note) => matchesNoteStatus(note, status, now));
-  }, [notes, status, now]);
-
-  // Notes passing the status + tag filters, before the text query. Kept
-  // separate so tag counts in the editor don't reflect the search box.
+  // Notes passing the tag filters, before the text query. Kept separate so
+  // tag counts in the editor don't reflect the search box.
   const tagMatchedNotes = useMemo(() => {
-    if (!hasTagFilter) return statusNotes;
-    return statusNotes.filter((note) => matchesTagFilter(note, filter));
-  }, [statusNotes, hasTagFilter, filter]);
-
-  // Per-segment counts for the status control, within the current tag filter
-  // (but ignoring the active status, so every segment shows its own reach).
-  const statusCounts = useMemo(() => {
-    const base = hasTagFilter ? notes.filter((note) => matchesTagFilter(note, filter)) : notes;
-    const counts: Record<NoteStatusFilter, number> = { pending: 0, overdue: 0, completed: 0 };
-    for (const note of base) {
-      if (note.completedAt != null) counts.completed += 1;
-      else {
-        counts.pending += 1;
-        if (matchesNoteStatus(note, "overdue", now)) counts.overdue += 1;
-      }
-    }
-    return counts;
-  }, [notes, hasTagFilter, filter, now]);
+    if (!hasTagFilter) return notes;
+    return notes.filter((note) => matchesTagFilter(note, filter));
+  }, [notes, hasTagFilter, filter]);
 
   const visibleNotes = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -387,28 +350,21 @@ function NotesPage() {
   const rowCount = useCallback(
     (tag: string) => {
       if (exclude.includes(tag)) {
-        return statusNotes.filter((note) => noteFilterTags(note).includes(tag) && matchesTagFilter(note, filter, tag))
-          .length;
+        return notes.filter((note) => noteFilterTags(note).includes(tag) && matchesTagFilter(note, filter, tag)).length;
       }
       if (matchMode === "any" && include.length > 0 && !include.includes(tag)) {
         const alone: TagFilter = { include: [tag], exclude, match: "any" };
-        return statusNotes.filter((note) => matchesTagFilter(note, alone)).length;
+        return notes.filter((note) => matchesTagFilter(note, alone)).length;
       }
       return tagMatchedNotes.filter((note) => noteFilterTags(note).includes(tag)).length;
     },
-    [statusNotes, tagMatchedNotes, filter, include, exclude, matchMode],
+    [notes, tagMatchedNotes, filter, include, exclude, matchMode],
   );
 
   // While a drag is in progress the order lives here, updated on every
   // drag-over so the grid reflows live under the pointer.
   const [dragIds, setDragIds] = useState<string[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-
-  // While hovering a Today-panel calendar day, the drag overlay collapses to a
-  // small chip so the day cell under it stays visible. The chip is anchored to
-  // the grab point because the overlay wrapper keeps the card's dimensions.
-  const [overCalendar, setOverCalendar] = useState(false);
-  const [grabOffset, setGrabOffset] = useState<{ x: number; y: number } | null>(null);
 
   const orderedNotes = useMemo(() => {
     if (!dragIds) return visibleNotes;
@@ -441,9 +397,7 @@ function NotesPage() {
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
       // While filtering (including saved views), the grid isn't reorderable:
-      // hidden notes make drop positions ambiguous. Report no collision so
-      // the drag can only land on Today-panel calendar days (handled before
-      // this delegate in AppDndProvider).
+      // hidden notes make drop positions ambiguous.
       if (isFiltering) return [];
       const inner = masonry.innerEl;
       const pointer = args.pointerCoordinates;
@@ -476,26 +430,10 @@ function NotesPage() {
     setDragIds(notes.map((note) => note.id));
     lastPointerRef.current = null;
     lastReorderPointerRef.current = null;
-
-    setOverCalendar(false);
-    setGrabOffset(null);
-  }
-
-  // The active rect isn't measured yet in onDragStart, so the grab offset is
-  // captured on the first move: activator coords are the drag-start pointer
-  // position, and the initial rect is where the card was at that moment.
-  function handleDragMove(event: DragMoveEvent) {
-    if (grabOffset) return;
-    const rect = event.active.rect.current.initial;
-    const activator = event.activatorEvent;
-    if (rect && activator instanceof PointerEvent) {
-      setGrabOffset({ x: activator.clientX - rect.left, y: activator.clientY - rect.top });
-    }
   }
 
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
-    setOverCalendar(over != null && isCalendarDropTarget(String(over.id)));
     if (isFiltering || !over || over.id === active.id) return;
 
     // Reordering reflows the masonry, which can change the collision result
@@ -525,7 +463,6 @@ function NotesPage() {
   const finishDrag = useCallback(() => {
     setActiveId(null);
     setDragIds(null);
-    setOverCalendar(false);
     recentlyDraggedRef.current = true;
     setTimeout(() => {
       recentlyDraggedRef.current = false;
@@ -580,12 +517,10 @@ function NotesPage() {
     }
   }
 
-  // Drag handling lives in the app-shell AppDndProvider so notes can also be
-  // dropped on Today-panel calendar days; this page owns everything else.
+  // Drag handling is delegated to the app-shell DndContext.
   useDndDelegate({
     collisionDetection,
     onDragStart: handleDragStart,
-    onDragMove: handleDragMove,
     onDragOver: handleDragOver,
     onDragEnd: handleDragEnd,
     onDragCancel: finishDrag,
@@ -604,14 +539,14 @@ function NotesPage() {
         </Button>
       </div>
 
-      {(views.length > 0 || ((hasTagFilter || status != null) && activeViewId === null)) && (
+      {(views.length > 0 || (hasTagFilter && activeViewId === null)) && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
           <button
             type="button"
-            onClick={() => patchSearch({ tags: undefined, not: undefined, match: undefined, status: undefined })}
+            onClick={() => patchSearch({ tags: undefined, not: undefined, match: undefined })}
             className={cn(
               "inline-flex h-7 items-center rounded-full border px-3 font-medium text-xs transition-colors",
-              !hasTagFilter && status == null
+              !hasTagFilter
                 ? "border-primary bg-primary text-primary-foreground"
                 : "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
             )}
@@ -660,7 +595,7 @@ function NotesPage() {
             );
           })}
 
-          {(hasTagFilter || status != null) && activeViewId === null && (
+          {hasTagFilter && activeViewId === null && (
             <Popover open={saveViewOpen} onOpenChange={setSaveViewOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -811,34 +746,10 @@ function NotesPage() {
             </PopoverContent>
           </Popover>
 
-          <div className="flex h-8 items-center overflow-hidden rounded-full border bg-card text-xs">
-            {STATUS_OPTIONS.map((option) => {
-              const active = status === option.value;
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  onClick={() => patchSearch({ status: option.value })}
-                  className={cn(
-                    "flex h-full items-center gap-1 px-2.5 transition-colors sm:px-3",
-                    active ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {option.label}
-                  {option.value && (
-                    <span className={cn("tabular-nums", active ? "text-muted-foreground" : "text-muted-foreground/60")}>
-                      {statusCounts[option.value]}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {(hasTagFilter || status != null) && (
+          {hasTagFilter && (
             <button
               type="button"
-              onClick={() => patchSearch({ tags: undefined, not: undefined, match: undefined, status: undefined })}
+              onClick={() => patchSearch({ tags: undefined, not: undefined, match: undefined })}
               className="ml-1 text-muted-foreground text-sm underline-offset-2 hover:text-foreground hover:underline"
             >
               Clear all
@@ -897,29 +808,11 @@ function NotesPage() {
       </div>
 
       <DragOverlay dropAnimation={{ duration: 200, easing: "ease" }}>
-        {activeNote &&
-          (overCalendar ? (
-            <div className="relative h-full w-full">
-              <div
-                className="absolute flex w-max max-w-56 cursor-grabbing items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-card-foreground shadow-xl"
-                style={
-                  grabOffset
-                    ? // Snap the chip to the cursor: centered horizontally, its
-                      // bottom edge just above the pointer so the target day
-                      // cell below stays visible.
-                      { left: grabOffset.x, top: grabOffset.y, transform: "translate(-50%, calc(-100% - 2px))" }
-                    : undefined
-                }
-              >
-                <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate text-sm">{activeNote.title.trim() || "Untitled"}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="cursor-grabbing rounded-lg border bg-card text-card-foreground shadow-xl">
-              <NoteCardContent note={activeNote} />
-            </div>
-          ))}
+        {activeNote && (
+          <div className="cursor-grabbing rounded-lg border bg-card text-card-foreground shadow-xl">
+            <NoteCardContent note={activeNote} />
+          </div>
+        )}
       </DragOverlay>
     </div>
   );

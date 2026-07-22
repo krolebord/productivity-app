@@ -1,6 +1,6 @@
 import { generateId } from "@sqlite-sync/core";
 import { useMatches } from "@tanstack/react-router";
-import { Trash2Icon } from "lucide-react";
+import { ListTodoIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
@@ -8,9 +8,9 @@ import { parseTags, serializeTags, UNTAGGED } from "@/lib/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@/lib/use-debounced-callback";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
-import { NoteDueDateControl, type NoteDueFields } from "./note-due-date";
 import { NoteEditor, type NoteEditorHandle } from "./note-editor";
 import { TagInput } from "./tag-input";
+import { useTaskDialogStore } from "./task-dialog";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { useInlineConfirm } from "./ui/inline-confirm";
@@ -82,9 +82,6 @@ type NoteFields = {
   title?: string;
   content?: string;
   tags?: string;
-  dueAt?: number | null;
-  hasDueTime?: boolean;
-  completedAt?: number | null;
 };
 
 function NoteDialogContent({
@@ -92,11 +89,13 @@ function NoteDialogContent({
   saveNote,
   onClose,
   onDelete,
+  onConvertToTask,
 }: {
   noteId: string;
   saveNote: DebouncedCallback<[NoteFields]>;
   onClose: () => void;
   onDelete: () => void;
+  onConvertToTask: () => void;
 }) {
   const {
     data: [note],
@@ -115,8 +114,6 @@ function NoteDialogContent({
 
   const [title, setTitle] = useState(note?.title ?? "");
   const [tags, setTags] = useState<string[]>(() => parseTags(note?.tags));
-  const [dueAt, setDueAt] = useState<number | null>(note?.dueAt ?? null);
-  const [hasDueTime, setHasDueTime] = useState(note?.hasDueTime ?? false);
   const editorRef = useRef<NoteEditorHandle>(null);
   // Latest values live in a ref so every save carries all fields,
   // regardless of which input triggered it.
@@ -124,9 +121,6 @@ function NoteDialogContent({
     title: note?.title ?? "",
     content: note?.content ?? "",
     tags: note?.tags ?? "[]",
-    dueAt: note?.dueAt ?? null,
-    hasDueTime: note?.hasDueTime ?? false,
-    completedAt: note?.completedAt ?? null,
   });
 
   const updateNote = (fields: NoteFields) => {
@@ -138,12 +132,6 @@ function NoteDialogContent({
   const handleTagsChange = (next: string[]) => {
     setTags(next);
     updateNote({ tags: serializeTags(next) });
-  };
-
-  const handleDueChange = (fields: NoteDueFields) => {
-    setDueAt(fields.dueAt);
-    setHasDueTime(fields.hasDueTime);
-    updateNote(fields);
   };
 
   const deleteConfirm = useInlineConfirm({ onConfirm: onDelete });
@@ -179,8 +167,17 @@ function NoteDialogContent({
           onEscape={onClose}
         />
       </div>
-      <div className="flex shrink-0 items-center justify-between border-t pt-2">
-        <NoteDueDateControl dueAt={dueAt} hasDueTime={hasDueTime} onChange={handleDueChange} />
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t pt-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground"
+          onClick={onConvertToTask}
+        >
+          <ListTodoIcon />
+          Turn into task
+        </Button>
         <Button
           type="button"
           variant={deleteConfirm.armed ? "destructive" : "ghost"}
@@ -205,6 +202,7 @@ export function NoteDialog() {
   const noteId = useNoteDialogStore((x) => x.noteId);
   const openRevision = useNoteDialogStore((x) => x.openRevision);
   const closeDialog = useNoteDialogStore((x) => x.close);
+  const openTaskDialog = useTaskDialogStore((x) => x.open);
 
   const saveNote = useDebounceCallback((fields: NoteFields) => {
     db.db.executeKysely((q) => q.updateTable("item").set(fields).where("id", "=", noteId));
@@ -221,6 +219,19 @@ export function NoteDialog() {
     closeDialog();
   }
 
+  function convertToTask() {
+    if (!noteId) return;
+    saveNote.flush();
+    db.db.executeKysely((q) =>
+      q
+        .updateTable("item")
+        .set({ type: "task", dueAt: null, hasDueTime: false, completedAt: null })
+        .where("id", "=", noteId),
+    );
+    closeDialog();
+    openTaskDialog(noteId);
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && saveAndClose()}>
       <DialogContent className="flex flex-col gap-3 overflow-hidden pb-2 sm:max-w-lg sm:pb-2" showCloseButton={false}>
@@ -231,6 +242,7 @@ export function NoteDialog() {
             saveNote={saveNote}
             onClose={saveAndClose}
             onDelete={deleteAndClose}
+            onConvertToTask={convertToTask}
           />
         ) : (
           <DialogTitle>Edit note</DialogTitle>

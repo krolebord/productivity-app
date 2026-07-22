@@ -43,7 +43,7 @@ export type AgendaHabit = {
 /** dateKey ("YYYY-MM-DD") → summed entry value for that day. */
 export type HabitEntryValuesByDate = ReadonlyMap<string, number>;
 
-export type AgendaNote = {
+export type AgendaTask = {
   id: string;
   title: string;
   content: string;
@@ -53,10 +53,10 @@ export type AgendaNote = {
   order: number | null;
 };
 
-export type AgendaNoteRow = {
-  kind: "note";
+export type AgendaTaskRow = {
+  kind: "task";
   id: string;
-  note: AgendaNote;
+  task: AgendaTask;
   bucket: AgendaBucket;
   completed: boolean;
   sortTime: number | null;
@@ -77,7 +77,7 @@ export type AgendaHabitRow = {
   editable: boolean;
 };
 
-export type AgendaRow = AgendaNoteRow | AgendaHabitRow;
+export type AgendaRow = AgendaTaskRow | AgendaHabitRow;
 
 export type AgendaSection = {
   bucket: AgendaBucket;
@@ -286,29 +286,29 @@ export function habitBucket(timeOfDay: HabitTimeOfDay): Exclude<AgendaBucket, "o
   return timeOfDay ?? "anytime";
 }
 
-/** Timed notes by hour; all-day → anytime. */
-export function noteBucket(note: Pick<AgendaNote, "dueAt" | "hasDueTime">): Exclude<AgendaBucket, "overdue"> {
-  if (!note.hasDueTime || note.dueAt == null) return "anytime";
-  const hour = new Date(note.dueAt).getHours();
+/** Timed tasks by hour; all-day → anytime. */
+export function taskBucket(task: Pick<AgendaTask, "dueAt" | "hasDueTime">): Exclude<AgendaBucket, "overdue"> {
+  if (!task.hasDueTime || task.dueAt == null) return "anytime";
+  const hour = new Date(task.dueAt).getHours();
   if (hour >= 5 && hour <= 11) return "morning";
   if (hour >= 12 && hour <= 16) return "afternoon";
   if (hour >= 17 && hour <= 20) return "evening";
   return "night";
 }
 
-export function isNoteOnLocalDay(dueAt: number, dateKey: string): boolean {
+export function isTaskOnLocalDay(dueAt: number, dateKey: string): boolean {
   return toDateKey(new Date(dueAt)) === dateKey;
 }
 
-export function isNoteOverdueForToday(note: Pick<AgendaNote, "dueAt" | "completedAt">, todayKey: string): boolean {
-  if (note.dueAt == null || note.completedAt != null) return false;
+export function isTaskOverdueForToday(task: Pick<AgendaTask, "dueAt" | "completedAt">, todayKey: string): boolean {
+  if (task.dueAt == null || task.completedAt != null) return false;
   const todayStart = localMidnightMs(parseDateKey(todayKey));
-  return note.dueAt < todayStart;
+  return task.dueAt < todayStart;
 }
 
-/** Incomplete dated notes due on `dateKey` (for week-strip dots). */
-export function dayHasIncompleteNotes(notes: readonly AgendaNote[], dateKey: string): boolean {
-  return notes.some((note) => note.dueAt != null && note.completedAt == null && isNoteOnLocalDay(note.dueAt, dateKey));
+/** Incomplete scheduled tasks on `dateKey` (for week-strip dots). */
+export function dayHasIncompleteTasks(tasks: readonly AgendaTask[], dateKey: string): boolean {
+  return tasks.some((task) => task.dueAt != null && task.completedAt == null && isTaskOnLocalDay(task.dueAt, dateKey));
 }
 
 export type DayHabitProgress = {
@@ -335,25 +335,25 @@ export function getDayHabitProgress(
 
 function compareAgendaRows(a: AgendaRow, b: AgendaRow): number {
   // Incomplete first, completed at bottom.
-  if (a.kind === "note" ? a.completed : a.done) {
-    if (!(b.kind === "note" ? b.completed : b.done)) return 1;
-  } else if (b.kind === "note" ? b.completed : b.done) {
+  if (a.kind === "task" ? a.completed : a.done) {
+    if (!(b.kind === "task" ? b.completed : b.done)) return 1;
+  } else if (b.kind === "task" ? b.completed : b.done) {
     return -1;
   }
 
   const rank = (row: AgendaRow) => {
-    if (row.kind === "note") return row.sortTime != null ? 0 : 1;
+    if (row.kind === "task") return row.sortTime != null ? 0 : 1;
     return 2;
   };
   const ra = rank(a);
   const rb = rank(b);
   if (ra !== rb) return ra - rb;
 
-  if (a.kind === "note" && b.kind === "note") {
+  if (a.kind === "task" && b.kind === "task") {
     const ta = a.sortTime ?? 0;
     const tb = b.sortTime ?? 0;
     if (ta !== tb) return ta - tb;
-    return (a.note.order ?? 0) - (b.note.order ?? 0);
+    return (a.task.order ?? 0) - (b.task.order ?? 0);
   }
 
   if (a.kind === "habit" && b.kind === "habit") {
@@ -371,11 +371,11 @@ function compareAgendaRows(a: AgendaRow, b: AgendaRow): number {
 export function buildAgendaSections(args: {
   selectedKey: string;
   todayKey: string;
-  notes: readonly AgendaNote[];
+  tasks: readonly AgendaTask[];
   habits: readonly AgendaHabit[];
   entriesByHabit: ReadonlyMap<string, HabitEntryValuesByDate>;
 }): AgendaSection[] {
-  const { selectedKey, todayKey, notes, habits, entriesByHabit } = args;
+  const { selectedKey, todayKey, tasks, habits, entriesByHabit } = args;
   const isToday = selectedKey === todayKey;
   const isFuture = selectedKey > todayKey;
 
@@ -388,31 +388,31 @@ export function buildAgendaSections(args: {
     anytime: [],
   };
 
-  for (const note of notes) {
-    if (note.dueAt == null) continue;
+  for (const task of tasks) {
+    if (task.dueAt == null) continue;
 
-    if (isToday && isNoteOverdueForToday(note, todayKey)) {
+    if (isToday && isTaskOverdueForToday(task, todayKey)) {
       rowsByBucket.overdue.push({
-        kind: "note",
-        id: note.id,
-        note,
+        kind: "task",
+        id: task.id,
+        task,
         bucket: "overdue",
         completed: false,
-        sortTime: note.hasDueTime ? note.dueAt : null,
+        sortTime: task.hasDueTime ? task.dueAt : null,
       });
       continue;
     }
 
-    if (!isNoteOnLocalDay(note.dueAt, selectedKey)) continue;
+    if (!isTaskOnLocalDay(task.dueAt, selectedKey)) continue;
 
-    const bucket = noteBucket(note);
+    const bucket = taskBucket(task);
     rowsByBucket[bucket].push({
-      kind: "note",
-      id: note.id,
-      note,
+      kind: "task",
+      id: task.id,
+      task,
       bucket,
-      completed: note.completedAt != null,
-      sortTime: note.hasDueTime ? note.dueAt : null,
+      completed: task.completedAt != null,
+      sortTime: task.hasDueTime ? task.dueAt : null,
     });
   }
 

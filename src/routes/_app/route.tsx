@@ -12,6 +12,8 @@ import { Devtools } from "@/components/devtools";
 import { HabitDialog } from "@/components/habit-dialog";
 import { NoteDialog } from "@/components/note-dialog";
 import { SyncStatusMonitor } from "@/components/sync-status-monitor";
+import { TaskDialog } from "@/components/task-dialog";
+import { LegacyTaskMigration } from "@/components/task-migration";
 import { TodayPanel } from "@/components/today/today-panel";
 import { TransactionDialog } from "@/components/transaction-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
@@ -89,6 +91,7 @@ function RouteComponent() {
     <DbProvider db={db}>
       <AppDndProvider>
         <SyncStatusMonitor />
+        <LegacyTaskMigration />
         <div className="flex h-dvh overflow-hidden">
           <AppSidebar />
           <Group
@@ -124,6 +127,7 @@ function RouteComponent() {
         )}
         <CommandPalette />
         <NoteDialog />
+        <TaskDialog />
         <AccountDialog />
         <HabitDialog />
         <TransactionDialog />

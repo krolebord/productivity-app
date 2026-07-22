@@ -4,7 +4,7 @@ import {
   buildAgendaSections,
   getDayHabitProgress,
   isHabitDueOnDay,
-  noteBucket,
+  taskBucket,
   toDateKey,
 } from "./agenda";
 
@@ -136,14 +136,14 @@ describe("isHabitDueOnDay", () => {
   });
 });
 
-describe("noteBucket", () => {
+describe("taskBucket", () => {
   it("maps hours to buckets and all-day to anytime", () => {
-    expect(noteBucket({ dueAt: new Date(2026, 6, 9, 9).getTime(), hasDueTime: true })).toBe("morning");
-    expect(noteBucket({ dueAt: new Date(2026, 6, 9, 14).getTime(), hasDueTime: true })).toBe("afternoon");
-    expect(noteBucket({ dueAt: new Date(2026, 6, 9, 19).getTime(), hasDueTime: true })).toBe("evening");
-    expect(noteBucket({ dueAt: new Date(2026, 6, 9, 22).getTime(), hasDueTime: true })).toBe("night");
-    expect(noteBucket({ dueAt: new Date(2026, 6, 9, 3).getTime(), hasDueTime: true })).toBe("night");
-    expect(noteBucket({ dueAt: new Date(2026, 6, 9).getTime(), hasDueTime: false })).toBe("anytime");
+    expect(taskBucket({ dueAt: new Date(2026, 6, 9, 9).getTime(), hasDueTime: true })).toBe("morning");
+    expect(taskBucket({ dueAt: new Date(2026, 6, 9, 14).getTime(), hasDueTime: true })).toBe("afternoon");
+    expect(taskBucket({ dueAt: new Date(2026, 6, 9, 19).getTime(), hasDueTime: true })).toBe("evening");
+    expect(taskBucket({ dueAt: new Date(2026, 6, 9, 22).getTime(), hasDueTime: true })).toBe("night");
+    expect(taskBucket({ dueAt: new Date(2026, 6, 9, 3).getTime(), hasDueTime: true })).toBe("night");
+    expect(taskBucket({ dueAt: new Date(2026, 6, 9).getTime(), hasDueTime: false })).toBe("anytime");
   });
 });
 
@@ -171,9 +171,9 @@ describe("getDayHabitProgress", () => {
 });
 
 describe("buildAgendaSections", () => {
-  it("puts overdue notes only on today and buckets the rest", () => {
+  it("puts overdue tasks only on today and buckets the rest", () => {
     const today = "2026-07-09";
-    const notes = [
+    const tasks = [
       {
         id: "over",
         title: "Old",
@@ -210,7 +210,7 @@ describe("buildAgendaSections", () => {
     const sections = buildAgendaSections({
       selectedKey: today,
       todayKey: today,
-      notes,
+      tasks,
       habits,
       entriesByHabit: new Map(),
     });
@@ -223,7 +223,7 @@ describe("buildAgendaSections", () => {
 
   it("hides overdue on non-today days and marks future habits non-editable", () => {
     const today = "2026-07-09";
-    const notes = [
+    const tasks = [
       {
         id: "over",
         title: "Old",
@@ -247,7 +247,7 @@ describe("buildAgendaSections", () => {
     const sections = buildAgendaSections({
       selectedKey: "2026-07-10",
       todayKey: today,
-      notes,
+      tasks,
       habits,
       entriesByHabit: new Map(),
     });
@@ -263,7 +263,7 @@ describe("buildAgendaSections", () => {
     const sections = buildAgendaSections({
       selectedKey: today,
       todayKey: today,
-      notes: [],
+      tasks: [],
       habits,
       entriesByHabit: new Map([["wk", entries(["2026-07-06", 1], ["2026-07-09", 1])]]),
     });
@@ -275,7 +275,7 @@ describe("buildAgendaSections", () => {
 
   it("sorts completed rows to the bottom of a section", () => {
     const today = "2026-07-09";
-    const notes = [
+    const tasks = [
       {
         id: "done",
         title: "Done",
@@ -298,7 +298,7 @@ describe("buildAgendaSections", () => {
     const sections = buildAgendaSections({
       selectedKey: today,
       todayKey: today,
-      notes,
+      tasks,
       habits: [],
       entriesByHabit: new Map(),
     });

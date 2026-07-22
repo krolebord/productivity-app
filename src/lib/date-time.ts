@@ -38,20 +38,3 @@ export function formatDueDateLabel(dueAt: number, hasDueTime: boolean): string {
   if (!hasDueTime) return datePart;
   return `${datePart} ${format(date, "HH:mm")}`;
 }
-
-/**
- * Whether a dated note is overdue. All-day items (`hasDueTime` false) become
- * overdue only after the local calendar day of `dueAt` has ended.
- */
-export function isNoteDueOverdue(
-  dueAt: number,
-  hasDueTime: boolean,
-  completedAt: number | null | undefined,
-  now = Date.now(),
-): boolean {
-  if (completedAt != null) return false;
-  if (hasDueTime) return dueAt < now;
-  const endOfDueDay = new Date(dueAt);
-  endOfDueDay.setHours(23, 59, 59, 999);
-  return endOfDueDay.getTime() < now;
-}

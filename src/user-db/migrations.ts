@@ -354,8 +354,11 @@ export const syncDbSchema = defineSyncSchema({
   tables: {
     item: t
       .table({
-        type: t.text().default("note").describe('Currently always "note".'),
-        title: t.text().describe("Note title (may be empty for untitled notes)."),
+        type: t
+          .enum(["note", "task"])
+          .default("note")
+          .describe('Item kind: "note" for reference material, "task" for an actionable item.'),
+        title: t.text().describe("Note or task title (may be empty)."),
         createdAt: t.integer(),
         content: t
           .text()
@@ -372,7 +375,7 @@ export const syncDbSchema = defineSyncSchema({
           .nullable()
           .default(null)
           .describe(
-            "When the note is due / appears on the Today agenda (epoch ms). Null means undated — a plain note, not an agenda item.",
+            "When a task is scheduled on the agenda (epoch ms). Null means the task is in Inbox. Always null for notes.",
           ),
         hasDueTime: t
           .boolean()
@@ -384,15 +387,14 @@ export const syncDbSchema = defineSyncSchema({
           .integer()
           .nullable()
           .default(null)
-          .describe(
-            "Epoch ms when the user checked this dated note off the agenda. Completing dismisses it from Today but does not delete or otherwise change the note itself. Null when not completed.",
-          ),
+          .describe("Epoch ms when the task was completed, or null when it is still open. Always null for notes."),
       })
       .describe(
         [
-          "The user's notes. Notes with a non-null `dueAt` also act as todos/agenda items on the Today",
-          "view: they appear on the day of `dueAt` until `completedAt` is set. Undated notes (`dueAt` null)",
-          "are ordinary notes and do not appear on the agenda.",
+          "The user's notes and tasks, distinguished by `type`. Notes are durable reference material and use",
+          "title, content, tags, and order. Tasks are actions: a null dueAt puts them in Inbox; a non-null",
+          "dueAt schedules them on the agenda; completedAt records completion. Tasks may use content and tags",
+          "for supporting details.",
         ].join(" "),
       ),
     currency_rate: t
@@ -707,7 +709,7 @@ export const syncDbSchema = defineSyncSchema({
           .nullable()
           .default(null)
           .describe(
-            'Optional completion-status filter: "pending" (not completed), "overdue" (dated, past due, not completed), "completed". Null means all notes.',
+            "Legacy field retained for sync compatibility. New note views leave it null and the UI ignores it.",
           ),
         order: t.real().default(0).describe("Manual sort position, ascending."),
         createdAt: t.integer(),
@@ -743,6 +745,7 @@ export const syncDbSchema = defineSyncSchema({
 });
 
 export type NoteItem = typeof syncDbSchema.tables.item.$row;
+export type TaskItem = typeof syncDbSchema.tables.item.$row;
 export type CurrencyRateItem = typeof syncDbSchema.tables.currency_rate.$row;
 export type AccountItem = typeof syncDbSchema.tables.account.$row;
 export type TransactionEntryItem = typeof syncDbSchema.tables.transaction_entry.$row;

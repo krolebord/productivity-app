@@ -9,6 +9,7 @@ import {
   Brain,
   CoinsIcon,
   Home,
+  ListTodoIcon,
   MessageSquarePlusIcon,
   Plug,
   PlusIcon,
@@ -24,6 +25,7 @@ import { useCreateAccount, useRefreshAccountBalances } from "@/components/accoun
 import { useNewConversation } from "@/components/assistant/assistant-sidebar";
 import { useOpenCategoryImportanceDialog } from "@/components/category-importance-dialog";
 import { useCreateNote } from "@/components/note-dialog";
+import { useCreateTask } from "@/components/task-dialog";
 import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/components/transaction-dialog";
 import { useCommandStore } from "@/lib/command-store";
 import {
@@ -63,6 +65,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const createNote = useCreateNote();
+  const createTask = useCreateTask();
   const createAccount = useCreateAccount();
   const createExpense = useCreateExpense();
   const createIncome = useCreateIncome();
@@ -120,6 +123,10 @@ export function CommandPalette() {
             New note
             <CommandShortcut>{formatForDisplay(NEW_NOTE_HOTKEY)}</CommandShortcut>
           </CommandItem>
+          <CommandItem onSelect={() => runAndClose(createTask)}>
+            <ListTodoIcon className="size-4" />
+            New task
+          </CommandItem>
           <CommandItem onSelect={() => runAndClose(createExpense)}>
             <ArrowDownLeftIcon className="size-4 text-red-500" />
             New expense
@@ -173,6 +180,10 @@ export function CommandPalette() {
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/notes" }))}>
             <StickyNote className="size-4" />
             Notes
+          </CommandItem>
+          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/today" }))}>
+            <ListTodoIcon className="size-4" />
+            Today
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/accounts" }))}>
             <Wallet className="size-4" />

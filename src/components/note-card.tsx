@@ -1,6 +1,5 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Trash2 } from "lucide-react";
-import { NoteDueBadge } from "@/components/note-due-date";
 import { NoteMarkdown } from "@/components/note-markdown";
 import { parseTags } from "@/lib/tags";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
@@ -19,7 +18,7 @@ export function NoteCardContent({
 }) {
   const tags = parseTags(note.tags);
   const active = new Set(activeTags);
-  const hasMeta = note.dueAt != null || tags.length > 0;
+  const hasMeta = tags.length > 0;
 
   return (
     <div className="px-4 py-3">
@@ -34,7 +33,6 @@ export function NoteCardContent({
       )}
       {hasMeta && (
         <div className="mt-2 flex flex-wrap gap-1">
-          <NoteDueBadge note={note} />
           {tags.map((tag) => {
             const isActive = active.has(tag);
             const baseClass = "inline-flex items-center rounded-full px-2 py-0.5 font-medium text-[11px]";
