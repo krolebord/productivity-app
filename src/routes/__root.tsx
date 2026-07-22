@@ -1,9 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, type ErrorComponentProps, Link, Outlet } from "@tanstack/react-router";
 import { AlertTriangle, FileQuestion } from "lucide-react";
+import { AppUpdateProvider } from "@/components/app-update-provider";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Devtools } from "@/components/devtools";
-import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -59,11 +59,10 @@ function ErrorPage({ error, reset }: ErrorComponentProps) {
 
 function Root() {
   return (
-    <>
+    <AppUpdateProvider>
       <Outlet />
       <ConfirmDialog />
-      <PwaUpdatePrompt />
       <Toaster closeButton />
-    </>
+    </AppUpdateProvider>
   );
 }

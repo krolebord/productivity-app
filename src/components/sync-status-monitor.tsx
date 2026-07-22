@@ -1,19 +1,13 @@
 import { toast } from "sonner";
+import { useAppUpdate } from "@/components/app-update-provider";
 import { useDb, useDbEvent } from "@/user-db/user-db";
 
 export function SyncStatusMonitor() {
   const db = useDb();
+  const reportDatabaseUpdate = useAppUpdate();
 
   useDbEvent("remote-schema-version-mismatch", () => {
-    toast.warning("A new version is available", {
-      id: "sync-schema-mismatch",
-      description: "Reload to update to the latest version.",
-      duration: Number.POSITIVE_INFINITY,
-      action: {
-        label: "Reload",
-        onClick: () => db.requestReload({ clean: false }),
-      },
-    });
+    reportDatabaseUpdate(() => db.requestReload({ clean: false }));
   });
 
   useDbEvent("de-sync-detected", () => {
