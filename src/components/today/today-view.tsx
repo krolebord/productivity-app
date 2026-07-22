@@ -1,3 +1,5 @@
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { format } from "date-fns";
 import {
   CalendarDays,
@@ -8,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  GripVerticalIcon,
   InboxIcon,
   ListTodoIcon,
   PlusIcon,
@@ -27,6 +30,7 @@ import type {
   AgendaTaskRow,
   DayHabitProgress,
 } from "@/lib/agenda";
+import { calendarDayDroppableId } from "@/lib/app-dnd";
 import { formatDueDateLabel } from "@/lib/date-time";
 import { cn } from "@/lib/utils";
 import { type CalendarDayInfo, useAgenda } from "./use-agenda";
@@ -40,12 +44,11 @@ export function TodayView() {
   const headerLabel = agenda.isSelectedToday ? "Today" : format(agenda.selectedDate, "EEE, MMM d");
   const activeSections = useMemo(
     () =>
-      agenda.sections
-        .map((section) => ({
-          ...section,
-          rows: section.rows.filter((row) => (row.kind === "task" ? !row.completed : !row.done)),
-        }))
-        .filter((section) => section.rows.length > 0),
+      agenda.sections.reduce<AgendaSection[]>((result, section) => {
+        const rows = section.rows.filter((row) => (row.kind === "task" ? !row.completed : !row.done));
+        if (rows.length > 0) result.push({ ...section, rows });
+        return result;
+      }, []),
     [agenda.sections],
   );
   const completedRows = useMemo(
@@ -239,8 +242,11 @@ function DayCell({
   muted?: boolean;
   onSelect: (dateKey: string) => void;
 }) {
+  const droppable = useDroppable({ id: calendarDayDroppableId(day.dateKey) });
+
   return (
     <button
+      ref={droppable.setNodeRef}
       type="button"
       onClick={() => onSelect(day.dateKey)}
       aria-label={format(day.date, "EEEE, MMMM d")}
@@ -251,6 +257,7 @@ function DayCell({
         selected ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         !selected && isToday && "text-foreground",
         muted && !selected && "opacity-40",
+        droppable.isOver && "opacity-100 ring-2 ring-ring ring-offset-1 ring-offset-background",
       )}
     >
       {initial && <span className="font-medium text-[10px] uppercase leading-none">{initial}</span>}
@@ -386,36 +393,83 @@ function InboxSection({
         <ul className="border-t px-1.5 py-1">
           {tasks.map((task) => (
             <li key={task.id}>
-              <div className="group flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-muted/60">
-                <Checkbox
-                  checked={false}
-                  onCheckedChange={(value) => onToggle(task.id, value === true)}
-                  aria-label={`Complete ${task.title || "untitled task"}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => onOpen(task.id)}
-                  className="min-w-0 flex-1 truncate text-left text-sm"
-                >
-                  {task.title.trim() || noteContentToPlainText(task.content, 100) || "Untitled"}
-                </button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0 text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                  aria-label={`Schedule for ${selectedLabel}`}
-                  title={`Schedule for ${selectedLabel}`}
-                  onClick={() => onSchedule(task.id)}
-                >
-                  <CalendarPlus className="size-3.5" />
-                </Button>
-              </div>
+              <InboxTaskRow
+                task={task}
+                selectedLabel={selectedLabel}
+                onOpen={() => onOpen(task.id)}
+                onToggle={(completed) => onToggle(task.id, completed)}
+                onSchedule={() => onSchedule(task.id)}
+              />
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+function TaskDragHandle({ draggable, label }: { draggable: ReturnType<typeof useDraggable>; label: string }) {
+  return (
+    <button
+      ref={draggable.setActivatorNodeRef}
+      type="button"
+      className="-ml-1 flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/60 opacity-100 hover:bg-muted hover:text-foreground active:cursor-grabbing md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+      aria-label={`Drag ${label} to another date`}
+      title="Drag to reschedule"
+      {...draggable.attributes}
+      {...draggable.listeners}
+    >
+      <GripVerticalIcon className="size-3.5" />
+    </button>
+  );
+}
+
+function InboxTaskRow({
+  task,
+  selectedLabel,
+  onOpen,
+  onToggle,
+  onSchedule,
+}: {
+  task: AgendaTask;
+  selectedLabel: string;
+  onOpen: () => void;
+  onToggle: (completed: boolean) => void;
+  onSchedule: () => void;
+}) {
+  const draggable = useDraggable({ id: task.id, data: { kind: "task" } });
+  const label = task.title.trim() || noteContentToPlainText(task.content, 100) || "Untitled";
+
+  return (
+    <div
+      ref={draggable.setNodeRef}
+      style={{ transform: CSS.Translate.toString(draggable.transform) }}
+      className={cn(
+        "group relative flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-muted/60",
+        draggable.isDragging && "z-20 bg-card opacity-90 shadow-md",
+      )}
+    >
+      <TaskDragHandle draggable={draggable} label={label} />
+      <Checkbox
+        checked={false}
+        onCheckedChange={(value) => onToggle(value === true)}
+        aria-label={`Complete ${label}`}
+      />
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 truncate text-left text-sm">
+        {label}
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="shrink-0 text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+        aria-label={`Schedule for ${selectedLabel}`}
+        title={`Schedule for ${selectedLabel}`}
+        onClick={onSchedule}
+      >
+        <CalendarPlus className="size-3.5" />
+      </Button>
+    </div>
   );
 }
 
@@ -553,14 +607,19 @@ function TaskRow({
   const label = title || preview || "Untitled";
   const timeLabel = task.hasDueTime && task.dueAt != null ? format(task.dueAt, "HH:mm") : null;
   const dueLabel = overdue && task.dueAt != null ? formatDueDateLabel(task.dueAt, task.hasDueTime) : null;
+  const draggable = useDraggable({ id: task.id, data: { kind: "task" } });
 
   return (
     <div
+      ref={draggable.setNodeRef}
+      style={{ transform: CSS.Translate.toString(draggable.transform) }}
       className={cn(
-        "group flex items-start gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-muted/60",
+        "group relative flex items-start gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-muted/60",
         completed && "opacity-60",
+        draggable.isDragging && "z-20 bg-card opacity-90 shadow-md",
       )}
     >
+      <TaskDragHandle draggable={draggable} label={label} />
       <Checkbox
         checked={completed}
         onCheckedChange={(value) => onToggle(value === true)}
