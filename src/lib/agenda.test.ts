@@ -103,6 +103,53 @@ describe("isHabitDueOnDay", () => {
     });
   });
 
+  describe("monthly", () => {
+    const h = habit({ id: "mo", scheduleType: "monthly" });
+
+    it("always shows on today, even once done earlier in the month", () => {
+      expect(isHabitDueOnDay(h, "2026-07-09", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-02", today, entries(["2026-07-02", 1]))).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-09", today, entries(["2026-07-02", 1]))).toBe(true);
+    });
+
+    it("shows on future days until the month is complete", () => {
+      expect(isHabitDueOnDay(h, "2026-07-20", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-20", today, entries(["2026-07-02", 1]))).toBe(false);
+      // Next month is unaffected by this month's completion.
+      expect(isHabitDueOnDay(h, "2026-08-03", today, entries(["2026-07-02", 1]))).toBe(true);
+    });
+
+    it("past incomplete month shows only on its last day", () => {
+      expect(isHabitDueOnDay(h, "2026-06-15", today, undefined)).toBe(false);
+      expect(isHabitDueOnDay(h, "2026-06-30", today, undefined)).toBe(true);
+    });
+
+    it("past completed month shows only on days with logged entries", () => {
+      const e = entries(["2026-06-11", 1]);
+      expect(isHabitDueOnDay(h, "2026-06-11", today, e)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-06-30", today, e)).toBe(false);
+      expect(isHabitDueOnDay(h, "2026-06-10", today, e)).toBe(false);
+    });
+
+    it("target accumulates across the month", () => {
+      const h3 = habit({ id: "mo3", scheduleType: "monthly", target: 3 });
+      // June: 1+1+1 across three days completes the month.
+      const done = entries(["2026-06-02", 1], ["2026-06-14", 1], ["2026-06-25", 1]);
+      expect(isHabitDueOnDay(h3, "2026-06-30", today, done)).toBe(false); // not missed on the last day
+      expect(isHabitDueOnDay(h3, "2026-06-14", today, done)).toBe(true); // contribution day shows
+      expect(isHabitDueOnDay(h3, "2026-06-15", today, done)).toBe(false); // no entry that day
+
+      // Only 2/3 logged: still missed on the last day.
+      const partial = entries(["2026-06-02", 1], ["2026-06-14", 1]);
+      expect(isHabitDueOnDay(h3, "2026-06-30", today, partial)).toBe(true);
+
+      // Current month complete via sum: hidden on future days, still shown today.
+      const thisMonth = entries(["2026-07-01", 2], ["2026-07-08", 1]);
+      expect(isHabitDueOnDay(h3, "2026-07-09", today, thisMonth)).toBe(true);
+      expect(isHabitDueOnDay(h3, "2026-07-20", today, thisMonth)).toBe(false);
+    });
+  });
+
   describe("everyNDays", () => {
     it("is due from createdAt day when never completed", () => {
       const h = habit({
@@ -266,6 +313,22 @@ describe("buildAgendaSections", () => {
       tasks: [],
       habits,
       entriesByHabit: new Map([["wk", entries(["2026-07-06", 1], ["2026-07-09", 1])]]),
+    });
+    const row = sections.flatMap((s) => s.rows).find((r) => r.kind === "habit");
+    expect(row?.kind === "habit" && row.value).toBe(2);
+    expect(row?.kind === "habit" && row.dayValue).toBe(1);
+    expect(row?.kind === "habit" && row.done).toBe(false);
+  });
+
+  it("carries month-sum progress and per-day value for monthly habits", () => {
+    const today = "2026-07-09";
+    const habits = [habit({ id: "mo", scheduleType: "monthly", target: 3 })];
+    const sections = buildAgendaSections({
+      selectedKey: today,
+      todayKey: today,
+      tasks: [],
+      habits,
+      entriesByHabit: new Map([["mo", entries(["2026-07-01", 1], ["2026-07-09", 1])]]),
     });
     const row = sections.flatMap((s) => s.rows).find((r) => r.kind === "habit");
     expect(row?.kind === "habit" && row.value).toBe(2);

@@ -22,6 +22,7 @@ import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useStat
 import { parseScheduleWeekdays, useCreateHabit, useHabitDialogStore } from "@/components/habit-dialog";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { habitTargetPeriodLabel } from "@/lib/agenda";
 import { cn } from "@/lib/utils";
 import type { HabitItem } from "@/user-db/migrations";
 import { useDb, useDbQuery } from "@/user-db/user-db";
@@ -53,6 +54,8 @@ export function formatHabitSchedule(habit: Pick<HabitItem, "scheduleType" | "sch
       return "Every day";
     case "weekly":
       return "Once a week";
+    case "monthly":
+      return "Once a month";
     case "everyNDays": {
       const n = habit.scheduleInterval;
       return n === 1 ? "Every day" : `Every ${n} days`;
@@ -70,7 +73,7 @@ export function formatHabitSchedule(habit: Pick<HabitItem, "scheduleType" | "sch
 export function formatHabitTarget(habit: Pick<HabitItem, "target" | "unit" | "scheduleType">) {
   if (habit.target <= 1) return null;
   const unit = habit.unit.trim();
-  const period = habit.scheduleType === "weekly" ? "week" : "day";
+  const period = habitTargetPeriodLabel(habit.scheduleType);
   if (unit) return `${habit.target} ${unit}/${period}`;
   return `×${habit.target}/${period}`;
 }

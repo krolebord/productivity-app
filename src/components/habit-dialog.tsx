@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { z } from "zod";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
+import { habitTargetPeriodLabel } from "@/lib/agenda";
 import { createDynamicValidationLogic, dynamicZodValidators } from "@/lib/form-schemas";
 import { cn } from "@/lib/utils";
 import type { HabitItem } from "@/user-db/migrations";
@@ -20,6 +21,7 @@ export type HabitTimeOfDay = NonNullable<HabitItem["timeOfDay"]>;
 const SCHEDULE_TYPES = [
   { value: "daily", label: "Every day" },
   { value: "weekly", label: "Once a week" },
+  { value: "monthly", label: "Once a month" },
   { value: "everyNDays", label: "Every N days" },
   { value: "weekdays", label: "Specific weekdays" },
 ] as const satisfies ReadonlyArray<{ value: HabitScheduleType; label: string }>;
@@ -45,7 +47,7 @@ const WEEKDAYS = [
 const habitFormSchema = z
   .object({
     name: z.string().trim().min(1, "Name is required."),
-    scheduleType: z.enum(["daily", "weekly", "everyNDays", "weekdays"]),
+    scheduleType: z.enum(["daily", "weekly", "monthly", "everyNDays", "weekdays"]),
     scheduleInterval: z.string(),
     scheduleWeekdays: z.array(z.number().int().min(1).max(7)),
     timeOfDay: z.enum(["anytime", "morning", "afternoon", "evening", "night"]),
@@ -344,7 +346,7 @@ function HabitDialogContent() {
           <form.AppField name="target">
             {(field) => (
               <field.FieldContainer
-                labelText={scheduleType === "weekly" ? "Target (per week)" : "Target (per day)"}
+                labelText={`Target (per ${habitTargetPeriodLabel(scheduleType)})`}
                 className="flex-1"
               >
                 <field.FormInput

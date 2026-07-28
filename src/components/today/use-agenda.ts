@@ -1,5 +1,5 @@
 import { generateId } from "@sqlite-sync/core";
-import { addMonths } from "date-fns";
+import { addMonths, endOfMonth } from "date-fns";
 import { useCallback, useMemo, useState } from "react";
 import { parseScheduleWeekdays } from "@/components/habit-dialog";
 import {
@@ -10,10 +10,11 @@ import {
   buildAgendaSections,
   dayHasIncompleteTasks,
   getDayHabitProgress,
+  getHabitPeriodDays,
   getMonthGridDays,
   getWeekDays,
   type HabitEntryValuesByDate,
-  parseDateKey,
+  isHabitPeriodSchedule,
   startOfLocalDay,
   toAgendaHabit,
   toDateKey,
@@ -43,7 +44,9 @@ export function useAgenda() {
   );
   const visibleStart = visibleDays[0] ?? selectedDate;
   const visibleEnd = visibleDays[visibleDays.length - 1] ?? selectedDate;
-  const visibleEndKey = toDateKey(visibleEnd);
+  // Monthly habits sum their whole calendar month, which can extend past a
+  // collapsed week view, so entries are loaded up to the end of that month.
+  const entriesEndKey = toDateKey(endOfMonth(visibleEnd));
   const visibleStartMs = localMidnightMs(visibleStart);
   const visibleEndExclusiveMs = localMidnightMs(visibleEnd) + 24 * 60 * 60 * 1000;
   const todayStartMs = localMidnightMs(today);
@@ -88,7 +91,7 @@ export function useAgenda() {
   // All entries (local SQLite is cheap). Needed so everyNDays can find the last
   // completion even when it falls outside the visible week.
   const { data: entriesRaw } = useDbQuery((q) =>
-    q.selectFrom("habit_entry").select(["id", "habitId", "date", "value"]).where("date", "<=", visibleEndKey),
+    q.selectFrom("habit_entry").select(["id", "habitId", "date", "value"]).where("date", "<=", entriesEndKey),
   );
 
   const entriesByHabit = useMemo(() => {
@@ -299,9 +302,9 @@ export function useAgenda() {
         setHabitEntryValue(habit.id, dateKey, 1);
         return;
       }
-      if (habit.scheduleType === "weekly") {
-        // A weekly habit's completion may live on another day of the week.
-        for (const day of getWeekDays(parseDateKey(dateKey))) {
+      if (isHabitPeriodSchedule(habit.scheduleType)) {
+        // A weekly/monthly habit's completion may live on another day of the period.
+        for (const day of getHabitPeriodDays(habit.scheduleType, dateKey)) {
           setHabitEntryValue(habit.id, toDateKey(day), 0);
         }
         return;

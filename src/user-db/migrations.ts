@@ -637,14 +637,14 @@ export const syncDbSchema = defineSyncSchema({
       .table({
         name: t.text().default("").describe("Display name of the habit."),
         scheduleType: t
-          .enum(["daily", "weekly", "everyNDays", "weekdays"])
+          .enum(["daily", "weekly", "monthly", "everyNDays", "weekdays"])
           .default("daily")
           .describe(
             [
               'How often the habit is due: "daily" = every day; "weekdays" = only on the ISO weekdays listed',
               'in scheduleWeekdays; "weekly" = target accumulates over the calendar week (Monday-start), shown',
-              'until the week sum reaches target; "everyNDays" = due scheduleInterval days after the last',
-              "completed day, shown until done.",
+              'until the week sum reaches target; "monthly" = same but over the calendar month;',
+              '"everyNDays" = due scheduleInterval days after the last completed day, shown until done.',
             ].join(" "),
           ),
         scheduleInterval: t
@@ -666,7 +666,7 @@ export const syncDbSchema = defineSyncSchema({
           .real()
           .default(1)
           .describe(
-            "Quantity target. For weekly habits it applies to the whole Monday-start week (done when the week's summed habit_entry.value is >= target); for all other schedules it applies per day. 1 means a simple check-off.",
+            "Quantity target. For weekly habits it applies to the whole Monday-start week and for monthly habits to the whole calendar month (done when the period's summed habit_entry.value is >= target); for all other schedules it applies per day. 1 means a simple check-off.",
           ),
         unit: t.text().default("").describe('Optional unit label for the target, e.g. "pages". Empty when unused.'),
         order: t.real().default(0).describe("Manual sort position, ascending."),
@@ -682,9 +682,10 @@ export const syncDbSchema = defineSyncSchema({
         [
           "Recurring habits shown on the Today view. Schedule semantics: daily = every day; weekdays = on the",
           "days listed in scheduleWeekdays; weekly = target summed over the Monday-start calendar week (shown",
-          "until the week sum reaches target); everyNDays = due scheduleInterval days after the last completed",
-          "day (shown until done). Except for weekly habits, done-for-a-day means the sum of habit_entry.value",
-          "for that date is >= target. Soft-archive via archivedAt rather than deleting.",
+          "until the week sum reaches target); monthly = the same over the calendar month; everyNDays = due",
+          "scheduleInterval days after the last completed day (shown until done). Except for weekly and monthly",
+          "habits, done-for-a-day means the sum of habit_entry.value for that date is >= target.",
+          "Soft-archive via archivedAt rather than deleting.",
         ].join(" "),
       ),
     note_view: t
@@ -729,7 +730,7 @@ export const syncDbSchema = defineSyncSchema({
           .real()
           .default(0)
           .describe(
-            "Accumulated amount logged for this habit on this date. Counts toward habit.target per day, or summed over the Monday-start week for weekly habits.",
+            "Accumulated amount logged for this habit on this date. Counts toward habit.target per day, or summed over the Monday-start week for weekly habits and the calendar month for monthly habits.",
           ),
         createdAt: t.integer(),
         updatedAt: t.integer(),
@@ -737,7 +738,8 @@ export const syncDbSchema = defineSyncSchema({
       .describe(
         [
           "Per-day progress toward a habit. One logical entry per (habitId, date); value accumulates toward",
-          "habit.target — per day for most schedules, summed across the Monday-start week for weekly habits.",
+          "habit.target — per day for most schedules, summed across the Monday-start week for weekly habits",
+          "and the calendar month for monthly habits.",
         ].join(" "),
       ),
   },

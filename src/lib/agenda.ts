@@ -21,7 +21,10 @@ export const AGENDA_BUCKET_LABELS: Record<AgendaBucket, string> = {
   anytime: "Anytime",
 };
 
-export type HabitScheduleType = "daily" | "weekly" | "everyNDays" | "weekdays";
+export type HabitScheduleType = "daily" | "weekly" | "monthly" | "everyNDays" | "weekdays";
+
+/** Schedules whose target accumulates over a calendar period rather than a single day. */
+export type HabitPeriodScheduleType = "weekly" | "monthly";
 export type HabitTimeOfDay = "morning" | "afternoon" | "evening" | "night" | null;
 
 /** Minimal habit shape needed for due-date / agenda logic. */
@@ -68,7 +71,7 @@ export type AgendaHabitRow = {
   habit: AgendaHabit;
   bucket: Exclude<AgendaBucket, "overdue">;
   dateKey: string;
-  /** Progress toward target: week sum for weekly habits, day value otherwise. */
+  /** Progress toward target: period sum for weekly/monthly habits, day value otherwise. */
   value: number;
   /** Value logged on this specific day (what entry edits operate on). */
   dayValue: number;
@@ -182,28 +185,53 @@ function sumValuesInRange(entries: HabitEntryValuesByDate | undefined, startKey:
   return sum;
 }
 
-function weekDateKeys(dateKey: string): string[] {
-  return getWeekDays(parseDateKey(dateKey)).map(toDateKey);
+/** The period a habit's target applies to, e.g. "5 pages per week". */
+export function habitTargetPeriodLabel(scheduleType: HabitScheduleType): "day" | "week" | "month" {
+  if (scheduleType === "weekly") return "week";
+  if (scheduleType === "monthly") return "month";
+  return "day";
+}
+
+export function isHabitPeriodSchedule(scheduleType: HabitScheduleType): scheduleType is HabitPeriodScheduleType {
+  return scheduleType === "weekly" || scheduleType === "monthly";
+}
+
+/** Inclusive [start, end] dateKeys of the Mon–Sun week or calendar month containing `dateKey`. */
+export function habitPeriodRange(scheduleType: HabitPeriodScheduleType, dateKey: string): [string, string] {
+  const date = parseDateKey(dateKey);
+  if (scheduleType === "monthly") return [toDateKey(startOfMonth(date)), toDateKey(endOfMonth(date))];
+  const days = getWeekDays(date);
+  return [toDateKey(days[0] ?? date), toDateKey(days[6] ?? date)];
+}
+
+/** Local midnights of every day in the period containing `dateKey`. */
+export function getHabitPeriodDays(scheduleType: HabitPeriodScheduleType, dateKey: string): Date[] {
+  const [startKey, endKey] = habitPeriodRange(scheduleType, dateKey);
+  const days: Date[] = [];
+  for (let day = parseDateKey(startKey); toDateKey(day) <= endKey; day = addLocalDays(day, 1)) {
+    days.push(day);
+  }
+  return days;
 }
 
 /**
- * Progress value shown for a habit on a day: weekly habits accumulate their
- * target over the Mon–Sun week containing the day; others count per day.
+ * Progress value shown for a habit on a day: weekly/monthly habits accumulate
+ * their target over the calendar period containing the day; others count per day.
  */
 export function getHabitProgressValue(
   habit: Pick<AgendaHabit, "scheduleType">,
   dateKey: string,
   entries: HabitEntryValuesByDate | undefined,
 ): number {
-  if (habit.scheduleType !== "weekly") return getEntryValue(entries, dateKey);
-  const keys = weekDateKeys(dateKey);
-  return sumValuesInRange(entries, keys[0] ?? dateKey, keys[6] ?? dateKey);
+  if (!isHabitPeriodSchedule(habit.scheduleType)) return getEntryValue(entries, dateKey);
+  const [startKey, endKey] = habitPeriodRange(habit.scheduleType, dateKey);
+  return sumValuesInRange(entries, startKey, endKey);
 }
 
 /**
  * Whether a habit should appear on local day `dateKey`.
  *
- * @param todayKey - "today" in local TZ; used to distinguish past vs current/future weekly rules.
+ * @param todayKey - "today" in local TZ; used to distinguish past vs current/future period rules.
  */
 export function isHabitDueOnDay(
   habit: AgendaHabit,
@@ -226,7 +254,8 @@ export function isHabitDueOnDay(
     }
 
     case "weekly":
-      return isWeeklyDueOnDay(habit, dateKey, todayKey, entries, valueOnDay);
+    case "monthly":
+      return isPeriodDueOnDay(habit, habit.scheduleType, dateKey, todayKey, entries, valueOnDay);
 
     case "everyNDays":
       return isEveryNDaysDueOnDay(habit, dateKey, entries, doneOnDay);
@@ -236,29 +265,28 @@ export function isHabitDueOnDay(
   }
 }
 
-function isWeeklyDueOnDay(
+function isPeriodDueOnDay(
   habit: Pick<AgendaHabit, "target">,
+  scheduleType: HabitPeriodScheduleType,
   dateKey: string,
   todayKey: string,
   entries: HabitEntryValuesByDate | undefined,
   valueOnDay: number,
 ): boolean {
-  const keys = weekDateKeys(dateKey);
-  const weekStart = keys[0] ?? dateKey;
-  const weekEnd = keys[6] ?? dateKey;
-  const weekDone = sumValuesInRange(entries, weekStart, weekEnd) >= habit.target;
+  const [periodStart, periodEnd] = habitPeriodRange(scheduleType, dateKey);
+  const periodDone = sumValuesInRange(entries, periodStart, periodEnd) >= habit.target;
 
   if (dateKey < todayKey) {
-    // Past day: show days that logged progress, or missed on the week's last day.
+    // Past day: show days that logged progress, or missed on the period's last day.
     if (valueOnDay > 0) return true;
-    return !weekDone && dateKey === weekEnd;
+    return !periodDone && dateKey === periodEnd;
   }
 
-  // Today stays visible all week, shown as done once the week's sum hits target.
+  // Today stays visible all period, shown as done once the period's sum hits target.
   if (dateKey === todayKey) return true;
 
-  // Future days show until the week is complete.
-  return !weekDone;
+  // Future days show until the period is complete.
+  return !periodDone;
 }
 
 function isEveryNDaysDueOnDay(
