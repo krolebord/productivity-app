@@ -75,7 +75,7 @@ type NoteCardProps = {
 };
 
 export function NoteCard({ note, onOpen, onTagClick, activeTags, reorderDisabled }: NoteCardProps) {
-  const draggable = useDraggable({ id: note.id });
+  const draggable = useDraggable({ id: note.id, data: { kind: "note" } });
   const droppable = useDroppable({ id: note.id, disabled: reorderDisabled });
 
   const db = useDb();

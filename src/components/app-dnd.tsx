@@ -62,20 +62,31 @@ export function AppDndProvider({ children }: { children: ReactNode }) {
     return delegate ? delegate.collisionDetection(restArgs) : closestCenter(restArgs);
   }, []);
 
-  const rescheduleTaskToDay = useCallback(
-    (taskId: string, dateKey: string) => {
+  /** Schedules a task on the given day; a dropped note is converted into a task first. */
+  const scheduleItemOnDay = useCallback(
+    (itemId: string, dateKey: string) => {
       db.db.executeTransaction((trx) => {
-        const [task] = trx.executeKysely((q) =>
-          q.selectFrom("item").select(["type", "dueAt", "hasDueTime"]).where("id", "=", taskId),
+        const [item] = trx.executeKysely((q) =>
+          q.selectFrom("item").select(["type", "dueAt", "hasDueTime"]).where("id", "=", itemId),
         ).rows;
-        if (!task || (task.type !== "task" && task.dueAt == null)) return;
+        if (!item) return;
 
         const day = parseDateKey(dateKey);
+        if (item.type === "note") {
+          trx.executeKysely((q) =>
+            q
+              .updateTable("item")
+              .set({ type: "task", dueAt: localMidnightMs(day), hasDueTime: false, completedAt: null })
+              .where("id", "=", itemId),
+          );
+          return;
+        }
+
         const dueAt =
-          task.hasDueTime && task.dueAt != null
-            ? combineLocalDateAndTime(day, format(task.dueAt, "HH:mm"))
+          item.hasDueTime && item.dueAt != null
+            ? combineLocalDateAndTime(day, format(item.dueAt, "HH:mm"))
             : localMidnightMs(day);
-        trx.executeKysely((q) => q.updateTable("item").set({ type: "task", dueAt }).where("id", "=", taskId));
+        trx.executeKysely((q) => q.updateTable("item").set({ type: "task", dueAt }).where("id", "=", itemId));
       });
     },
     [db],
@@ -92,8 +103,9 @@ export function AppDndProvider({ children }: { children: ReactNode }) {
         onDragEnd={(event) => {
           const overId = event.over ? String(event.over.id) : null;
           const dateKey = overId ? calendarDayFromDroppableId(overId) : null;
-          if (dateKey && event.active.data.current?.kind === "task") {
-            rescheduleTaskToDay(String(event.active.id), dateKey);
+          const kind = event.active.data.current?.kind;
+          if (dateKey && (kind === "task" || kind === "note")) {
+            scheduleItemOnDay(String(event.active.id), dateKey);
             delegateRef.current?.onDragCancel();
             return;
           }
