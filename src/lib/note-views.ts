@@ -7,7 +7,6 @@
 import { parseTags } from "@/lib/tags";
 import type { NoteViewItem } from "@/user-db/migrations";
 
-/** The subset of /notes search params a view captures (text query excluded). */
 export type NoteViewSearch = {
   tags?: string[];
   not?: string[];
@@ -20,12 +19,9 @@ export function sameTagSet(a: string[], b: string[]): boolean {
   return b.every((tag) => set.has(tag));
 }
 
-// "all" vs "any" only changes results with 2+ included tags, so filters that
-// differ only in a meaningless match mode still count as the same view.
 export const effectiveMatch = (include: string[], match: string | undefined): "all" | "any" =>
   include.length >= 2 && match === "any" ? "any" : "all";
 
-/** Search params that apply this view when navigating to /notes. */
 export function noteViewSearch(view: NoteViewItem): NoteViewSearch {
   const include = parseTags(view.include);
   const exclude = parseTags(view.exclude);
@@ -36,7 +32,6 @@ export function noteViewSearch(view: NoteViewItem): NoteViewSearch {
   };
 }
 
-/** Whether the current /notes search params equal this view's stored filter. */
 export function viewMatchesSearch(view: NoteViewItem, search: NoteViewSearch): boolean {
   const include = parseTags(view.include);
   return (

@@ -1,9 +1,7 @@
 import { z } from "zod";
 
-/** `providerType` written onto `item` rows created from Google Calendar events. */
 export const GOOGLE_CALENDAR_PROVIDER_TYPE = "google-calendar" as const;
 
-/** Central D1 connection status enum, enforced in application code. */
 export const GOOGLE_CALENDAR_CONNECTION_STATUSES = ["connected", "disconnected", "error"] as const;
 export type GoogleCalendarConnectionStatus = (typeof GOOGLE_CALENDAR_CONNECTION_STATUSES)[number];
 
@@ -14,7 +12,6 @@ export type GoogleCalendarConnectionStatus = (typeof GOOGLE_CALENDAR_CONNECTION_
  */
 export const GOOGLE_CALENDAR_SCOPES = ["openid", "email", "https://www.googleapis.com/auth/calendar.readonly"] as const;
 
-/** How far back and forward the sync job mirrors events, in days. */
 export const SYNC_WINDOW_PAST_DAYS = 1;
 export const SYNC_WINDOW_FUTURE_DAYS = 14;
 
@@ -37,11 +34,9 @@ export const googleCalendarEventSchema = z.object({
   description: z.string().default(""),
   location: z.string().default(""),
   htmlLink: z.string().default(""),
-  /** RFC3339 timestamp of the event's last modification; drives "Google wins" reconciliation. */
   updated: z.string().optional(),
   start: googleEventDateSchema.optional(),
   end: googleEventDateSchema.optional(),
-  /** Present on instances of a recurring event; the id of the series. */
   recurringEventId: z.string().optional(),
 });
 

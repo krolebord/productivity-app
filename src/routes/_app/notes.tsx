@@ -22,7 +22,6 @@ import { useDb, useDbQuery } from "@/user-db/user-db";
 
 const tagFilterLabel = (tag: string) => (tag === UNTAGGED ? "untagged" : `#${tag}`);
 
-/** Tags a note exposes to filtering; untagged notes match the pseudo-tag. */
 function noteFilterTags(note: NoteItem): string[] {
   const tags = parseTags(note.tags);
   return tags.length > 0 ? tags : [UNTAGGED];
@@ -30,9 +29,6 @@ function noteFilterTags(note: NoteItem): string[] {
 
 type TagFilter = { include: string[]; exclude: string[]; match: "all" | "any" };
 
-// Excludes always apply (AND), regardless of the all/any mode, which only
-// governs the included set. `ignoreExcluded` lets counts ask "what is this
-// one exclusion hiding" by evaluating the filter without it.
 function matchesTagFilter(note: NoteItem, filter: TagFilter, ignoreExcluded?: string): boolean {
   const tags = noteFilterTags(note);
   if (filter.exclude.some((tag) => tag !== ignoreExcluded && tags.includes(tag))) return false;
@@ -51,8 +47,6 @@ const notesSearchSchema = z.object({
 
 type NotesSearch = z.infer<typeof notesSearchSchema>;
 
-// The checklist rendered inside every tag-filter popover: row click toggles
-// include, the trailing minus toggles exclude.
 function TagFilterEditor({
   allTags,
   include,
@@ -169,9 +163,6 @@ function NotesPage() {
   const createNote = useCreateNote();
   const openNoteDialog = useNoteDialogStore((s) => s.open);
 
-  // The tag editor popover is anchored to the whole chip group (not the chip
-  // that opened it): toggling filters from inside the editor mounts/unmounts
-  // chips, and a popover anchored to an unmounting chip would close.
   const [filterOpen, setFilterOpen] = useState(false);
   const filterAnchorRef = useRef<HTMLDivElement>(null);
 
@@ -185,7 +176,6 @@ function NotesPage() {
           return {
             tags,
             not: merged.not?.length ? merged.not : undefined,
-            // "any" vs "all" only matters with 2+ included tags; drop it otherwise.
             match: tags && tags.length >= 2 && merged.match === "any" ? ("any" as const) : undefined,
             q: merged.q || undefined,
           };
@@ -223,8 +213,6 @@ function NotesPage() {
     db.selectFrom("note_view").selectAll().orderBy("order", "asc").orderBy("createdAt", "asc"),
   );
 
-  // The view whose stored filter equals the current one; drives pill highlight
-  // and hides "Save view" when the current filter is already saved.
   const activeViewId = useMemo(() => {
     const current = { tags: include, not: exclude, match: matchMode === "any" ? ("any" as const) : undefined };
     return views.find((view) => viewMatchesSearch(view, current))?.id ?? null;
@@ -277,14 +265,7 @@ function NotesPage() {
 
   const { data: list } = useDbQuery(
     (db) =>
-      db
-        .selectFrom("item")
-        .selectAll()
-        .where("type", "=", "note")
-        // Legacy dated notes are tasks and stay out of Notes while their
-        // synced item-kind conversion runs.
-        .where("dueAt", "is", null)
-        .orderBy("order", "asc"),
+      db.selectFrom("item").selectAll().where("type", "=", "note").where("dueAt", "is", null).orderBy("order", "asc"),
     {
       mapData: (notes) => ({
         notes: notes,
@@ -308,8 +289,6 @@ function NotesPage() {
   const hasTagFilter = include.length > 0 || exclude.length > 0;
   const isFiltering = hasTagFilter || query.length > 0;
 
-  // Notes passing the tag filters, before the text query. Kept separate so
-  // tag counts in the editor don't reflect the search box.
   const tagMatchedNotes = useMemo(() => {
     if (!hasTagFilter) return notes;
     return notes.filter((note) => matchesTagFilter(note, filter));
@@ -323,9 +302,6 @@ function NotesPage() {
     );
   }, [tagMatchedNotes, query]);
 
-  // Every tag across all notes (the editor is a menu, so it lists the full
-  // set, not just co-occurring facets), plus the untagged pseudo-tag last.
-  // Filtered-on tags are always kept so they stay removable.
   const allFilterTags = useMemo(() => {
     const set = new Set<string>();
     let hasUntagged = false;
@@ -343,10 +319,6 @@ function NotesPage() {
     return sorted;
   }, [notes, include, exclude]);
 
-  // Count shown on an editor row, answering "what does clicking this do":
-  // excluded tags show how many notes the exclusion hides; in any-mode,
-  // unselected tags show their own reach; otherwise co-occurrence within the
-  // current tag matches (= results after adding the tag in all-mode).
   const rowCount = useCallback(
     (tag: string) => {
       if (exclude.includes(tag)) {
@@ -361,8 +333,6 @@ function NotesPage() {
     [notes, tagMatchedNotes, filter, include, exclude, matchMode],
   );
 
-  // While a drag is in progress the order lives here, updated on every
-  // drag-over so the grid reflows live under the pointer.
   const [dragIds, setDragIds] = useState<string[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -389,15 +359,9 @@ function NotesPage() {
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const lastReorderPointerRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Collision detection runs against the masonry's computed target layout
-  // instead of DOM rects, which are unreliable mid-transition. A rect the
-  // pointer is inside wins outright; nearest center is only the fallback for
-  // pointers in the gaps, since center distance alone flips between
-  // neighbors at boundaries.
+  // DOM rectangles are stale during masonry transitions, so use the target layout.
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
-      // While filtering (including saved views), the grid isn't reorderable:
-      // hidden notes make drop positions ambiguous.
       if (isFiltering) return [];
       const inner = masonry.innerEl;
       const pointer = args.pointerCoordinates;
@@ -436,11 +400,7 @@ function NotesPage() {
     const { active, over } = event;
     if (isFiltering || !over || over.id === active.id) return;
 
-    // Reordering reflows the masonry, which can change the collision result
-    // and fire another drag-over without the pointer moving. Only reorder
-    // when the pointer has actually moved since the last reorder, otherwise
-    // layouts where the placeholder lands away from the pointer oscillate
-    // forever (and blow React's update depth).
+    // Reflow can repeat drag-over without pointer movement and cause an update loop.
     const pointer = lastPointerRef.current;
     const lastReorder = lastReorderPointerRef.current;
     if (pointer && lastReorder && Math.abs(pointer.x - lastReorder.x) < 1 && Math.abs(pointer.y - lastReorder.y) < 1) {
@@ -457,8 +417,6 @@ function NotesPage() {
     });
   }
 
-  // Suppress the click that fires on the card right after a drop, so a drag
-  // doesn't also open the note dialog.
   const recentlyDraggedRef = useRef(false);
   const finishDrag = useCallback(() => {
     setActiveId(null);
@@ -483,9 +441,6 @@ function NotesPage() {
     const movedIndex = ordered.findIndex((note) => note.id === movedId);
     if (movedIndex === -1) return;
 
-    // Place the moved note between its new neighbors with a fractional order;
-    // fall back to renumbering everything when the midpoint runs out of
-    // float precision or a neighbor has a null order.
     const prevOrder = movedIndex > 0 ? ordered[movedIndex - 1].order : undefined;
     const nextOrder = movedIndex < ordered.length - 1 ? ordered[movedIndex + 1].order : undefined;
     let movedOrder: number | null = null;
@@ -517,7 +472,6 @@ function NotesPage() {
     }
   }
 
-  // Drag handling is delegated to the app-shell DndContext.
   useDndDelegate({
     collisionDetection,
     onDragStart: handleDragStart,
@@ -726,9 +680,6 @@ function NotesPage() {
             <PopoverContent
               align="start"
               className="w-auto p-0"
-              // Clicks on the anchor (chips, their clear buttons) must not
-              // count as outside interactions, or clearing a chip while the
-              // editor is open would dismiss it.
               onInteractOutside={(event) => {
                 if (filterAnchorRef.current?.contains(event.target as Node)) event.preventDefault();
               }}

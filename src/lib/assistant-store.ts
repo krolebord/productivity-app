@@ -5,7 +5,6 @@ import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId
 export type RightPanel = "assistant" | "today";
 
 interface AssistantStore {
-  /** Which right-rail panel is open. Only one at a time; null means closed. */
   activePanel: RightPanel | null;
   activeConversationId: string | null;
   model: AssistantModelId;
@@ -32,7 +31,6 @@ interface AssistantStore {
 }
 
 type PersistedAssistantState = Partial<AssistantStore> & {
-  /** Legacy boolean from before activePanel; migrated in merge. */
   open?: boolean;
 };
 
@@ -64,8 +62,6 @@ export const useAssistantStore = create<AssistantStore>()(
         activeConversationId: state.activeConversationId,
         model: state.model,
       }),
-      // Guard against a persisted id that's no longer in the supported list,
-      // and migrate the legacy `open` boolean into `activePanel`.
       merge: (persisted, current) => {
         const raw = (persisted ?? {}) as PersistedAssistantState;
         const { open, ...rest } = raw;

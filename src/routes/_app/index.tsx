@@ -83,8 +83,6 @@ type TrendBucket = {
   end: number;
 };
 
-// Per-importance styling for the cash-flow expense stack: shades of red, darkest
-// for the most-required tier and lightening toward investments.
 const IMPORTANCE_FLOW = {
   fixed: { label: "Fixed", color: "#991b1b" },
   flexible: { label: "Flexible", color: "#ef4444" },
@@ -278,10 +276,6 @@ function DashboardPage() {
   const createTransfer = useCreateTransfer();
   const [activeChart, setActiveChart] = useState<ChartTab>("flow");
 
-  // Compute time boundaries so the queries below stay stable across renders
-  // (instead of refetching on every tick) and only recompute when the chosen
-  // range changes. `trendBuckets` are the trailing buckets used by the trend
-  // charts, oldest first; the last entry is the current partial period.
   const {
     rangeStart,
     rangeEnd,
@@ -297,8 +291,6 @@ function DashboardPage() {
   } = useMemo(() => {
     const now = new Date();
     const buckets = rangeMode === "cycle" ? buildCycleTrendBuckets(now, rangeCycleDay) : buildCalendarTrendBuckets(now);
-    // Summary cards + spending donut follow the user-selected range; the
-    // preceding window of equal shape drives the period-over-period delta.
     const range = resolveDashboardRange({ mode: rangeMode, days: rangeDays, cycleDay: rangeCycleDay }, now);
     return {
       ...range,
@@ -312,9 +304,6 @@ function DashboardPage() {
 
   const { data: allAccounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
 
-  // Accounts flagged out of the dashboard are dropped from every metric below.
-  // `accounts` drives net worth and the accounts list; `excludedIds` filters the
-  // transaction-based queries (income/spend, charts, recent activity).
   const accounts = useMemo(() => allAccounts.filter((a) => !a.excludeFromDashboard), [allAccounts]);
   const excludedIds = useMemo(() => allAccounts.filter((a) => a.excludeFromDashboard).map((a) => a.id), [allAccounts]);
   const excludedSet = useMemo(() => new Set(excludedIds), [excludedIds]);
@@ -355,8 +344,6 @@ function DashboardPage() {
       .groupBy(["category", "accountCurrency"]),
   );
 
-  // Raw rows for the trend window — flow buckets and net-worth reconstruction
-  // both derive from this, so we only pull it once.
   const { data: windowRows } = useDbQuery((db) =>
     db
       .selectFrom("transaction_entry")
@@ -386,8 +373,6 @@ function DashboardPage() {
 
   const currencyOptions = latestRate ? getCurrencyOptions(latestRate) : APP_CURRENCIES;
 
-  // Convert a native amount into the chosen base. Returns null when rates are
-  // missing for either currency so callers can flag unconvertible totals.
   const toBase = useMemo(() => {
     return (amount: number, currency: string): number | null => {
       if (currency === baseCurrency) {
@@ -400,7 +385,6 @@ function DashboardPage() {
     };
   }, [latestRate, baseCurrency]);
 
-  // Net worth across all accounts, converted to the base currency.
   let netWorth = 0;
   let unconvertibleAccounts = 0;
   const nowByCurrency = new Map<string, number>();
@@ -435,7 +419,6 @@ function DashboardPage() {
   const prev30 = sumFlow(prevRangeRows);
   const netDelta = last30.net - prev30.net;
 
-  // Spending by category for the last 30 days, aggregated in the base currency.
   const categoryTotals = new Map<string, number>();
   for (const row of categoryRows) {
     const total = toBase(Number(row.total ?? 0), row.accountCurrency);
@@ -449,8 +432,6 @@ function DashboardPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, TOP_CATEGORIES);
 
-  // Cash flow per trend bucket, in the base currency. Expenses are split across
-  // importance tiers for the stacked bar; unclassified expenses count as optional.
   const flowData = trendBuckets.map((bucket) => {
     let income = 0;
     let expense = 0;
@@ -479,9 +460,6 @@ function DashboardPage() {
   });
   const flowHasData = flowData.some((d) => d.income !== 0 || d.expense !== 0);
 
-  // Net worth at each trend bucket end, reconstructed by rolling current balances back
-  // through the transactions that happened after that point. The current
-  // bucket's point uses live balances. FX uses the latest rates for every point.
   const netWorthData = trendBuckets.map((bucket, index) => {
     const boundary = index === trendBuckets.length - 1 ? nowTs : bucket.end;
     const deltaByCurrency = new Map<string, number>();
@@ -489,8 +467,7 @@ function DashboardPage() {
       if (row.effectiveAt <= boundary) {
         continue;
       }
-      // Each transfer row touches two accounts; roll back only the sides that
-      // belong to an included account so excluded balances never leak in.
+      // Excluded accounts must not affect reconstructed balances.
       if (!excludedSet.has(row.accountId)) {
         deltaByCurrency.set(row.accountCurrency, (deltaByCurrency.get(row.accountCurrency) ?? 0) + Number(row.amount));
       }
@@ -512,7 +489,6 @@ function DashboardPage() {
     return { month: bucket.label, netWorth: total };
   });
 
-  // Spending donut data (current month, top categories).
   const categoryData = topCategories.map(([name, value], index) => ({
     name,
     value,
@@ -554,7 +530,6 @@ function DashboardPage() {
           <h1 className="font-semibold text-xl">Overview</h1>
           <p className="text-muted-foreground text-sm">{rangeLabel}</p>
         </div>
-        {/* Settings inline when the panel is wide enough, else collapsed behind a button */}
         <div className="@xl:flex hidden flex-wrap items-center gap-2">
           <DashboardRangeSelect />
           <span className="text-muted-foreground text-xs uppercase tracking-wide">Display in</span>
@@ -599,7 +574,6 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* Summary cards */}
       <div className="grid @4xl:grid-cols-4 @lg:grid-cols-2 grid-cols-[minmax(0,1fr)] gap-3">
         <div className="rounded-lg border bg-card p-4 shadow-xs">
           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -648,7 +622,6 @@ function DashboardPage() {
         </div>
       </div>
 
-      {/* Trend charts */}
       <section className="rounded-lg border bg-card shadow-xs">
         <div className="flex @lg:flex-row flex-col @lg:items-center @lg:justify-between gap-3 border-b px-4 py-3">
           <h2 className="font-medium text-sm">{chartTitle}</h2>
@@ -744,7 +717,6 @@ function DashboardPage() {
       </section>
 
       <div className="grid @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] grid-cols-[minmax(0,1fr)] gap-4">
-        {/* Recent transactions */}
         <section className="min-w-0 overflow-hidden rounded-lg border bg-card shadow-xs">
           <div className="flex flex-col gap-2 border-b px-4 py-3">
             <div className="flex items-center justify-between gap-2">
@@ -753,7 +725,6 @@ function DashboardPage() {
                 <Link to="/transactions">View all</Link>
               </Button>
             </div>
-            {/* Create actions — desktop only; mobile uses the FAB + command palette */}
             <div className="hidden items-center gap-1.5 md:flex">
               <Button onClick={createExpense} size="sm" className="flex-1">
                 <ArrowDownLeftIcon className="size-4" />
@@ -810,7 +781,6 @@ function DashboardPage() {
           )}
         </section>
 
-        {/* Accounts */}
         <section className="min-w-0 overflow-hidden rounded-lg border bg-card shadow-xs">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <h2 className="font-medium text-sm">Accounts</h2>

@@ -2,9 +2,7 @@ import { useEffect } from "react";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 
 /**
- * Dated notes were the app's original task model. Convert them through the
- * synced write path so every replica receives the new explicit item kind.
- * The reactive query also catches legacy rows that arrive after initial sync.
+ * Convert dated notes through the synced write path so every replica receives an explicit task kind.
  */
 export function LegacyTaskMigration() {
   const db = useDb();

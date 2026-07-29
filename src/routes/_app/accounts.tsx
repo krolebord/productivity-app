@@ -32,8 +32,6 @@ function AccountsPage() {
     mapData: (accounts) => ({ accounts, timestamp: Date.now() }),
   });
 
-  // While a drag is settling we show the optimistic order so the grid doesn't
-  // flash back to the old order before the synced write round-trips.
   const [optimisticList, _setOptimisticList] = useState<typeof list>(list);
   const setOptimisticAccounts = useCallback((accounts: (typeof list)["accounts"]) => {
     _setOptimisticList({ accounts, timestamp: Date.now() });
@@ -41,8 +39,6 @@ function AccountsPage() {
   const accounts = list.timestamp > optimisticList.timestamp ? list.accounts : optimisticList.accounts;
 
   const sensors = useSensors(
-    // Mouse drags start on an 8px move; touch requires a short press-and-hold
-    // so taps and list scrolling on mobile aren't hijacked into a drag.
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -60,9 +56,6 @@ function AccountsPage() {
     const movedId = String(active.id);
     const movedIndex = to;
 
-    // Place the moved account between its new neighbors with a fractional
-    // order; fall back to renumbering everything when the midpoint runs out
-    // of float precision.
     const prevOrder = movedIndex > 0 ? ordered[movedIndex - 1].order : undefined;
     const nextOrder = movedIndex < ordered.length - 1 ? ordered[movedIndex + 1].order : undefined;
     let movedOrder: number | null = null;

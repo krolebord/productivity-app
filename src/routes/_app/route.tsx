@@ -72,7 +72,6 @@ function RouteComponent() {
   const activePanel = useAssistantStore((s) => s.activePanel);
   const isDesktop = useIsDesktop();
   const assistantEnabled = auth.assistantEnabled;
-  // Assistant stays gated; Today is available to everyone. One right panel at a time.
   const resolvedPanel =
     activePanel === "assistant" && !assistantEnabled
       ? null
@@ -115,7 +114,6 @@ function RouteComponent() {
             )}
           </Group>
         </div>
-        {/* Keep the mobile assistant mounted after its first opening so closing it preserves chat state. */}
         {hasMountedMobileAssistant.current && !isDesktop && (
           <div
             className={mobileAssistantOpen ? "fixed inset-0 z-50 bg-background md:hidden" : "hidden"}

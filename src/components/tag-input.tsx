@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 type TagInputProps = {
   value: string[];
   onChange: (tags: string[]) => void;
-  /** Existing tags across all notes, used for autocomplete. */
   suggestions: string[];
   placeholder?: string;
   id?: string;
@@ -21,7 +20,6 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
   const inputRef = React.useRef<HTMLInputElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // Close on outside mousedown (works correctly inside a Radix Dialog).
   React.useEffect(() => {
     if (!open) return;
     function handleMouseDown(e: MouseEvent) {
@@ -45,7 +43,6 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
   const canCreate =
     normalizedInput.length > 0 && !value.includes(normalizedInput) && !filtered.includes(normalizedInput);
 
-  // Suggestions and the "create" entry as one indexable list for keyboard nav.
   const options = React.useMemo<Array<{ kind: "tag" | "create"; value: string }>>(() => {
     const opts: Array<{ kind: "tag" | "create"; value: string }> = filtered.map((value) => ({ kind: "tag", value }));
     if (canCreate) opts.push({ kind: "create", value: normalizedInput });
@@ -90,9 +87,6 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
       e.preventDefault();
       addTag(inputValue);
     } else if (e.key === "Tab" && !e.shiftKey) {
-      // Tab completes the pending tag (highlighted suggestion or typed text)
-      // and keeps focus here so more tags can be added. With an empty input
-      // it closes the dropdown and lets focus move on to the editor.
       if (normalizedInput) {
         const active = showDropdown ? options[activeOptionIndex] : undefined;
         e.preventDefault();
@@ -161,7 +155,6 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
                 role="option"
                 tabIndex={-1}
                 aria-selected={active}
-                // Use mousedown so the input doesn't blur (and close the dropdown) first.
                 onMouseDown={(e) => {
                   e.preventDefault();
                   addTag(option.value);

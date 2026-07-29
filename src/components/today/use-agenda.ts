@@ -58,9 +58,6 @@ export function useAgenda() {
     [habitsRaw],
   );
 
-  // Scheduled tasks in the visible range, plus incomplete tasks before today
-  // (overdue). The legacy clause keeps dated notes visible until the synced
-  // item-kind migration has reached this replica.
   const { data: scheduledTasks } = useDbQuery((q) =>
     q
       .selectFrom("item")

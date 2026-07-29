@@ -71,8 +71,6 @@ type NoteCardProps = {
   onOpen: () => void;
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
-  /** Disables this card as a reorder drop target; the card itself stays
-   * draggable so it can still be dropped on Today-panel calendar days. */
   reorderDisabled?: boolean;
 };
 
@@ -89,8 +87,6 @@ export function NoteCard({ note, onOpen, onTagClick, activeTags, reorderDisabled
       <div
         className={cn(
           "relative rounded-lg border bg-card text-card-foreground shadow-xs",
-          // While dragging, the card stays in the grid as an invisible
-          // placeholder so the empty slot reflows with the layout.
           draggable.isDragging && "opacity-0",
         )}
         ref={(el) => {
@@ -100,7 +96,6 @@ export function NoteCard({ note, onOpen, onTagClick, activeTags, reorderDisabled
         {...draggable.attributes}
         {...draggable.listeners}
       >
-        {/* Hover actions */}
         <div className="absolute top-1.5 right-1.5 hidden opacity-0 transition-opacity group-hover:opacity-100 md:block">
           <button
             type="button"

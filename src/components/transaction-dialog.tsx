@@ -59,8 +59,6 @@ export const useTransactionDialogStore = create(
       openRevision: 0,
     } as TransactionDialogState,
     (set, get) => ({
-      // Keep transactionId on close so the dialog's `where id = ?` live query doesn't
-      // re-fire with an empty id mid-close; the next open overwrites it anyway.
       close: () => set({ isOpen: false, mode: null, draft: null }),
       openCreate: (draft?: TransactionDialogDraft) =>
         set({
@@ -168,8 +166,6 @@ function TransactionDialogContent() {
   const closeDialog = useTransactionDialogStore((state) => state.close);
   const [addMore, setAddMore] = useState(false);
   const amountInputRef = useRef<HTMLInputElement>(null);
-  // Once the user picks an importance tier by hand, stop auto-filling it from the
-  // category. Editing an existing transaction also counts as "already set".
   const importanceTouchedRef = useRef(mode === "edit");
 
   const deleteConfirm = useInlineConfirm({
@@ -197,8 +193,6 @@ function TransactionDialogContent() {
   );
   const categories = categoryRows.map((row) => row.category);
 
-  // Per-category importance memory: the most-used tier for each category, so the
-  // importance field can pre-fill itself once a category has been classified before.
   const { data: importanceRows } = useDbQuery((query) =>
     query
       .selectFrom("transaction_entry")
@@ -299,8 +293,6 @@ function TransactionDialogContent() {
       }
 
       if (mode === "create" && addMore) {
-        // Clear only entry fields. Avoid form.reset() — it clears isTouched, and TanStack
-        // Form then reverts untouched fields (accountId) to their initial defaultValue.
         for (const field of ["amount", "counterpartyAmount", "notes", "title"] as const) {
           form.setFieldValue(field, "", { dontValidate: true });
         }
@@ -325,8 +317,6 @@ function TransactionDialogContent() {
   const currentAccountId = useStore(form.store, (state) => state.values.accountId);
   const currentCategory = useStore(form.store, (state) => state.values.category);
 
-  // Pre-fill importance from the category's remembered tier (or the default) until
-  // the user overrides it, so classifying an expense usually takes no extra input.
   useEffect(() => {
     if (currentType !== "expense" || importanceTouchedRef.current) return;
     const suggested = importanceByCategory.get(currentCategory.trim()) ?? DEFAULT_IMPORTANCE;

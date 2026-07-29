@@ -25,9 +25,7 @@ export type AssistantModel = {
     outputPerMillion: number;
     cacheReadPerMillion?: number;
   };
-  /** Reasoning effort to request for this model, when it supports reasoning. */
   reasoningEffort?: AssistantReasoningEffort;
-  /** When false, the model is kept for backwards compatibility but not offered for selection. */
   selectable?: boolean;
 };
 
@@ -87,7 +85,6 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     reasoningEffort: "high",
   },
 
-  // Legacy models remain valid for existing conversations but are no longer selectable.
   {
     id: "openai/gpt-5.5",
     label: "GPT-5.5",

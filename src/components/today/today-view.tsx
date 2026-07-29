@@ -65,7 +65,6 @@ export function TodayView() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <h1 className="min-w-0 flex-1 truncate font-semibold text-xl">{headerLabel}</h1>
-        {/* Always mounted so appearing/disappearing doesn't shift the header */}
         <Button
           type="button"
           variant="outline"
@@ -604,7 +603,6 @@ function TaskRow({
 }) {
   const { task, completed } = row;
   const title = task.title.trim();
-  // Only parse the body when we actually need a fallback (no title).
   const preview = useMemo(() => (title ? "" : noteContentToPlainText(task.content, 100)), [title, task.content]);
   const label = title || preview || "Untitled";
   const fromCalendar = isCalendarBackedTask(task);

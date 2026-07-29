@@ -27,9 +27,7 @@ const DraggableTaskItem = TaskItem.extend({
   addProseMirrorPlugins() {
     return [
       ...(this.parent?.() ?? []),
-      // Keep every task item's dragId unique. Splitting an item (pressing
-      // Enter) copies its attributes, so new items inherit the parent's
-      // dragId — reassign anything missing or already seen, not just nulls.
+      // Splitting copies attributes, so reassign duplicate drag IDs as well as missing ones.
       new Plugin({
         key: dragIdPluginKey,
         appendTransaction: (_transactions, _oldState, newState) => {
@@ -55,12 +53,7 @@ const DraggableTaskItem = TaskItem.extend({
   },
 });
 
-/**
- * Shared between the note editor and the static card preview so both
- * parse and render markdown identically.
- */
 export const noteExtensions = [
-  // Underline is excluded: it has no markdown representation.
   StarterKit.configure({ underline: false }),
   TaskList,
   DraggableTaskItem.configure({ nested: true }),
@@ -77,21 +70,13 @@ export function parseNoteMarkdown(markdown: string): JSONContent {
   return { ...doc, content: stampDragIds(splitMisparsedTaskItems(doc.content ?? [])) };
 }
 
-/**
- * A single-line, plain-text preview of a note's markdown content — used as a
- * fallback label when a note has no title. Parses with the shared markdown
- * pipeline and joins the text nodes, so it stays in sync with how notes render.
- *
- * Pass `maxLength` to stop walking once enough text is collected — handy for
- * long notes where only a short preview is displayed.
- */
 export function noteContentToPlainText(markdown: string, maxLength?: number): string {
   const parts: string[] = [];
   let length = 0;
   const walk = (node: JSONContent): boolean => {
     if (node.text) {
       parts.push(node.text);
-      length += node.text.length + 1; // +1 for the joining space
+      length += node.text.length + 1;
       if (maxLength != null && length >= maxLength) return true;
     }
     for (const child of node.content ?? []) {
@@ -106,7 +91,6 @@ export function noteContentToPlainText(markdown: string, maxLength?: number): st
   return maxLength != null ? text.slice(0, maxLength) : text;
 }
 
-/** Give every task item a stable dragId up front (the editor reorders by it). */
 function stampDragIds(nodes: JSONContent[]): JSONContent[] {
   return nodes.map((node) => {
     const content = node.content ? stampDragIds(node.content) : node.content;
@@ -163,7 +147,6 @@ function splitMisparsedTaskItems(nodes: JSONContent[]): JSONContent[] {
   return out;
 }
 
-/** Returns the checkbox mark (" " or "x") if the list item is a misparsed empty task item. */
 function emptyTaskItemMark(item: JSONContent): string | null {
   if (item.type !== "listItem") return null;
   const [first] = item.content ?? [];

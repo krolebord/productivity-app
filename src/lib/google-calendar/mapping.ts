@@ -15,7 +15,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 export const DETACHED_PROVIDER_TYPE = "detached" as const;
 
-/** Fields the sync job writes onto an `item` row. Nothing else about the task is touched. */
 export type MappedEventFields = {
   title: string;
   content: string;
@@ -79,7 +78,6 @@ export function zonedMidnightMs(dateKey: string, timeZone: string): number {
   return utcMidnight - offset;
 }
 
-/** Today's calendar day in `timeZone`, as "YYYY-MM-DD". */
 export function todayDateKeyInZone(timeZone: string, now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -89,7 +87,6 @@ export function todayDateKeyInZone(timeZone: string, now: Date = new Date()): st
   }).format(now);
 }
 
-/** Shift a "YYYY-MM-DD" key by whole days, staying in date space (no timezone involved). */
 export function shiftDateKey(dateKey: string, days: number): string {
   const [year, month, day] = dateKey.split("-").map(Number);
   const shifted = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1) + days * DAY_MS);
@@ -129,7 +126,6 @@ function eventStartMs(event: GoogleCalendarEvent, timeZone: string): number | nu
   return null;
 }
 
-/** Human-readable time range for the task body, rendered in the calendar's timezone. */
 function formatRange(event: GoogleCalendarEvent, timeZone: string): string {
   const startDateTime = event.start?.dateTime;
   const endDateTime = event.end?.dateTime;
@@ -212,7 +208,6 @@ export function mapEventToTaskFields(event: GoogleCalendarEvent, timeZone: strin
   };
 }
 
-/** The subset of an existing `item` row the reconciliation rules need. */
 export type ExistingSyncedTask = {
   id: string;
   tombstone: boolean;
@@ -287,7 +282,6 @@ export function decideEventSync(args: {
   return { action: "update", itemId: existing.id, fields };
 }
 
-/** Whether a task row should show the calendar icon. */
 export function isCalendarBackedTask(item: { providerType: string | null }): boolean {
   return item.providerType === GOOGLE_CALENDAR_PROVIDER_TYPE;
 }

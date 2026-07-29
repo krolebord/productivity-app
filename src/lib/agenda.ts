@@ -23,17 +23,14 @@ export const AGENDA_BUCKET_LABELS: Record<AgendaBucket, string> = {
 
 export type HabitScheduleType = "daily" | "weekly" | "monthly" | "everyNDays" | "weekdays";
 
-/** Schedules whose target accumulates over a calendar period rather than a single day. */
 export type HabitPeriodScheduleType = "weekly" | "monthly";
 export type HabitTimeOfDay = "morning" | "afternoon" | "evening" | "night" | null;
 
-/** Minimal habit shape needed for due-date / agenda logic. */
 export type AgendaHabit = {
   id: string;
   name: string;
   scheduleType: HabitScheduleType;
   scheduleInterval: number;
-  /** Parsed ISO weekdays 1=Mon..7=Sun. */
   scheduleWeekdays: number[];
   timeOfDay: HabitTimeOfDay;
   target: number;
@@ -43,7 +40,6 @@ export type AgendaHabit = {
   createdAt: number;
 };
 
-/** dateKey ("YYYY-MM-DD") → summed entry value for that day. */
 export type HabitEntryValuesByDate = ReadonlyMap<string, number>;
 
 export type AgendaTask = {
@@ -54,7 +50,6 @@ export type AgendaTask = {
   hasDueTime: boolean;
   completedAt: number | null;
   order: number | null;
-  /** "google-calendar" for mirrored events; drives the calendar badge on the row. */
   providerType: string | null;
 };
 
@@ -73,12 +68,9 @@ export type AgendaHabitRow = {
   habit: AgendaHabit;
   bucket: Exclude<AgendaBucket, "overdue">;
   dateKey: string;
-  /** Progress toward target: period sum for weekly/monthly habits, day value otherwise. */
   value: number;
-  /** Value logged on this specific day (what entry edits operate on). */
   dayValue: number;
   done: boolean;
-  /** False for future days — no entry controls. */
   editable: boolean;
 };
 
@@ -90,12 +82,10 @@ export type AgendaSection = {
   rows: AgendaRow[];
 };
 
-/** Local calendar day as "YYYY-MM-DD". */
 export function toDateKey(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
 
-/** Parse a "YYYY-MM-DD" key into a local Date at midnight. */
 export function parseDateKey(dateKey: string): Date {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d);
@@ -105,18 +95,15 @@ export function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-/** Monday-start week containing `date`. */
 export function startOfWeekMonday(date: Date): Date {
   return startOfWeek(startOfLocalDay(date), { weekStartsOn: 1 });
 }
 
-/** Seven local midnights Mon–Sun for the week containing `date`. */
 export function getWeekDays(date: Date): Date[] {
   const start = startOfWeekMonday(date);
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
-/** All days of the Mon-start week grid covering `date`'s month (4–6 full weeks). */
 export function getMonthGridDays(date: Date): Date[] {
   const start = startOfWeekMonday(startOfMonth(date));
   const endExclusive = addDays(startOfWeekMonday(endOfMonth(date)), 7);
@@ -187,7 +174,6 @@ function sumValuesInRange(entries: HabitEntryValuesByDate | undefined, startKey:
   return sum;
 }
 
-/** The period a habit's target applies to, e.g. "5 pages per week". */
 export function habitTargetPeriodLabel(scheduleType: HabitScheduleType): "day" | "week" | "month" {
   if (scheduleType === "weekly") return "week";
   if (scheduleType === "monthly") return "month";
@@ -198,7 +184,6 @@ export function isHabitPeriodSchedule(scheduleType: HabitScheduleType): schedule
   return scheduleType === "weekly" || scheduleType === "monthly";
 }
 
-/** Inclusive [start, end] dateKeys of the Mon–Sun week or calendar month containing `dateKey`. */
 export function habitPeriodRange(scheduleType: HabitPeriodScheduleType, dateKey: string): [string, string] {
   const date = parseDateKey(dateKey);
   if (scheduleType === "monthly") return [toDateKey(startOfMonth(date)), toDateKey(endOfMonth(date))];
@@ -206,7 +191,6 @@ export function habitPeriodRange(scheduleType: HabitPeriodScheduleType, dateKey:
   return [toDateKey(days[0] ?? date), toDateKey(days[6] ?? date)];
 }
 
-/** Local midnights of every day in the period containing `dateKey`. */
 export function getHabitPeriodDays(scheduleType: HabitPeriodScheduleType, dateKey: string): Date[] {
   const [startKey, endKey] = habitPeriodRange(scheduleType, dateKey);
   const days: Date[] = [];
@@ -279,15 +263,12 @@ function isPeriodDueOnDay(
   const periodDone = sumValuesInRange(entries, periodStart, periodEnd) >= habit.target;
 
   if (dateKey < todayKey) {
-    // Past day: show days that logged progress, or missed on the period's last day.
     if (valueOnDay > 0) return true;
     return !periodDone && dateKey === periodEnd;
   }
 
-  // Today stays visible all period, shown as done once the period's sum hits target.
   if (dateKey === todayKey) return true;
 
-  // Future days show until the period is complete.
   return !periodDone;
 }
 
@@ -306,7 +287,6 @@ function isEveryNDaysDueOnDay(
 
   if (dateKey < dueKey) return false;
 
-  // Shown until done: hide if any day in [dueKey, day before D] is done.
   const dayBefore = toDateKey(addLocalDays(parseDateKey(dateKey), -1));
   if (dayBefore >= dueKey && anyDoneInRange(habit, entries, dueKey, dayBefore)) return false;
   return true;
@@ -316,7 +296,6 @@ export function habitBucket(timeOfDay: HabitTimeOfDay): Exclude<AgendaBucket, "o
   return timeOfDay ?? "anytime";
 }
 
-/** Timed tasks by hour; all-day → anytime. */
 export function taskBucket(task: Pick<AgendaTask, "dueAt" | "hasDueTime">): Exclude<AgendaBucket, "overdue"> {
   if (!task.hasDueTime || task.dueAt == null) return "anytime";
   const hour = new Date(task.dueAt).getHours();
@@ -336,7 +315,6 @@ export function isTaskOverdueForToday(task: Pick<AgendaTask, "dueAt" | "complete
   return task.dueAt < todayStart;
 }
 
-/** Incomplete scheduled tasks on `dateKey` (for week-strip dots). */
 export function dayHasIncompleteTasks(tasks: readonly AgendaTask[], dateKey: string): boolean {
   return tasks.some((task) => task.dueAt != null && task.completedAt == null && isTaskOnLocalDay(task.dueAt, dateKey));
 }
@@ -364,7 +342,6 @@ export function getDayHabitProgress(
 }
 
 function compareAgendaRows(a: AgendaRow, b: AgendaRow): number {
-  // Incomplete first, completed at bottom.
   if (a.kind === "task" ? a.completed : a.done) {
     if (!(b.kind === "task" ? b.completed : b.done)) return 1;
   } else if (b.kind === "task" ? b.completed : b.done) {
@@ -394,10 +371,6 @@ function compareAgendaRows(a: AgendaRow, b: AgendaRow): number {
   return 0;
 }
 
-/**
- * Build agenda sections for `selectedKey`.
- * Overdue appears only when `selectedKey === todayKey`.
- */
 export function buildAgendaSections(args: {
   selectedKey: string;
   todayKey: string;

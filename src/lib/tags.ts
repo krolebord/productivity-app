@@ -11,7 +11,6 @@
  */
 export const UNTAGGED = ":untagged";
 
-/** Lowercase, trim, slugify whitespace, and strip a leading "#". */
 export function normalizeTag(raw: string): string {
   return raw
     .trim()
@@ -23,7 +22,6 @@ export function normalizeTag(raw: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Parse the stored JSON column into a deduped list of tag strings. */
 export function parseTags(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {
@@ -44,7 +42,6 @@ export function parseTags(raw: string | null | undefined): string[] {
   }
 }
 
-/** Serialize a tag list back into the stored JSON column format. */
 export function serializeTags(tags: string[]): string {
   return JSON.stringify(tags);
 }

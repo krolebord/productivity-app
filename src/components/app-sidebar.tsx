@@ -195,7 +195,6 @@ function TodayNavItem({
   const activePanel = useAssistantStore((s) => s.activePanel);
   const togglePanel = useAssistantStore((s) => s.togglePanel);
 
-  // The side panel only exists on desktop; on mobile the item links to the standalone page.
   if (!isDesktop) {
     return (
       <SidebarNavLink
@@ -789,8 +788,6 @@ function NotesNavItem({
     );
   }
 
-  // The bare Notes link is active only without a view filter, so it reads as
-  // "All notes" next to the view sub-links.
   const activeViewId = notesSearch ? views.find((view) => viewMatchesSearch(view, notesSearch))?.id : undefined;
 
   return (
@@ -922,7 +919,6 @@ function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  // Close sheet on route change (e.g. back/forward navigation)
   useEffect(() => {
     return router.subscribe("onBeforeNavigate", () => setOpen(false));
   }, [router]);
@@ -1002,7 +998,6 @@ export function AppSidebar() {
 
   return (
     <>
-      {/* Desktop sidebar */}
       <aside
         className={cn(
           "hidden h-full shrink-0 flex-col border-sidebar-border border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex",
@@ -1012,7 +1007,6 @@ export function AppSidebar() {
         <SidebarContent collapsed={collapsed} onToggleCollapse={toggle} />
       </aside>
 
-      {/* Mobile sheet trigger + sheet */}
       <MobileSidebar />
     </>
   );

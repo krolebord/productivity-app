@@ -1,8 +1,6 @@
 import { getContext } from "@/lib/context";
 
-// The assistant runs LLM calls billed to our shared OpenRouter key, so for the
-// initial release it is locked behind an email allowlist. ASSISTANT_ALLOWLIST is
-// a comma-separated list of emails; an empty/unset value denies everyone.
+// An unset allowlist denies access to the billed assistant.
 function parseAllowlist(raw: string | undefined): Set<string> {
   return new Set(
     (raw ?? "")

@@ -4,9 +4,7 @@ export type DashboardRangeMode = "days" | "cycle";
 
 export interface DashboardRangeConfig {
   mode: DashboardRangeMode;
-  /** Trailing-window length for the "Last N days" mode (1–31). */
   days: number;
-  /** Day-of-month the billing cycle starts on, for the "Since the Nth" mode (1–31). */
   cycleDay: number;
 }
 
@@ -18,7 +16,6 @@ function ordinal(n: number) {
   return `${n}${suffixes[(v - 20) % 10] ?? suffixes[v] ?? suffixes[0]}`;
 }
 
-/** The most recent occurrence of `cycleDay` at or before `now`, clamped to month length. */
 export function cycleStartOnOrBefore(now: Date, cycleDay: number): Date {
   const thisMonth = new Date(now.getFullYear(), now.getMonth(), Math.min(cycleDay, getDaysInMonth(now)));
   if (thisMonth.getTime() <= now.getTime()) {
@@ -33,11 +30,8 @@ export interface ResolvedDashboardRange {
   rangeEnd: number;
   prevRangeStart: number;
   prevRangeEnd: number;
-  /** Descriptive subtitle, e.g. "Last 30 days" or "Since the 25th". */
   label: string;
-  /** Compact suffix for the summary-card labels, e.g. "30d". */
   cardSuffix: string;
-  /** Trailing text for the period-over-period delta, e.g. "previous 30 days". */
   prevLabel: string;
 }
 

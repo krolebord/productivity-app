@@ -18,7 +18,6 @@ type NoteEditorProps = {
   onEscape?: () => void;
 };
 
-/** Locate a task item by its dragId, returning the node and its document position. */
 function findTaskItem(doc: PMNode, dragId: string): { node: PMNode; pos: number } | null {
   let found: { node: PMNode; pos: number } | null = null;
   doc.descendants((node, pos) => {
@@ -58,14 +57,11 @@ function moveTaskItem(editor: Editor, activeId: string, overId: string) {
 }
 
 export function NoteEditor({ ref, initialContent, placeholder, onChange, onEscape }: NoteEditorProps) {
-  // Keep latest callbacks without re-creating the editor.
   const callbacksRef = useRef({ onChange, onEscape });
   callbacksRef.current = { onChange, onEscape };
 
   const editor = useEditor({
     extensions: [...noteExtensions, Placeholder.configure({ placeholder: placeholder ?? "" })],
-    // Parsed through the same pipeline as the card preview (including the
-    // empty-task-item fixup) so the editor opens exactly what the card shows.
     content: parseNoteMarkdown(initialContent),
     editorProps: {
       attributes: {
@@ -92,8 +88,6 @@ export function NoteEditor({ ref, initialContent, placeholder, onChange, onEscap
     [editor],
   );
 
-  // Ordered list of checklist drag ids, kept in sync with the document so the
-  // SortableContext matches what's rendered.
   const taskIds = useEditorState({
     editor,
     selector: ({ editor }) => {
@@ -106,8 +100,6 @@ export function NoteEditor({ ref, initialContent, placeholder, onChange, onEscap
     equalityFn: (a, b) => a.length === (b ?? []).length && a.every((id, i) => id === (b ?? [])[i]),
   });
 
-  // A small drag distance avoids hijacking taps; the handle is the only
-  // activator, so list scrolling on touch is unaffected.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function handleDragEnd(event: DragEndEvent) {

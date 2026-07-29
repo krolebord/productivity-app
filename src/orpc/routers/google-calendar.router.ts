@@ -19,10 +19,6 @@ type CalendarOAuthSessionData = {
   codeVerifier: string;
 };
 
-/**
- * Separate from the sign-in `oauth` cookie so a calendar consent flow can never be mistaken for a
- * sign-in callback (and vice versa).
- */
 export const calendarOAuthCookieSession = createCookieSession<CalendarOAuthSessionData>({
   name: "oauth-calendar",
   maxAge: 60 * 10,
@@ -51,12 +47,6 @@ const connect = protectedProcedure.handler(async ({ context }) => {
 
 const connectionInput = z.object({ connectionId: z.string() });
 
-/**
- * Resolve one of the user's connections by id.
- *
- * Every mutation below is scoped this way rather than picking the first connection: a user can have
- * several Google accounts linked, and acting on the wrong one is silent and confusing.
- */
 async function requireConnection(userId: string, connectionId: string) {
   const connections = await getGoogleCalendarConnectionsByUserId(userId);
   return connections.find((candidate) => candidate.id === connectionId);
@@ -80,7 +70,6 @@ const getSyncStatus = protectedProcedure.handler(async ({ context }) => {
   return { connections: reports };
 });
 
-/** Re-read the calendar list, picking up calendars added or renamed in Google since connecting. */
 const refreshCalendars = protectedProcedure.input(connectionInput).handler(async ({ input, context, errors }) => {
   const connection = await requireConnection(context.auth.userId, input.connectionId);
   if (!connection) {
@@ -108,10 +97,6 @@ const refreshCalendars = protectedProcedure.input(connectionInput).handler(async
   }
 });
 
-/**
- * Run a sync now instead of waiting for the 15-minute interval. Omitting `connectionId` syncs every
- * connected account, which is what the job's interval run does.
- */
 const syncNow = protectedProcedure
   .input(z.object({ connectionId: z.string().nullable().default(null) }))
   .handler(async ({ input, context, errors }) => {
@@ -130,10 +115,6 @@ const syncNow = protectedProcedure
     return { success: true as const };
   });
 
-/**
- * Clear the mirrored upcoming tasks for a calendar the user just switched off. The `enabled` flag
- * itself is written client-side straight to the synced DB.
- */
 const cleanupCalendar = protectedProcedure
   .input(connectionInput.extend({ providerCalendarId: z.string().nullable().default(null) }))
   .handler(async ({ input, context, errors }) => {
@@ -151,28 +132,20 @@ const cleanupCalendar = protectedProcedure
     return { success: true as const };
   });
 
-/**
- * Disconnect the account: revoke the refresh token at Google, mark the D1 row disconnected, and
- * clear upcoming mirrored tasks. Past and completed tasks are left as history.
- */
 const disconnect = protectedProcedure.input(connectionInput).handler(async ({ input, context }) => {
   const connection = await requireConnection(context.auth.userId, input.connectionId);
 
   if (!connection) {
-    // Already gone — disconnecting twice is not an error.
     return { success: true as const };
   }
 
-  // Best-effort revoke so the grant disappears from the user's Google account page too.
   try {
     await fetch("https://oauth2.googleapis.com/revoke", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ token: connection.refreshToken }),
     });
-  } catch {
-    // ignore — disconnect proceeds regardless
-  }
+  } catch {}
 
   const now = new Date().toISOString();
   await db
@@ -195,7 +168,6 @@ const disconnect = protectedProcedure.input(connectionInput).handler(async ({ in
     providerConnectionId: connection.id,
     connection: { status: "disconnected", email: "", connectedAt: 0 },
   });
-  // Drop the stored cursors and diagnostics so a later reconnect starts from a clean full sync.
   await stub.clearCalendarSyncStatus(connection.id);
 
   return { success: true as const };

@@ -15,10 +15,6 @@ function formatAttachToken(ref: AttachRef): string {
   return `@${ref.table}:${ref.id}`;
 }
 
-// --- Shared "is the context modifier held" tracker -------------------------
-// Backed by a single window listener no matter how many components subscribe,
-// so a page with hundreds of cards doesn't register hundreds of listener pairs.
-
 let isHeld = false;
 const subscribers = new Set<() => void>();
 
@@ -69,15 +65,6 @@ function getServerSnapshot(): boolean {
   return false;
 }
 
-/**
- * Click-to-attach for the assistant. ⌘/Ctrl-click any data row to append an
- * `@table:id` reference to the composer; the assistant resolves it via queryDb.
- *
- * Intended usage keeps the normal click handler intact:
- *
- *   const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
- *   <div onClick={isContextKeyHeld ? getAttachClickHandler(ref) : handleNormalClick} />
- */
 export function useAttachToAssistant() {
   const isContextKeyHeld = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const appendToInput = useAssistantStore((s) => s.appendToInput);

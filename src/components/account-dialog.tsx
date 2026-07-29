@@ -22,15 +22,15 @@ const accountFormSchema = z.object({
 });
 
 const LABEL_COLORS = [
-  "#8b5cf6", // violet
-  "#3b82f6", // blue
-  "#06b6d4", // cyan
-  "#10b981", // emerald
-  "#f59e0b", // amber
-  "#f97316", // orange
-  "#ef4444", // red
-  "#ec4899", // pink
-  "#09090b", // black
+  "#8b5cf6",
+  "#3b82f6",
+  "#06b6d4",
+  "#10b981",
+  "#f59e0b",
+  "#f97316",
+  "#ef4444",
+  "#ec4899",
+  "#09090b",
 ];
 
 export const useAccountDialogStore = create(
@@ -198,7 +198,6 @@ function AccountDialogContent() {
       labelText: existing?.labelText ?? "",
       labelColor: existing?.labelColor ?? "#8b5cf6",
       currency: existing?.currency ?? "USD",
-      // Stored as string so FormInput handles free-form typing (negatives, decimals)
       balance: String(mode === "edit" ? (existing?.balance ?? 0) : 0),
       description: existing?.description ?? "",
     },

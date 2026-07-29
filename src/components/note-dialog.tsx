@@ -101,7 +101,6 @@ function NoteDialogContent({
     data: [note],
   } = useDbQuery((q) => q.selectFrom("item").selectAll().where("id", "=", noteId));
 
-  // Distinct tags across all notes, for autocomplete.
   const { data: tagSuggestions } = useDbQuery((q) => q.selectFrom("item").select(["tags"]).where("type", "=", "note"), {
     mapData: (rows) => {
       const set = new Set<string>();
@@ -115,8 +114,6 @@ function NoteDialogContent({
   const [title, setTitle] = useState(note?.title ?? "");
   const [tags, setTags] = useState<string[]>(() => parseTags(note?.tags));
   const editorRef = useRef<NoteEditorHandle>(null);
-  // Latest values live in a ref so every save carries all fields,
-  // regardless of which input triggered it.
   const fieldsRef = useRef({
     title: note?.title ?? "",
     content: note?.content ?? "",

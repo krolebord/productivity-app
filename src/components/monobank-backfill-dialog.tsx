@@ -42,7 +42,6 @@ function StatementList({
     }),
   );
 
-  // The client already holds every synced transaction, so dedupe display needs no server call.
   const { data: importedRows } = useDbQuery((q) =>
     q.selectFrom("transaction_entry").select(["providerId"]).where("providerType", "=", "monobank"),
   );
@@ -58,7 +57,6 @@ function StatementList({
   );
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  // Default to every not-yet-imported entry once the statement loads.
   useEffect(() => {
     setSelected(new Set(rows.filter((row) => !row.alreadyImported).map((row) => row.entry.providerId)));
   }, [rows]);

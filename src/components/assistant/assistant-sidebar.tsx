@@ -472,7 +472,6 @@ function MessageParts({ message, conversationId }: { message: UIMessage; convers
       if (name === "create_skill") {
         return <SkillChip key={i} part={part} />;
       }
-      // The chart spec is the tool input; render it once the call has resolved.
       if (name === "renderChart" && part.state === "output-available") {
         return (
           <ErrorBoundary key={i} fallback={<ChartErrorChip />} onError={logChartError} resetKeys={[part.input]}>
@@ -537,7 +536,6 @@ function ConversationDeleteButton({
       className={cn("rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-destructive", className)}
       aria-label={`Delete ${label}`}
       onClick={(e) => {
-        // Don't let the click switch the active conversation; open the confirm dialog instead.
         e.stopPropagation();
         confirm({
           title: "Delete conversation",
@@ -635,8 +633,6 @@ function ModelSelect({
 }) {
   const active = ASSISTANT_MODELS.find((m) => m.id === model) ?? ASSISTANT_MODELS[0];
 
-  // Once the conversation has a message the model is fixed — show the locked
-  // model without an interactive dropdown.
   if (locked) {
     return (
       <Tooltip>
@@ -751,7 +747,6 @@ function ConversationView({
   }
 
   function newConversation() {
-    // An empty active conversation already is a "new" one — just stay on it.
     if (!conversation.title && conversation.totalTokens === 0) return;
     const id = generateId();
     const now = Date.now();
@@ -862,7 +857,6 @@ function ConversationView({
 
 function ConversationChat({ agentId, conversation }: { agentId: string; conversation: ConversationRow }) {
   const db = useDb();
-  // The draft lives in the store so off-screen rows can append context tokens to it.
   const input = useAssistantStore((s) => s.inputDraft);
   const setInput = useAssistantStore((s) => s.setInputDraft);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -886,8 +880,6 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
     return () => cancelAnimationFrame(frame);
   }, [composerFocusNonce]);
 
-  // The model belongs to the conversation. Also remember changes as the default
-  // carried into the next new chat.
   const setPreferredModel = useAssistantStore((s) => s.setModel);
   const model = resolveAssistantModelId(conversation.model);
   const modelRef = useRef(model);
@@ -896,12 +888,10 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
   const agent = useAgent({ agent: "assistant-agent", name: agentId });
   const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({
     agent,
-    // Read from a ref so the selected model is always current without re-creating the chat.
     body: () => ({ model: modelRef.current }),
   });
 
   function selectModel(next: AssistantModelId) {
-    // Persist on the conversation and remember it as the default for new chats.
     setPreferredModel(next);
     db.db.executeKysely((q) => q.updateTable("conversation").set({ model: next }).where("id", "=", conversation.id));
   }

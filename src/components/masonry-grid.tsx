@@ -2,14 +2,6 @@ import { type CSSProperties, type Key, type Ref, useCallback, useEffect, useMemo
 
 export type MasonryRect = { x: number; y: number; width: number; height: number };
 
-/**
- * Google Keep-style masonry layout: fixed-width columns centered in the
- * container (a single column fills the container width), items placed in
- * order into the currently shortest column.
- * Items are absolutely positioned via transforms so position changes animate,
- * and the computed rects are exposed so callers (e.g. drag-and-drop collision
- * detection) can work off the target layout instead of mid-animation DOM rects.
- */
 export function useMasonryLayout<T>({
   items,
   itemKey,
@@ -52,8 +44,6 @@ export function useMasonryLayout<T>({
     });
   }, []);
 
-  // Ref callbacks are cached per key so React doesn't detach/reattach (and
-  // churn the observer) on every render.
   const itemRefCache = useRef(new Map<Key, (el: HTMLElement | null) => (() => void) | undefined>());
   const getItemRef = useCallback(
     (key: Key) => {
@@ -87,8 +77,6 @@ export function useMasonryLayout<T>({
     }
     const targetWidth = Math.min(columnWidth, outerWidth);
     const columnCount = Math.max(1, Math.floor((outerWidth + gap) / (targetWidth + gap)));
-    // Multi-column keeps the fixed, centered columns; a lone column fills the
-    // container instead of sitting in dead side-margin (e.g. on narrow phones).
     const colWidth = columnCount === 1 ? outerWidth : columnWidth;
     const colHeights = new Array<number>(columnCount).fill(0);
     const rects = new Map<Key, MasonryRect>();
@@ -112,8 +100,6 @@ export function useMasonryLayout<T>({
     };
   }, [items, itemKey, heights, outerWidth, columnWidth, gap]);
 
-  // Snapshot of the rects from the previously committed render: an item that
-  // had no position yet must not animate in from (0, 0).
   const prevRectsRef = useRef<ReadonlyMap<Key, MasonryRect>>(new Map());
   useEffect(() => {
     prevRectsRef.current = layout.rects;

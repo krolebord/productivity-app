@@ -39,7 +39,6 @@ const tokenResponseSchema = z.object({
 
 export type RefreshedAccessToken = {
   accessToken: string;
-  /** Epoch ms at which the token stops being usable. */
   expiresAt: number;
   scope: string;
 };
@@ -88,7 +87,6 @@ export async function refreshAccessToken(args: {
   };
 }
 
-/** True when a stored access token is missing or too close to expiry to reuse. */
 export function isAccessTokenUsable(accessToken: string | null, expiresAt: string | null): boolean {
   if (!accessToken || !expiresAt) return false;
   const expiry = new Date(expiresAt).getTime();
@@ -117,9 +115,7 @@ async function googleRequest(accessToken: string, path: string, params: Record<s
     try {
       const json = (await response.json()) as { error?: { message?: string } };
       detail = json?.error?.message ? `: ${json.error.message}` : "";
-    } catch {
-      // ignore non-JSON error bodies
-    }
+    } catch {}
     throw new GoogleCalendarApiError(
       `Google Calendar API request failed (${response.status} ${response.statusText})${detail}.`,
       response.status,
@@ -129,7 +125,6 @@ async function googleRequest(accessToken: string, path: string, params: Record<s
   return response.json();
 }
 
-/** Every calendar the account can see, including subscribed and shared ones. */
 export async function fetchCalendarList(accessToken: string): Promise<GoogleCalendarListEntry[]> {
   const entries: GoogleCalendarListEntry[] = [];
   let pageToken: string | undefined;
@@ -150,7 +145,6 @@ export async function fetchCalendarList(accessToken: string): Promise<GoogleCale
 
 export type EventsPage = {
   events: GoogleCalendarEvent[];
-  /** Cursor to store for the next incremental sync; absent if Google did not return one. */
   nextSyncToken: string | undefined;
 };
 

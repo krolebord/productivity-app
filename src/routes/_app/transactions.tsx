@@ -47,7 +47,6 @@ import { useDbQuery } from "@/user-db/user-db";
 const TRANSACTION_SORTS = ["date_desc", "date_asc", "amount_desc", "amount_asc", "title_asc", "title_desc"] as const;
 type TransactionSort = (typeof TRANSACTION_SORTS)[number];
 
-// "none" matches transactions with no importance set (unclassified / imported).
 const IMPORTANCE_FILTERS = [...IMPORTANCE_TIERS, "none"] as const;
 
 const transactionsSearchSchema = z.object({
@@ -167,7 +166,6 @@ const TYPE_STYLE = {
   },
 } satisfies Record<TransactionType, { icon: unknown; dot: string; badge: string; accent: string }>;
 
-// Per-tier pill styling, matching the importance selector in the transaction dialog.
 const IMPORTANCE_STYLE = {
   fixed: { label: "Fixed", badge: "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400" },
   flexible: { label: "Flexible", badge: "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400" },
@@ -248,15 +246,11 @@ function formatTimeRangeLabel(from?: number, to?: number) {
   return "All time";
 }
 
-// The chip-based filters, in the order they appear. Search and sort live outside
-// this set because they stay visible at all times.
 const FILTER_ORDER = ["account", "currency", "time", "type", "importance", "category"] as const;
 type FilterKey = (typeof FILTER_ORDER)[number];
 
 const capitalize = (value: string) => value[0].toUpperCase() + value.slice(1);
 
-// A single-select list rendered inside a filter chip's popover. The empty-value
-// option ("All …") clears the filter.
 function FilterOptionList({
   options,
   selected,
@@ -297,12 +291,10 @@ function TransactionsPage() {
   const createIncome = useCreateIncome(search.accountId ? { accountId: search.accountId } : undefined);
   const createTransfer = useCreateTransfer(search.accountId ? { accountId: search.accountId } : undefined);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
-  // Which filter chip's editor popover is open, plus the "Add filter" menu state.
   const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addPage, setAddPage] = useState<FilterKey | null>(null);
 
-  // Reset to the default page size whenever the active filters change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset is keyed on filter values, not setLimit.
   useEffect(() => {
     setLimit(DEFAULT_LIMIT);
@@ -331,7 +323,6 @@ function TransactionsPage() {
   );
   const categories = categoryRows.map((row) => row.category);
 
-  // Fetch one extra row beyond the limit so we can tell whether more remain.
   const { data: transactions } = useDbQuery((db) =>
     applyTransactionSort(applyTransactionFilters(db.selectFrom("transaction_entry").selectAll(), search), sort).limit(
       limit + 1,
@@ -348,8 +339,6 @@ function TransactionsPage() {
   const visibleTransactions = hasMore ? transactions.slice(0, limit) : transactions;
   const totalEntries = Number(totalRows[0]?.count ?? 0);
 
-  // Day headers only make sense while the list is ordered by date; under other
-  // sorts the days would be interleaved and the headers would repeat noisily.
   const groupByDay = sort === "date_desc" || sort === "date_asc";
   const dayGroups: { key: string; label: string; transactions: typeof visibleTransactions }[] = [];
   if (groupByDay) {
@@ -395,8 +384,6 @@ function TransactionsPage() {
     setAddPage(null);
   }
 
-  // Label + current display value for each chip filter. `value` is null when the
-  // filter is inactive, which keeps it out of the chip row and in the "Add filter" menu.
   const filterMeta: Record<FilterKey, { label: string; value: string | null }> = {
     account: {
       label: "Account",
@@ -436,8 +423,6 @@ function TransactionsPage() {
     }
   }
 
-  // The editor shown inside a chip's popover (and in the "Add filter" second page).
-  // Single-selects close the popover on choose; time/category stay open for further input.
   function renderFilterEditor(key: FilterKey) {
     switch (key) {
       case "account":
@@ -569,8 +554,6 @@ function TransactionsPage() {
           </p>
         </div>
 
-        {/* Create actions — desktop only; mobile uses the FAB + command palette.
-            Full-width split while the header is stacked, natural width once it's a row. */}
         <div className="hidden gap-2 md:flex">
           <Button onClick={createExpense} size="sm" className="@2xl:flex-none flex-1">
             <ArrowDownLeftIcon className="size-4" />

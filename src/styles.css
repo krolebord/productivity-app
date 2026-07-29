@@ -190,7 +190,6 @@
     @apply bg-background text-foreground;
   }
 
-  /* Selection colors matching primary theme */
   ::selection {
     background-color: oklch(0.6056 0.2189 292.7172 / 0.2);
   }
@@ -328,7 +327,6 @@
     margin: 0.75rem 0;
   }
 
-  /* Task lists as rendered by Tiptap */
   .note-prose ul[data-type="taskList"] {
     list-style: none;
     padding-left: 0;
@@ -410,7 +408,6 @@
     }
   }
 
-  /* Editor placeholder (Tiptap Placeholder extension) */
   .tiptap p.is-editor-empty:first-child::before {
     color: color-mix(in oklab, var(--color-muted-foreground) 60%, transparent);
     content: attr(data-placeholder);

@@ -44,8 +44,6 @@ export function AccountCard({ account }: AccountCardProps) {
     transition: sortable.transition,
   };
 
-  // The whole card is the drag handle, so the body click that fires right
-  // after a drop must be swallowed — otherwise dropping a card also opens it.
   const justDraggedRef = useRef(false);
   useEffect(() => {
     if (sortable.isDragging) {
@@ -65,7 +63,6 @@ export function AccountCard({ account }: AccountCardProps) {
         {...sortable.attributes}
         {...sortable.listeners}
       >
-        {/* Hover actions */}
         <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
