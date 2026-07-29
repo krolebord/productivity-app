@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CALENDAR_CLEANUP_PROVIDER_TYPE } from "@/lib/google-calendar/mapping";
 import { GOOGLE_CALENDAR_PROVIDER_TYPE } from "@/lib/google-calendar/types";
 import { defineJob } from "./jobs-base";
 
@@ -37,6 +38,14 @@ export const calendarCleanupJob = defineJob({ type: "calendar-cleanup" })
     let removed = 0;
     for (const row of rows) {
       if (!row.providerId?.startsWith(prefix)) continue;
+      context.syncDb.enqueueEvent(
+        context.syncDb.createEvent({
+          type: "item-updated",
+          dataset: "_item",
+          item_id: row.id,
+          payload: { providerType: CALENDAR_CLEANUP_PROVIDER_TYPE },
+        }),
+      );
       context.syncDb.enqueueEvent(
         context.syncDb.createEvent({
           type: "item-deleted",

@@ -2,7 +2,12 @@ import { generateId } from "@sqlite-sync/core";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { fetchEvents, GoogleSyncTokenExpiredError } from "@/lib/google-calendar/api";
-import { decideEventSync, type ExistingSyncedTask, syncWindow } from "@/lib/google-calendar/mapping";
+import {
+  CALENDAR_CLEANUP_PROVIDER_TYPE,
+  decideEventSync,
+  type ExistingSyncedTask,
+  syncWindow,
+} from "@/lib/google-calendar/mapping";
 import { describeApiError, getAccessTokenForConnection } from "@/lib/google-calendar/server";
 import {
   getSourceStatus,
@@ -29,6 +34,7 @@ type ProviderItemRow = {
   providerType: string | null;
   providerUpdatedAt: number | null;
   completedAt: number | null;
+  dueAt: number | null;
 };
 
 function escapeLikePattern(value: string): string {
@@ -51,7 +57,7 @@ function loadExistingTasks(
 
   const rows = ctx.storage.sql
     .exec<ProviderItemRow>(
-      `select id, tombstone, providerId, providerType, providerUpdatedAt, completedAt
+      `select id, tombstone, providerId, providerType, providerUpdatedAt, completedAt, dueAt
        from _item
        where providerId like ? escape '\\'`,
       prefix,
@@ -66,6 +72,7 @@ function loadExistingTasks(
       providerType: row.providerType,
       providerUpdatedAt: row.providerUpdatedAt,
       completedAt: row.completedAt,
+      dueAt: row.dueAt,
     });
   }
   return byProviderId;
@@ -333,6 +340,50 @@ async function syncCalendarSource(args: {
         }),
       );
       counts.updated += 1;
+      continue;
+    }
+
+    if (decision.action === "restore") {
+      // sqlite-sync's runtime validator permits `tombstone: false` to resurrect a row, although the
+      // generated update payload type conservatively omits the managed column.
+      const restorePayload = {
+        tombstone: false,
+        providerType: GOOGLE_CALENDAR_PROVIDER_TYPE,
+        title: decision.fields.title,
+        content: decision.fields.content,
+        dueAt: decision.fields.dueAt,
+        hasDueTime: decision.fields.hasDueTime,
+        providerUpdatedAt: decision.fields.providerUpdatedAt,
+      };
+      context.syncDb.enqueueEvent(
+        context.syncDb.createEvent({
+          type: "item-updated",
+          dataset: "_item",
+          item_id: decision.itemId,
+          payload: restorePayload,
+        }),
+      );
+      counts.created += 1;
+      continue;
+    }
+
+    if (decision.action === "remove") {
+      context.syncDb.enqueueEvent(
+        context.syncDb.createEvent({
+          type: "item-updated",
+          dataset: "_item",
+          item_id: decision.itemId,
+          payload: { providerType: CALENDAR_CLEANUP_PROVIDER_TYPE },
+        }),
+      );
+      context.syncDb.enqueueEvent(
+        context.syncDb.createEvent({
+          type: "item-deleted",
+          dataset: "_item",
+          item_id: decision.itemId,
+        }),
+      );
+      counts.removed += 1;
       continue;
     }
 

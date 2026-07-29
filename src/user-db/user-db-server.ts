@@ -155,6 +155,48 @@ export class UserDbServer extends Server<Env> {
   }
 
   /**
+   * Apply calendar enablement in the server replica before scheduling work that reads it.
+   *
+   * A browser write followed by a separate RPC has no cross-channel ordering guarantee, whereas a
+   * server-authored event is applied synchronously by `enqueueEvent`.
+   */
+  async setCalendarSourceEnabled(input: {
+    sourceId: string;
+    providerConnectionId: string;
+    providerCalendarId: string;
+    enabled: boolean;
+  }): Promise<boolean> {
+    const [source] = this.syncDb.executeKysely((q) =>
+      q
+        .selectFrom("calendar_source")
+        .select(["id"])
+        .where("id", "=", input.sourceId)
+        .where("providerConnectionId", "=", input.providerConnectionId)
+        .where("providerCalendarId", "=", input.providerCalendarId),
+    ).rows;
+    if (!source) return false;
+
+    this.syncDb.enqueueEvent(
+      this.syncDb.createEvent({
+        type: "item-updated",
+        dataset: "_calendar_source",
+        item_id: source.id,
+        payload: { enabled: input.enabled, updatedAt: Date.now() },
+      }),
+    );
+
+    if (input.enabled) {
+      await this.enqueueCalendarSync({ providerConnectionId: input.providerConnectionId });
+    } else {
+      await this.enqueueCalendarCleanup({
+        providerConnectionId: input.providerConnectionId,
+        providerCalendarId: input.providerCalendarId,
+      });
+    }
+    return true;
+  }
+
+  /**
    * Per-run calendar sync diagnostics ("synced 3 minutes ago", per-calendar errors).
    *
    * These live in DO storage rather than the synced database — see

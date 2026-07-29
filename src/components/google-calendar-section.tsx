@@ -9,7 +9,7 @@ import type { CalendarSyncStatusReport } from "@/lib/google-calendar/sync-status
 import { cn } from "@/lib/utils";
 import { orpc } from "@/orpc/orpc-client";
 import type { CalendarConnectionMetaItem, CalendarSourceItem } from "@/user-db/migrations";
-import { useDb, useDbQuery } from "@/user-db/user-db";
+import { useDbQuery } from "@/user-db/user-db";
 
 function statusLabel(status: string): { label: string; className: string } {
   switch (status) {
@@ -56,32 +56,22 @@ function CalendarSourceRow({
   status: SyncStatusEntry | undefined;
   onChanged: () => void;
 }) {
-  const db = useDb();
-
-  // Clearing a disabled calendar's upcoming tasks needs the Durable Object (the single writer for
-  // bulk removals), so the toggle writes locally and then asks the server to follow up.
-  const cleanup = useMutation(
-    orpc.integrations.googleCalendar.cleanupCalendar.mutationOptions({
-      onError: (error) =>
-        toast.error(error instanceof Error ? error.message : "Could not clear tasks for that calendar."),
-    }),
-  );
-  const syncNow = useMutation(
-    orpc.integrations.googleCalendar.syncNow.mutationOptions({
-      onError: (error) => toast.error(error instanceof Error ? error.message : "Could not start a sync."),
+  const setCalendarEnabled = useMutation(
+    orpc.integrations.googleCalendar.setCalendarEnabled.mutationOptions({
+      onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update that calendar."),
     }),
   );
 
   function setEnabled(enabled: boolean) {
-    db.db.executeKysely((q) =>
-      q.updateTable("calendar_source").set({ enabled, updatedAt: Date.now() }).where("id", "=", source.id),
+    setCalendarEnabled.mutate(
+      {
+        connectionId,
+        sourceId: source.id,
+        providerCalendarId: source.providerCalendarId,
+        enabled,
+      },
+      { onSuccess: onChanged },
     );
-
-    if (enabled) {
-      syncNow.mutate({ connectionId }, { onSuccess: onChanged });
-    } else {
-      cleanup.mutate({ connectionId, providerCalendarId: source.providerCalendarId }, { onSuccess: onChanged });
-    }
   }
 
   const syncedLabel = source.enabled ? lastSyncedLabel(status) : "Not syncing";
@@ -96,6 +86,7 @@ function CalendarSourceRow({
         id={`calendar-enabled-${source.id}`}
         checked={source.enabled}
         onCheckedChange={(value) => setEnabled(value === true)}
+        disabled={setCalendarEnabled.isPending}
       />
       {source.color ? (
         <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: source.color }} aria-hidden="true" />

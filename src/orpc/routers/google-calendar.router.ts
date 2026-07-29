@@ -115,6 +115,34 @@ const syncNow = protectedProcedure
     return { success: true as const };
   });
 
+const setCalendarEnabled = protectedProcedure
+  .input(
+    connectionInput.extend({
+      sourceId: z.string(),
+      providerCalendarId: z.string(),
+      enabled: z.boolean(),
+    }),
+  )
+  .handler(async ({ input, context, errors }) => {
+    const connection = await requireConnection(context.auth.userId, input.connectionId);
+    if (!connection) {
+      throw errors.BAD_REQUEST({ message: "That Google account is no longer connected." });
+    }
+
+    const stub = await getUserDbStub(context.auth.userId);
+    const found = await stub.setCalendarSourceEnabled({
+      sourceId: input.sourceId,
+      providerConnectionId: connection.id,
+      providerCalendarId: input.providerCalendarId,
+      enabled: input.enabled,
+    });
+    if (!found) {
+      throw errors.BAD_REQUEST({ message: "That calendar is no longer available." });
+    }
+
+    return { success: true as const };
+  });
+
 const cleanupCalendar = protectedProcedure
   .input(connectionInput.extend({ providerCalendarId: z.string().nullable().default(null) }))
   .handler(async ({ input, context, errors }) => {
@@ -178,6 +206,7 @@ export const googleCalendarRouter = {
   getSyncStatus,
   refreshCalendars,
   syncNow,
+  setCalendarEnabled,
   cleanupCalendar,
   disconnect,
 };

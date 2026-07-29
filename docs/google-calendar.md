@@ -77,9 +77,11 @@ Google is the source of truth, but the mirror must not fight the user. All of th
   also protects it from being removed if the event is later cancelled.
 - Otherwise Google wins on title, time and body — but only when the event's `updated` timestamp has
   advanced, so a full resync doesn't rewrite every row.
-- Events outside the window are ignored rather than deleted: tasks that simply aged out are history.
+- Events that simply age out of the window are history and stay untouched. If Google reports that
+  an existing in-window event was rescheduled beyond the window, its stale task is removed.
 - Disabling a calendar or disconnecting the account clears **upcoming, incomplete, still-attached**
-  mirrored tasks only (`calendar-cleanup`).
+  mirrored tasks only (`calendar-cleanup`). Those integration-generated removals are marked so
+  re-enabling the calendar can restore them; explicit user deletions remain permanent.
 
 ## Known limitations
 

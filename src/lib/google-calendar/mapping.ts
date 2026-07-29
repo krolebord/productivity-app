@@ -15,6 +15,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 export const DETACHED_PROVIDER_TYPE = "detached" as const;
 
+/**
+ * Temporary provider type written before integration cleanup tombstones a task.
+ *
+ * Unlike an ordinary Google Calendar tombstone (which means the user explicitly deleted the
+ * mirrored task), this marker tells a later sync that re-enabling the calendar may restore it.
+ */
+export const CALENDAR_CLEANUP_PROVIDER_TYPE = "google-calendar-cleanup" as const;
+
 export type MappedEventFields = {
   title: string;
   content: string;
@@ -151,11 +159,14 @@ function formatRange(event: GoogleCalendarEvent, timeZone: string): string {
   const endDate = event.end?.date;
   if (startDate && endDate) {
     // Google's all-day `end.date` is exclusive, so a one-day event ends the next morning.
-    const lastDay = new Date(zonedMidnightMs(endDate, timeZone) - 24 * 60 * 60 * 1000);
-    const firstDay = new Date(zonedMidnightMs(startDate, timeZone));
+    // Move back in date space before resolving the instant: subtracting 24 hours from a zoned
+    // midnight crosses DST incorrectly on spring-forward days.
+    const zone = event.start?.timeZone || timeZone;
+    const lastDay = new Date(zonedMidnightMs(shiftDateKey(endDate, -1), zone));
+    const firstDay = new Date(zonedMidnightMs(startDate, zone));
     const dateOptions: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-    const first = formatInZone(firstDay, timeZone, dateOptions);
-    const last = formatInZone(lastDay, timeZone, dateOptions);
+    const first = formatInZone(firstDay, zone, dateOptions);
+    const last = formatInZone(lastDay, zone, dateOptions);
     return first === last ? "All day" : `All day, ${first} – ${last}`;
   }
 
@@ -214,11 +225,14 @@ export type ExistingSyncedTask = {
   providerType: string | null;
   providerUpdatedAt: number | null;
   completedAt: number | null;
+  dueAt: number | null;
 };
 
 export type EventSyncDecision =
   | { action: "create"; fields: MappedEventFields }
+  | { action: "restore"; itemId: string; fields: MappedEventFields }
   | { action: "update"; itemId: string; fields: MappedEventFields }
+  | { action: "remove"; itemId: string }
   | { action: "tombstone"; itemId: string }
   | {
       action: "skip";
@@ -251,7 +265,7 @@ export function decideEventSync(args: {
     return { action: "skip", reason: "detached" };
   }
 
-  if (existing?.tombstone) {
+  if (existing?.tombstone && existing.providerType !== CALENDAR_CLEANUP_PROVIDER_TYPE) {
     return { action: "skip", reason: "deleted-locally" };
   }
 
@@ -267,11 +281,24 @@ export function decideEventSync(args: {
   }
 
   if (fields.dueAt < windowStartMs || fields.dueAt >= windowEndMs) {
+    const existingWasInWindow =
+      existing?.dueAt != null && existing.dueAt >= windowStartMs && existing.dueAt < windowEndMs;
+    if (existingWasInWindow && existing.completedAt == null) {
+      const seen = existing.providerUpdatedAt;
+      if (seen != null && fields.providerUpdatedAt != null && fields.providerUpdatedAt <= seen) {
+        return { action: "skip", reason: "unchanged" };
+      }
+      return { action: "remove", itemId: existing.id };
+    }
     return { action: "skip", reason: "outside-window" };
   }
 
   if (!existing) {
     return { action: "create", fields };
+  }
+
+  if (existing.tombstone) {
+    return { action: "restore", itemId: existing.id, fields };
   }
 
   const seen = existing.providerUpdatedAt;

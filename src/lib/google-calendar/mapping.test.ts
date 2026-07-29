@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEventContent,
+  CALENDAR_CLEANUP_PROVIDER_TYPE,
   DETACHED_PROVIDER_TYPE,
   decideEventSync,
   type ExistingSyncedTask,
@@ -46,6 +47,7 @@ function existingTask(overrides: Partial<ExistingSyncedTask> = {}): ExistingSync
     providerType: "google-calendar",
     providerUpdatedAt: Date.parse("2026-07-20T10:00:00.000Z"),
     completedAt: null,
+    dueAt: Date.parse("2026-08-03T09:30:00+03:00"),
     ...overrides,
   };
 }
@@ -129,6 +131,15 @@ describe("buildEventContent", () => {
     expect(content).toContain("Aug 3 – Aug 5");
   });
 
+  it("subtracts an exclusive all-day end in date space across spring DST", () => {
+    const content = buildEventContent(
+      event({ start: { date: "2026-03-08" }, end: { date: "2026-03-09" } }),
+      "America/New_York",
+    );
+    expect(content).toContain("All day");
+    expect(content).not.toContain("Mar 8 – Mar 7");
+  });
+
   it("spells out the end date when a timed event crosses midnight", () => {
     const content = buildEventContent(
       event({ start: { dateTime: "2026-08-03T23:00:00+03:00" }, end: { dateTime: "2026-08-04T01:00:00+03:00" } }),
@@ -147,6 +158,18 @@ describe("decideEventSync", () => {
   it("never recreates a task the user deleted", () => {
     const decision = decide({ event: event(), existing: existingTask({ tombstone: true }) });
     expect(decision).toEqual({ action: "skip", reason: "deleted-locally" });
+  });
+
+  it("restores a tombstone created by integration cleanup", () => {
+    const decision = decide({
+      event: event(),
+      existing: existingTask({ tombstone: true, providerType: CALENDAR_CLEANUP_PROVIDER_TYPE }),
+    });
+    expect(decision.action).toBe("restore");
+    if (decision.action === "restore") {
+      expect(decision.itemId).toBe("item-1");
+      expect(decision.fields.title).toBe("Standup");
+    }
   });
 
   it("leaves detached tasks alone even when the event changed", () => {
@@ -214,7 +237,43 @@ describe("decideEventSync", () => {
         end: { dateTime: "2026-06-01T10:00:00+03:00" },
         updated: "2026-07-27T10:00:00.000Z",
       }),
+      existing: existingTask({ dueAt: Date.parse("2026-06-01T09:00:00+03:00") }),
+    });
+    expect(decision).toEqual({ action: "skip", reason: "outside-window" });
+  });
+
+  it("removes an existing task when its event moves beyond the window", () => {
+    const decision = decide({
+      event: event({
+        start: { dateTime: "2026-09-30T09:00:00+03:00" },
+        end: { dateTime: "2026-09-30T10:00:00+03:00" },
+        updated: "2026-07-27T10:00:00.000Z",
+      }),
       existing: existingTask(),
+    });
+    expect(decision).toEqual({ action: "remove", itemId: "item-1" });
+  });
+
+  it("does not remove an in-window task for an older outside-window event snapshot", () => {
+    const decision = decide({
+      event: event({
+        start: { dateTime: "2026-09-30T09:00:00+03:00" },
+        end: { dateTime: "2026-09-30T10:00:00+03:00" },
+        updated: "2026-07-19T10:00:00.000Z",
+      }),
+      existing: existingTask(),
+    });
+    expect(decision).toEqual({ action: "skip", reason: "unchanged" });
+  });
+
+  it("keeps completed history when its event moves beyond the window", () => {
+    const decision = decide({
+      event: event({
+        start: { dateTime: "2026-09-30T09:00:00+03:00" },
+        end: { dateTime: "2026-09-30T10:00:00+03:00" },
+        updated: "2026-07-27T10:00:00.000Z",
+      }),
+      existing: existingTask({ completedAt: Date.parse("2026-08-03T10:05:00Z") }),
     });
     expect(decision).toEqual({ action: "skip", reason: "outside-window" });
   });
