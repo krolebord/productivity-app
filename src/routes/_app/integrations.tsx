@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { DownloadIcon, PlusIcon, RefreshCwIcon, Unplug } from "lucide-react";
+import { ChevronDown, DownloadIcon, PlusIcon, RefreshCwIcon, Unplug } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { GoogleCalendarSection, useGoogleCalendarData } from "@/components/googl
 import { MonobankBackfillDialog } from "@/components/monobank-backfill-dialog";
 import { MonobankTokenDialog } from "@/components/monobank-token-dialog";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { linkMonobankAccount } from "@/lib/monobank/link";
 import { cn } from "@/lib/utils";
@@ -185,79 +186,91 @@ function MonobankSection({
   const webhook = connection ? webhookLabel(connection.webhookStatus) : null;
 
   return (
-    <section className="rounded-xl border bg-card">
-      <div className="flex @2xl:flex-row flex-col @2xl:items-center @2xl:justify-between gap-3 border-b p-4">
-        <div>
-          <h2 className="font-semibold">Monobank</h2>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
-            <span className={cn("font-medium", status.className)}>{status.label}</span>
-            {isConnected && webhook ? <span className={webhook.className}>{webhook.label}</span> : null}
-            {connection?.displayName ? <span className="text-muted-foreground">{connection.displayName}</span> : null}
+    <Collapsible defaultOpen asChild>
+      <section className="rounded-xl border bg-card">
+        <div className="flex @2xl:flex-row flex-col @2xl:items-center @2xl:justify-between gap-3 p-4">
+          <CollapsibleTrigger className="flex min-w-0 flex-1 items-start gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform [[data-state=closed]_&]:-rotate-90" />
+            <div className="min-w-0">
+              <h2 className="font-semibold">Monobank</h2>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                <span className={cn("font-medium", status.className)}>{status.label}</span>
+                {isConnected && webhook ? <span className={webhook.className}>{webhook.label}</span> : null}
+                {connection?.displayName ? <span className="text-muted-foreground">{connection.displayName}</span> : null}
+              </div>
+              {isConnected && connection.lastError ? (
+                <p className="mt-1 text-rose-600 text-xs dark:text-rose-400">{connection.lastError}</p>
+              ) : null}
+            </div>
+          </CollapsibleTrigger>
+
+          <div className="flex flex-wrap gap-2 pl-6 @2xl:pl-0">
+            {isConnected ? (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setDialog({ open: true, mode: "replace" })}>
+                  Replace token
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => refreshAccounts.mutate({})}
+                  disabled={refreshAccounts.isPending}
+                >
+                  <RefreshCwIcon className={refreshAccounts.isPending ? "animate-spin" : undefined} />
+                  Refresh accounts
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => disconnect.mutate({})}
+                  disabled={disconnect.isPending}
+                >
+                  <Unplug />
+                  Disconnect
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={() => setDialog({ open: true, mode: "connect" })}>
+                Connect
+              </Button>
+            )}
           </div>
-          {isConnected && connection.lastError ? (
-            <p className="mt-1 text-rose-600 text-xs dark:text-rose-400">{connection.lastError}</p>
-          ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <CollapsibleContent>
           {isConnected ? (
-            <>
-              <Button size="sm" variant="outline" onClick={() => setDialog({ open: true, mode: "replace" })}>
-                Replace token
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => refreshAccounts.mutate({})}
-                disabled={refreshAccounts.isPending}
-              >
-                <RefreshCwIcon className={refreshAccounts.isPending ? "animate-spin" : undefined} />
-                Refresh accounts
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => disconnect.mutate({})} disabled={disconnect.isPending}>
-                <Unplug />
-                Disconnect
-              </Button>
-            </>
+            <div className="flex flex-col gap-2 border-t p-4">
+              {monoAccounts.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  No Monobank accounts yet. Use “Refresh accounts” to fetch them.
+                </p>
+              ) : (
+                monoAccounts.map((monoAccount) => (
+                  <MonobankAccountRow
+                    key={monoAccount.id}
+                    monoAccount={monoAccount}
+                    accounts={accounts}
+                    linkedElsewhere={linkedElsewhere}
+                  />
+                ))
+              )}
+            </div>
           ) : (
-            <Button size="sm" onClick={() => setDialog({ open: true, mode: "connect" })}>
-              Connect
-            </Button>
+            <div className="border-t p-4">
+              <p className="text-muted-foreground text-sm">
+                Connect your personal Monobank token to automatically import new transactions into linked accounts.
+              </p>
+            </div>
           )}
-        </div>
-      </div>
+        </CollapsibleContent>
 
-      {isConnected ? (
-        <div className="flex flex-col gap-2 p-4">
-          {monoAccounts.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No Monobank accounts yet. Use “Refresh accounts” to fetch them.
-            </p>
-          ) : (
-            monoAccounts.map((monoAccount) => (
-              <MonobankAccountRow
-                key={monoAccount.id}
-                monoAccount={monoAccount}
-                accounts={accounts}
-                linkedElsewhere={linkedElsewhere}
-              />
-            ))
-          )}
-        </div>
-      ) : (
-        <div className="p-4">
-          <p className="text-muted-foreground text-sm">
-            Connect your personal Monobank token to automatically import new transactions into linked accounts.
-          </p>
-        </div>
-      )}
-
-      <MonobankTokenDialog
-        open={dialog.open}
-        mode={dialog.mode}
-        onOpenChange={(open) => setDialog((prev) => ({ ...prev, open }))}
-      />
-    </section>
+        <MonobankTokenDialog
+          open={dialog.open}
+          mode={dialog.mode}
+          onOpenChange={(open) => setDialog((prev) => ({ ...prev, open }))}
+        />
+      </section>
+    </Collapsible>
   );
 }
 
