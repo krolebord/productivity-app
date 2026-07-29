@@ -186,7 +186,7 @@ function MonobankSection({
   const webhook = connection ? webhookLabel(connection.webhookStatus) : null;
 
   return (
-    <Collapsible defaultOpen asChild>
+    <Collapsible asChild>
       <section className="rounded-xl border bg-card">
         <div className="flex @2xl:flex-row flex-col @2xl:items-center @2xl:justify-between gap-3 p-4">
           <CollapsibleTrigger className="flex min-w-0 flex-1 items-start gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
