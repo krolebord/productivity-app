@@ -37,29 +37,26 @@ type ProviderItemRow = {
   dueAt: number | null;
 };
 
-function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
-}
-
 /**
  * Existing tasks for one calendar, keyed by `providerId`, **including tombstoned rows**.
  *
  * This is the one place that reads the base `_item` table instead of the CRDT view: the view hides
  * soft-deleted rows, and a task the user deleted must stay deleted rather than be recreated on the
- * next sync.
+ * next sync. `instr` performs a literal prefix check; using `LIKE` here makes provider-controlled
+ * calendar ids into patterns and can hit SQLite's pattern-complexity limit.
  */
 function loadExistingTasks(
   ctx: DurableObjectState,
   providerConnectionId: string,
   calendarId: string,
 ): Map<string, ExistingSyncedTask> {
-  const prefix = `${escapeLikePattern(`${providerConnectionId}:${calendarId}:`)}%`;
+  const prefix = `${providerConnectionId}:${calendarId}:`;
 
   const rows = ctx.storage.sql
     .exec<ProviderItemRow>(
       `select id, tombstone, providerId, providerType, providerUpdatedAt, completedAt, dueAt
        from _item
-       where providerId like ? escape '\\'`,
+       where instr(providerId, ?) = 1`,
       prefix,
     )
     .toArray();
