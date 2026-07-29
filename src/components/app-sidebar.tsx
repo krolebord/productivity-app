@@ -18,10 +18,10 @@ import {
   Bot,
   Brain,
   CalendarCheck,
+  ChartPie,
   ChevronDown,
   ChevronsUpDown,
   Coins,
-  Home,
   ListTodoIcon,
   Loader2,
   LogOut,
@@ -417,7 +417,7 @@ function SidebarContent({
           <SidebarNavLink
             to="/finances"
             label="Finances"
-            icon={Home}
+            icon={ChartPie}
             isActive={currentPath === "/finances"}
             collapsed={collapsed}
             onNavigate={onNavigate}
@@ -533,7 +533,7 @@ function SidebarContent({
           <DropdownMenuLabel className="text-muted-foreground text-xs">Default home</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={defaultHome} onValueChange={(value) => setDefaultHome(value as DefaultHome)}>
             <DropdownMenuRadioItem value="finances">
-              <Home className="size-4" />
+              <ChartPie className="size-4" />
               Finances
             </DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="today">

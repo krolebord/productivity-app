@@ -7,8 +7,8 @@ import {
   ArrowUpRightIcon,
   Bot,
   Brain,
+  ChartPie,
   CoinsIcon,
-  Home,
   ListTodoIcon,
   MessageSquarePlusIcon,
   Plug,
@@ -174,7 +174,7 @@ export function CommandPalette() {
         </CommandGroup>
         <CommandGroup heading="Navigation">
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/finances" }))}>
-            <Home className="size-4" />
+            <ChartPie className="size-4" />
             Finances
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/notes" }))}>
