@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { syncDbSchema } from "./migrations";
 import { userDbSchemaDocContext } from "./schema-doc";
 
-// The schema document is included in every assistant conversation, so this bounds token cost.
-const MAX_SCHEMA_DOC_CHARS = 18_000;
+// Descriptions should capture non-obvious invariants, not duplicate names and types.
+const MAX_SCHEMA_DOC_CHARS = 13_000;
 
 describe("user db schema doc", () => {
   it("stays within the context size budget", () => {

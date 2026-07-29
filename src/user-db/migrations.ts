@@ -400,66 +400,45 @@ export const syncDbSchema = defineSyncSchema({
           .enum(["note", "task"])
           .default("note")
           .describe('Item kind: "note" for reference material, "task" for an actionable item.'),
-        title: t.text().describe("Note or task title (may be empty)."),
+        title: t.text(),
         createdAt: t.integer(),
-        content: t
-          .text()
-          .nullable()
-          .default("")
-          .describe("Note body as markdown. Can be long — avoid selecting it unless needed."),
-        order: t.real().nullable().default(0).describe("Manual sort position, ascending."),
-        tags: t
-          .text()
-          .default("[]")
-          .describe('JSON array of normalized tag strings, e.g. ["work","idea"]. Defaults to "[]".'),
+        content: t.text().nullable().default("").describe("Markdown body; may be large."),
+        order: t.real().nullable().default(0),
+        tags: t.text().default("[]").describe('JSON array of normalized tags; default "[]".'),
         dueAt: t
           .integer()
           .nullable()
           .default(null)
-          .describe(
-            "When a task is scheduled on the agenda (epoch ms). Null means the task is in Inbox. Always null for notes.",
-          ),
-        hasDueTime: t
-          .boolean()
-          .default(false)
-          .describe(
-            "Whether dueAt carries a meaningful time-of-day. False means all-day (only the calendar date of dueAt matters).",
-          ),
+          .describe("Task schedule time; null means Inbox. Always null for notes."),
+        hasDueTime: t.boolean().default(false).describe("Whether dueAt has a time; false means all-day."),
         completedAt: t
           .integer()
           .nullable()
           .default(null)
-          .describe("Epoch ms when the task was completed, or null when it is still open. Always null for notes."),
+          .describe("Completion time; null when open. Always null for notes."),
         providerType: t
           .text()
           .nullable()
           .default(null)
-          .describe(
-            'Source that created this task: "google-calendar", "detached" once the user unlinks it, or null for user-created items.',
-          ),
+          .describe('"google-calendar", "detached" after unlinking, or null for user-created items.'),
         providerId: t
           .text()
           .nullable()
           .default(null)
-          .describe("Id of the external record this task mirrors; kept after detaching so it is never re-imported."),
+          .describe("External record id; retained after detaching to prevent re-import."),
         providerUpdatedAt: t
           .integer()
           .nullable()
           .default(null)
-          .describe("Epoch ms the external record last changed, used to skip unchanged rows on resync."),
+          .describe("External record update time; used to skip unchanged rows."),
       })
       .describe(
-        [
-          "The user's notes and tasks, distinguished by `type`. Notes are durable reference material and use",
-          "title, content, tags, and order. Tasks are actions: a null dueAt puts them in Inbox; a non-null",
-          "dueAt schedules them on the agenda; completedAt records completion. Tasks may use content and tags",
-          "for supporting details.",
-        ].join(" "),
+        ["Notes are reference material; tasks are actionable. Use `dueAt` and `completedAt` for task state."].join(" "),
       ),
     currency_rate: t
       .table({
-        date: t.text().describe('Rate date as "YYYY-MM-DD".'),
-        baseCurrency: t.text().describe('Currently always "USD".'),
+        date: t.text().describe('Rate date, "YYYY-MM-DD".'),
+        baseCurrency: t.text(),
         AUD: currencyColumn(),
         BRL: currencyColumn(),
         CAD: currencyColumn(),
@@ -494,81 +473,55 @@ export const syncDbSchema = defineSyncSchema({
       })
       .describe(
         [
-          "Daily exchange rates, one row per (date, baseCurrency). `baseCurrency` is currently always",
-          '"USD"; each currency-code column holds how many units of that currency equal 1 unit of the',
-          "base currency on that date (NULL if unavailable). To convert between two non-USD currencies,",
-          "go through the base: amountInB = amountInA / rateA * rateB. Rows are appended roughly daily;",
-          "use the row with the latest `date` for current rates.",
+          "Daily rates, one row per (date, baseCurrency). Each code is units per base unit (null if unavailable).",
+          "Use the latest date for current rates; A→B: amount / rateA * rateB.",
         ].join(" "),
       ),
     account: t
       .table({
         currency: t.text().describe('ISO 4217 currency code, e.g. "USD".'),
-        initialBalance: t.real().default(0).describe("Starting balance in the account currency."),
-        balance: t
-          .real()
-          .default(0)
-          .describe("Current balance in the account currency, kept up to date by the app as transactions change."),
-        description: t.text().default("").describe("User-provided account name/description."),
-        labelColor: t.text().default("#8b5cf6").describe("Hex color of the display label."),
-        labelText: t.text().default("").describe("Short display label shown on the account card."),
-        order: t.real().default(0).describe("Manual sort position, ascending."),
-        excludeFromDashboard: t
-          .boolean()
-          .default(false)
-          .describe("When true, this account is left out of all dashboard metrics (net worth, income/spend, charts)."),
+        initialBalance: t.real().default(0),
+        balance: t.real().default(0).describe("App-maintained current balance."),
+        description: t.text().default(""),
+        labelColor: t.text().default("#8b5cf6"),
+        labelText: t.text().default(""),
+        order: t.real().default(0),
+        excludeFromDashboard: t.boolean().default(false).describe("Exclude from dashboard metrics."),
         createdAt: t.integer(),
       })
-      .describe("Financial accounts (bank accounts, cash, etc.)."),
+      .describe("Financial accounts."),
     transaction_entry: t
       .table({
         type: t.text().default("expense").describe("expense | income | transfer | adjustment."),
         accountId: t.text().describe("References account.id."),
-        accountCurrency: t.text().describe("Currency of `amount` (copied from the account)."),
+        accountCurrency: t.text().describe("Currency of `amount`, copied from the account."),
         amount: t.real().describe("Signed amount — see table description for sign conventions."),
-        counterpartyAccountId: t
-          .text()
-          .default("")
-          .describe("Destination account.id for transfers, empty string otherwise."),
+        counterpartyAccountId: t.text().default("").describe("Destination account.id for transfers; empty otherwise."),
         counterpartyCurrency: t.text().default(""),
-        counterpartyAmount: t
-          .real()
-          .nullable()
-          .describe("Positive amount received by the destination account (transfers only)."),
+        counterpartyAmount: t.real().nullable().describe("Positive destination amount for transfers."),
         title: t.text().default(""),
-        category: t.text().default("").describe("Free-form category for expenses/incomes (empty for transfers)."),
+        category: t.text().default("").describe("Category; empty for transfers."),
         importance: t
           .enum(["fixed", "flexible", "optional", "investment"])
           .nullable()
           .default(null)
-          .describe(
-            "Expense importance tier: fixed | flexible | optional | investment; null for other types or unset.",
-          ),
-        notes: t.text().default("").describe("Free-form notes."),
-        effectiveAt: t
-          .integer()
-          .describe("When the transaction happened — use this for date filtering, not createdAt."),
+          .describe("Expense tier; null for other types or unset."),
+        notes: t.text().default(""),
+        effectiveAt: t.integer().describe("Transaction time; use for date filtering."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
         providerType: t
           .text()
           .nullable()
           .default(null)
-          .describe('External provider that created this transaction, e.g. "monobank"; null for manual entries.'),
-        providerId: t
-          .text()
-          .nullable()
-          .default(null)
-          .describe("Provider-side id of the source transaction (for Monobank, the statementItem id); null otherwise."),
+          .describe('External provider (e.g. "monobank"); null for manual entries.'),
+        providerId: t.text().nullable().default(null).describe("Provider-side transaction id; null otherwise."),
       })
       .describe(
         [
-          "Financial transactions. `type` is one of: expense, income, transfer, adjustment.",
-          "`amount` is signed and in the account's currency: negative for expenses and for the source",
-          "side of transfers, positive for income, either sign for adjustments. Transfers also set",
-          "`counterpartyAccountId` (destination account), `counterpartyCurrency`, and `counterpartyAmount`",
-          "(positive, in the destination currency); for all other types `counterpartyAccountId` is an",
-          "empty string and `counterpartyAmount` is NULL.",
+          "Financial transactions. Amount is in the account currency: negative for expenses and transfer sources,",
+          "positive for income, either sign for adjustments. Transfers set counterparty fields; otherwise",
+          "counterpartyAccountId is empty and counterpartyAmount is null.",
         ].join(" "),
       ),
     conversation: t
@@ -576,261 +529,174 @@ export const syncDbSchema = defineSyncSchema({
         title: t.text().default(""),
         createdAt: t.integer(),
         updatedAt: t.integer(),
-        model: t
-          .text()
-          .nullable()
-          .default(null)
-          .describe("Model id used for this conversation; fixed once the first message is sent."),
-        totalCost: t
-          .real()
-          .default(0)
-          .describe("Cumulative OpenRouter cost in USD across all turns in this conversation."),
-        totalTokens: t
-          .integer()
-          .default(0)
-          .describe("Cumulative total tokens used across all turns in this conversation."),
+        model: t.text().nullable().default(null).describe("Model id, fixed after the first message."),
+        totalCost: t.real().default(0).describe("Cumulative cost in USD."),
+        totalTokens: t.integer().default(0).describe("Cumulative tokens."),
       })
-      .describe("Index of the user's conversations with this assistant (titles, timestamps, and usage totals)."),
+      .describe("Assistant conversations and usage."),
     memory: t
       .table({
-        content: t.text().describe("A short, durable fact or preference about the user, in plain language."),
-        source: t
-          .enum(["user", "assistant"])
-          .default("user")
-          .describe('Who created the memory: "user" (added by the user) or "assistant".'),
-        enabled: t
-          .boolean()
-          .default(true)
-          .describe("When false the memory is muted: kept but not shown to the assistant."),
+        content: t.text().describe("Short, durable user fact or preference."),
+        source: t.enum(["user", "assistant"]).default("user").describe("Who created it."),
+        enabled: t.boolean().default(true).describe("False keeps it but omits it from assistant context."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
       .describe(
         [
-          "Small, durable notes the assistant keeps about the user (preferences, recurring facts, rules).",
-          "Every enabled memory is injected into the assistant's context each turn, so keep them short and",
-          "general. Manage them with the remember/update_memory/forget tools rather than writing here directly.",
+          "Durable user facts and preferences. Enabled rows enter every assistant turn; use memory tools, not mutateDb.",
         ].join(" "),
       ),
     skill: t
       .table({
-        name: t.text().default("").describe("Short title of the skill."),
-        whenToUse: t
-          .text()
-          .default("")
-          .describe("Short description of when this skill applies; used to match future requests."),
-        instructions: t.text().default("").describe("Step-by-step playbook in markdown for the assistant to follow."),
-        source: t.enum(["user", "assistant"]).default("user").describe('Who created the skill: "user" or "assistant".'),
+        name: t.text().default(""),
+        whenToUse: t.text().default("").describe("When this skill applies."),
+        instructions: t.text().default("").describe("Markdown playbook."),
+        source: t.enum(["user", "assistant"]).default("user"),
         status: t
           .enum(["pending", "active", "disabled"])
           .default("pending")
-          .describe('"active" skills are offered to the assistant; "pending" awaits user review; "disabled" is muted.'),
-        lastUsedAt: t.integer().nullable().default(null).describe("Epoch ms the skill was last invoked, or null."),
+          .describe("active is loadable; pending awaits review; disabled is muted."),
+        lastUsedAt: t.integer().nullable().default(null),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
       .describe(
         [
-          "Reusable multi-step playbooks the assistant can follow for recurring tasks. Only `active` skills are",
-          "offered to the assistant as loadable skills. New assistant-created skills start as `pending` until the",
-          "user reviews and activates them.",
+          "Reusable assistant playbooks. New assistant-created skills start pending; only active skills are loadable.",
         ].join(" "),
       ),
     monobank_connection: t
       .table({
-        providerConnectionId: t.text().describe("Id of the central-D1 Monobank connection row this mirrors."),
+        providerConnectionId: t.text().describe("Mirrors the central-D1 Monobank connection id."),
         status: t.text().default("connected").describe("connected | disconnected | error."),
         webhookStatus: t.text().default("pending").describe("pending | active | error."),
-        displayName: t.text().default("").describe("Client name reported by Monobank."),
-        lastError: t.text().default("").describe("Last connection-level error, empty when healthy."),
-        connectedAt: t.integer().default(0).describe("Epoch ms the connection was established."),
-        createdAt: t.integer(),
-        updatedAt: t.integer(),
-      })
-      .describe(
-        [
-          "Display/status metadata for the user's Monobank connection. The secret token lives only in",
-          "central D1, never here. There is at most one active connection per user.",
-        ].join(" "),
-      ),
-    monobank_account: t
-      .table({
-        providerConnectionId: t.text().describe("References monobank_connection.providerConnectionId."),
-        providerAccountId: t.text().describe("Monobank account id."),
-        displayName: t.text().default("").describe("Human-readable label for the remote account."),
-        accountType: t.text().default("").describe("Monobank account type (e.g. black, white, fop)."),
-        currency: t.text().default("").describe('ISO 4217 alpha currency code, or "" when unsupported.'),
-        maskedPan: t.text().default("").describe("Masked card number(s); display string or JSON text."),
-        linkedAccountId: t
-          .text()
-          .default("")
-          .describe("References account.id this remote account imports into, or empty when unlinked."),
-        enabled: t.boolean().default(true).describe("Whether imports are enabled for this remote account."),
-        lastWebhookAt: t.integer().nullable().default(null).describe("Epoch ms of the last received webhook, or null."),
-        lastImportAt: t
-          .integer()
-          .nullable()
-          .default(null)
-          .describe("Epoch ms of the last imported transaction, or null."),
-        lastError: t.text().default("").describe("Last import/link error for this account, empty when healthy."),
-        createdAt: t.integer(),
-        updatedAt: t.integer(),
-      })
-      .describe(
-        [
-          "Display/link metadata for the Monobank accounts exposed by the user's connection. Each remote",
-          "account links one-to-one to an in-app account via `linkedAccountId`. No balances are stored here.",
-        ].join(" "),
-      ),
-    calendar_connection: t
-      .table({
-        providerConnectionId: t.text().describe("Id of the central-D1 google_calendar_connection row this mirrors."),
-        status: t.text().default("connected").describe("connected | disconnected | error. Written only on change."),
-        email: t.text().default("").describe("Google account the calendars belong to."),
+        displayName: t.text().default(""),
+        lastError: t.text().default("").describe("Latest error; empty when healthy."),
         connectedAt: t.integer().default(0),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
       .describe(
-        "One row per connected Google account. OAuth tokens live in D1, sync diagnostics in DO storage, not here.",
+        ["Monobank connection metadata. Tokens are only in central D1; at most one is active per user."].join(" "),
       ),
+    monobank_account: t
+      .table({
+        providerConnectionId: t.text().describe("References monobank_connection.providerConnectionId."),
+        providerAccountId: t.text().describe("Monobank account id."),
+        displayName: t.text().default(""),
+        accountType: t.text().default(""),
+        currency: t.text().default("").describe('ISO 4217 code, or "" when unsupported.'),
+        maskedPan: t.text().default(""),
+        linkedAccountId: t.text().default("").describe("In-app account.id to import into; empty when unlinked."),
+        enabled: t.boolean().default(true).describe("Whether imports are enabled."),
+        lastWebhookAt: t.integer().nullable().default(null),
+        lastImportAt: t.integer().nullable().default(null).describe("Last transaction import time."),
+        lastError: t.text().default("").describe("Latest import/link error; empty when healthy."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "Monobank account metadata. Each remote account links to one in-app account; no balances are stored here.",
+        ].join(" "),
+      ),
+    calendar_connection: t
+      .table({
+        providerConnectionId: t.text().describe("Mirrors the central-D1 Google Calendar connection id."),
+        status: t.text().default("connected").describe("connected | disconnected | error."),
+        email: t.text().default(""),
+        connectedAt: t.integer().default(0),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe("One row per Google account. OAuth tokens are in D1; sync diagnostics are in DO storage."),
     calendar_source: t
       .table({
         providerConnectionId: t.text().describe("References calendar_connection.providerConnectionId."),
         providerCalendarId: t.text().describe("Google calendar id."),
         displayName: t.text().default(""),
-        color: t.text().default("").describe("Hex colour, or empty."),
+        color: t.text().default(""),
         isPrimary: t.boolean().default(false),
-        timeZone: t.text().default("").describe("IANA zone the calendar's all-day dates are anchored to."),
-        enabled: t.boolean().default(false).describe("Whether this calendar's events are mirrored into tasks."),
+        timeZone: t.text().default("").describe("IANA zone for all-day dates."),
+        enabled: t.boolean().default(false).describe("Mirror events into tasks."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
       .describe(
         [
-          "One row per calendar visible to a connected Google account. Enabled calendars mirror their events",
-          "one-way into `item` tasks with providerType google-calendar; no events are stored here.",
+          "Calendars visible to a Google account. Enabled rows mirror events one-way into item tasks; events are not stored here.",
         ].join(" "),
       ),
     dashboard_settings: t
       .table({
-        rangeMode: t.enum(["days", "cycle"]).default("days").describe("Dashboard range type: days | cycle."),
-        rangeDays: t.integer().default(30).describe('Trailing-window length for rangeMode "days".'),
-        cycleDay: t.integer().default(25).describe('Day of month when rangeMode "cycle" starts.'),
-        baseCurrency: t.text().default("USD").describe("Currency used to display dashboard totals."),
+        rangeMode: t.enum(["days", "cycle"]).default("days"),
+        rangeDays: t.integer().default(30).describe('Trailing length when rangeMode is "days".'),
+        cycleDay: t.integer().default(25).describe("Cycle start day of month."),
+        baseCurrency: t.text().default("USD").describe("Dashboard totals currency."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
-      .describe("Singleton dashboard preferences synced across the user's devices."),
+      .describe("Synced singleton dashboard preferences."),
     habit: t
       .table({
-        name: t.text().default("").describe("Display name of the habit."),
+        name: t.text().default(""),
         scheduleType: t
           .enum(["daily", "weekly", "monthly", "everyNDays", "weekdays"])
           .default("daily")
-          .describe(
-            [
-              'How often the habit is due: "daily" = every day; "weekdays" = only on the ISO weekdays listed',
-              'in scheduleWeekdays; "weekly" = target accumulates over the calendar week (Monday-start), shown',
-              'until the week sum reaches target; "monthly" = same but over the calendar month;',
-              '"everyNDays" = due scheduleInterval days after the last completed day, shown until done.',
-            ].join(" "),
-          ),
-        scheduleInterval: t
-          .integer()
-          .default(1)
-          .describe('The N for scheduleType "everyNDays" (days between completions). Unused for other schedule types.'),
-        scheduleWeekdays: t
-          .text()
-          .default("[]")
-          .describe(
-            'JSON array of ISO weekday numbers 1 (Mon) through 7 (Sun), used only when scheduleType is "weekdays". Defaults to "[]".',
-          ),
+          .describe('Due cadence; "weekdays" uses scheduleWeekdays and "everyNDays" uses scheduleInterval.'),
+        scheduleInterval: t.integer().default(1).describe('Days between completions for "everyNDays".'),
+        scheduleWeekdays: t.text().default("[]").describe('ISO weekday numbers (1=Mon … 7=Sun) for "weekdays".'),
         timeOfDay: t
           .enum(["morning", "afternoon", "evening", "night"])
           .nullable()
           .default(null)
-          .describe("Preferred time bucket: morning | afternoon | evening | night. Null means anytime."),
+          .describe("Preferred time; null means anytime."),
         target: t
           .real()
           .default(1)
-          .describe(
-            "Quantity target. For weekly habits it applies to the whole Monday-start week and for monthly habits to the whole calendar month (done when the period's summed habit_entry.value is >= target); for all other schedules it applies per day. 1 means a simple check-off.",
-          ),
-        unit: t.text().default("").describe('Optional unit label for the target, e.g. "pages". Empty when unused.'),
-        order: t.real().default(0).describe("Manual sort position, ascending."),
+          .describe("Goal: per day except weekly/monthly, which sum the calendar period. 1 is a check-off."),
+        unit: t.text().default("").describe("Optional target unit."),
+        order: t.real().default(0),
         archivedAt: t
           .integer()
           .nullable()
           .default(null)
-          .describe("Epoch ms when the habit was soft-archived, or null if active. Habits are never hard-deleted."),
+          .describe("Archive time; null if active. Habits are never hard-deleted."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
       .describe(
         [
-          "Recurring habits shown on the Today view. Schedule semantics: daily = every day; weekdays = on the",
-          "days listed in scheduleWeekdays; weekly = target summed over the Monday-start calendar week (shown",
-          "until the week sum reaches target); monthly = the same over the calendar month; everyNDays = due",
-          "scheduleInterval days after the last completed day (shown until done). Except for weekly and monthly",
-          "habits, done-for-a-day means the sum of habit_entry.value for that date is >= target.",
-          "Soft-archive via archivedAt rather than deleting.",
+          "Recurring habits. habit_entry values count toward target per day, except weekly/monthly habits, which",
+          "accumulate over their calendar period. Archive with archivedAt.",
         ].join(" "),
       ),
     note_view: t
       .table({
-        name: t.text().default("").describe("Display name of the saved view."),
-        include: t
-          .text()
-          .default("[]")
-          .describe(
-            'JSON array of tags a note must carry to appear in this view. The pseudo-tag ":untagged" matches notes without any tags.',
-          ),
-        exclude: t
-          .text()
-          .default("[]")
-          .describe("JSON array of tags that hide a note from this view; always applied regardless of `match`."),
-        match: t
-          .enum(["all", "any"])
-          .default("all")
-          .describe("Whether a note must carry all of the included tags or any one of them."),
+        name: t.text().default(""),
+        include: t.text().default("[]").describe('Required tags. Pseudo-tag ":untagged" matches notes without tags.'),
+        exclude: t.text().default("[]").describe("Tags that always hide a note."),
+        match: t.enum(["all", "any"]).default("all").describe("Whether include requires all tags or any tag."),
         status: t
           .enum(["pending", "completed", "overdue"])
           .nullable()
           .default(null)
-          .describe(
-            "Legacy field retained for sync compatibility. New note views leave it null and the UI ignores it.",
-          ),
-        order: t.real().default(0).describe("Manual sort position, ascending."),
+          .describe("Legacy sync field; leave null."),
+        order: t.real().default(0),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
-      .describe(
-        [
-          "Saved tag-filter presets for the Notes page, shown as one-click view pills above the filter bar.",
-          "A view is purely a named filter; it stores no notes itself.",
-        ].join(" "),
-      ),
+      .describe(["Saved named tag filters for notes; stores no notes."].join(" ")),
     habit_entry: t
       .table({
         habitId: t.text().describe("References habit.id."),
         date: t.text().describe('Local calendar day as "YYYY-MM-DD".'),
-        value: t
-          .real()
-          .default(0)
-          .describe(
-            "Accumulated amount logged for this habit on this date. Counts toward habit.target per day, or summed over the Monday-start week for weekly habits and the calendar month for monthly habits.",
-          ),
+        value: t.real().default(0).describe("Amount logged on this date."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
-      .describe(
-        [
-          "Per-day progress toward a habit. One logical entry per (habitId, date); value accumulates toward",
-          "habit.target — per day for most schedules, summed across the Monday-start week for weekly habits",
-          "and the calendar month for monthly habits.",
-        ].join(" "),
-      ),
+      .describe(["Per-day habit progress; one logical entry per (habitId, date)."].join(" ")),
   },
   migrations,
 });
