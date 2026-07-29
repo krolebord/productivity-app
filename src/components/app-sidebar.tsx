@@ -50,6 +50,7 @@ import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/componen
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
+import { type DefaultHome, useDefaultHomeStore } from "@/lib/default-home-store";
 import {
   NEW_ACCOUNT_HOTKEY,
   NEW_EXPENSE_HOTKEY,
@@ -386,6 +387,8 @@ function SidebarContent({
   const currentPath = matches[matches.length - 1]?.fullPath;
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
+  const defaultHome = useDefaultHomeStore((s) => s.defaultHome);
+  const setDefaultHome = useDefaultHomeStore((s) => s.setDefaultHome);
 
   return (
     <>
@@ -412,10 +415,10 @@ function SidebarContent({
 
         <nav className="flex flex-col gap-1 p-2">
           <SidebarNavLink
-            to="/"
-            label="Dashboard"
+            to="/finances"
+            label="Finances"
             icon={Home}
-            isActive={currentPath === "/"}
+            isActive={currentPath === "/finances"}
             collapsed={collapsed}
             onNavigate={onNavigate}
           />
@@ -526,6 +529,18 @@ function SidebarContent({
               </div>
             </div>
           </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-muted-foreground text-xs">Default home</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={defaultHome} onValueChange={(value) => setDefaultHome(value as DefaultHome)}>
+            <DropdownMenuRadioItem value="finances">
+              <Home className="size-4" />
+              Finances
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="today">
+              <CalendarCheck className="size-4" />
+              Today
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="text-muted-foreground text-xs">Theme</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>

@@ -173,9 +173,9 @@ export function CommandPalette() {
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Navigation">
-          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/" }))}>
+          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/finances" }))}>
             <Home className="size-4" />
-            Dashboard
+            Finances
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/notes" }))}>
             <StickyNote className="size-4" />
