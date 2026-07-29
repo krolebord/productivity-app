@@ -49,7 +49,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { convertAmount, getCurrencyOptions } from "@/lib/currency/convert";
 import { APP_CURRENCIES } from "@/lib/currency/currencies";
-import { cycleStartOnOrBefore, resolveDashboardRange } from "@/lib/dashboard-range-store";
+import { cycleStartOnOrBefore, type DashboardRangeMode, resolveDashboardRange } from "@/lib/dashboard-range-store";
 import { useDashboardSettings } from "@/lib/dashboard-settings";
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import {
@@ -58,6 +58,7 @@ import {
   type ImportanceTier,
   type TransactionType,
 } from "@/lib/transactions";
+import { useCurrentDayKey } from "@/lib/use-current-day";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 
@@ -261,6 +262,25 @@ function CashFlowTooltipContent({
   );
 }
 
+function useDashboardRange(rangeMode: DashboardRangeMode, rangeDays: number, rangeCycleDay: number) {
+  const currentDayKey = useCurrentDayKey();
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: currentDayKey only exists so an overnight tab recomputes instead of pinning the day it was opened.
+  return useMemo(() => {
+    const now = new Date();
+    const buckets = rangeMode === "cycle" ? buildCycleTrendBuckets(now, rangeCycleDay) : buildCalendarTrendBuckets(now);
+    const range = resolveDashboardRange({ mode: rangeMode, days: rangeDays, cycleDay: rangeCycleDay }, now);
+    return {
+      ...range,
+      rangeLabel: range.label,
+      trendBuckets: buckets,
+      trendPeriodLabel: rangeMode === "cycle" ? "cycles" : "months",
+      windowStart: buckets[0].start,
+      nowTs: now.getTime(),
+    };
+  }, [rangeMode, rangeDays, rangeCycleDay, currentDayKey]);
+}
+
 function FinancesPage() {
   const db = useDb();
   const {
@@ -288,19 +308,7 @@ function FinancesPage() {
     trendPeriodLabel,
     windowStart,
     nowTs,
-  } = useMemo(() => {
-    const now = new Date();
-    const buckets = rangeMode === "cycle" ? buildCycleTrendBuckets(now, rangeCycleDay) : buildCalendarTrendBuckets(now);
-    const range = resolveDashboardRange({ mode: rangeMode, days: rangeDays, cycleDay: rangeCycleDay }, now);
-    return {
-      ...range,
-      rangeLabel: range.label,
-      trendBuckets: buckets,
-      trendPeriodLabel: rangeMode === "cycle" ? "cycles" : "months",
-      windowStart: buckets[0].start,
-      nowTs: now.getTime(),
-    };
-  }, [rangeMode, rangeDays, rangeCycleDay]);
+  } = useDashboardRange(rangeMode, rangeDays, rangeCycleDay);
 
   const { data: allAccounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
 

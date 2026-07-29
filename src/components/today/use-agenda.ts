@@ -58,11 +58,13 @@ export function useAgenda() {
     [habitsRaw],
   );
 
+  // Any item with a dueAt belongs on the agenda regardless of kind, since dated
+  // notes predate the explicit task type. Leading with dueAt lets item_due drive
+  // both range branches instead of scanning every item.
   const { data: scheduledTasks } = useDbQuery((q) =>
     q
       .selectFrom("item")
       .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order", "providerType"])
-      .where((eb) => eb.or([eb("type", "=", "task"), eb.and([eb("type", "=", "note"), eb("dueAt", "is not", null)])]))
       .where("dueAt", "is not", null)
       .where((eb) =>
         eb.or([

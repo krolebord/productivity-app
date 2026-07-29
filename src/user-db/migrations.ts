@@ -385,6 +385,13 @@ const migrations = createMigrations((b) => ({
     // Include tombstones so deleted provider items are not recreated by sync.
     b.createIndex("item_provider", (idx) => idx.on("_item").columns(["providerType", "providerId"])),
   ],
+  21: [
+    // Serves the undated task inbox and the notes list, both of which filter on
+    // type + a null dueAt and sort by order.
+    b.createIndex("item_type_due_order", (idx) =>
+      idx.on("_item").columns(["type", "dueAt", "order"]).where(sql.ref("tombstone"), "=", 0),
+    ),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;

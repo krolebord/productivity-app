@@ -14,7 +14,7 @@ import {
   SlidersHorizontalIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { formatBalance } from "@/components/account-card";
 import { CategoryImportancePrompt } from "@/components/category-importance-prompt";
@@ -39,6 +39,7 @@ import {
   type TransactionType,
 } from "@/lib/transactions";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
+import { useDebounceCallback } from "@/lib/use-debounced-callback";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import type { UserDb } from "@/user-db/migrations";
@@ -64,6 +65,7 @@ const transactionsSearchSchema = z.object({
 type TransactionsSearch = z.infer<typeof transactionsSearchSchema>;
 
 const DEFAULT_LIMIT = 50;
+const SEARCH_DEBOUNCE_MS = 250;
 
 function applyTransactionFilters<O>(
   query: SelectQueryBuilder<UserDb, "transaction_entry", O>,
@@ -280,6 +282,21 @@ function FilterOptionList({
   );
 }
 
+function TransactionsTotal({ search, loaded }: { search: TransactionsSearch; loaded: number }) {
+  const { data: totalRows } = useDbQuery((db) =>
+    applyTransactionFilters(db.selectFrom("transaction_entry"), search).select((eb) =>
+      eb.fn.countAll<number>().as("count"),
+    ),
+  );
+  const total = Number(totalRows[0]?.count ?? 0);
+
+  return (
+    <p className="mt-2 text-muted-foreground text-xs">
+      Showing {loaded} of {total}
+    </p>
+  );
+}
+
 function TransactionsPage() {
   const search = Route.useSearch();
   const sort = search.sort ?? "date_desc";
@@ -294,6 +311,26 @@ function TransactionsPage() {
   const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addPage, setAddPage] = useState<FilterKey | null>(null);
+
+  const searchQuery = search.q ?? "";
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  const submittedQueryRef = useRef(searchQuery);
+
+  const submitSearchQuery = useDebounceCallback((value: string) => {
+    submittedQueryRef.current = value;
+    patchSearch({ q: value });
+  }, SEARCH_DEBOUNCE_MS);
+
+  useEffect(() => {
+    if (searchQuery === submittedQueryRef.current) {
+      return;
+    }
+
+    // The URL changed from outside the input, so drop any write we still owe it.
+    submittedQueryRef.current = searchQuery;
+    submitSearchQuery.cancel();
+    setSearchInput(searchQuery);
+  }, [searchQuery, submitSearchQuery]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset is keyed on filter values, not setLimit.
   useEffect(() => {
@@ -329,15 +366,8 @@ function TransactionsPage() {
     ),
   );
 
-  const { data: totalRows } = useDbQuery((db) =>
-    applyTransactionFilters(db.selectFrom("transaction_entry"), search).select((eb) =>
-      eb.fn.countAll<number>().as("count"),
-    ),
-  );
-
   const hasMore = transactions.length > limit;
   const visibleTransactions = hasMore ? transactions.slice(0, limit) : transactions;
-  const totalEntries = Number(totalRows[0]?.count ?? 0);
 
   const groupByDay = sort === "date_desc" || sort === "date_asc";
   const dayGroups: { key: string; label: string; transactions: typeof visibleTransactions }[] = [];
@@ -361,6 +391,7 @@ function TransactionsPage() {
   function patchSearch(next: Partial<typeof search>) {
     navigate({
       to: "/transactions",
+      replace: true,
       search: (prev) => {
         const merged = { ...prev, ...next };
         return {
@@ -577,8 +608,12 @@ function TransactionsPage() {
           <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="transactions-search"
-            value={search.q ?? ""}
-            onChange={(event) => patchSearch({ q: event.currentTarget.value })}
+            value={searchInput}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setSearchInput(value);
+              submitSearchQuery(value);
+            }}
             placeholder="Search title, notes, category"
             className="pl-9"
           />
@@ -855,9 +890,7 @@ function TransactionsPage() {
               <Button onClick={() => setLimit((current) => current + DEFAULT_LIMIT)} variant="outline" size="sm">
                 Load more
               </Button>
-              <p className="mt-2 text-muted-foreground text-xs">
-                Showing {visibleTransactions.length} of {totalEntries}
-              </p>
+              <TransactionsTotal search={search} loaded={visibleTransactions.length} />
             </div>
           ) : null}
         </div>

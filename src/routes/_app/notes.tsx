@@ -170,6 +170,7 @@ function NotesPage() {
     (next: Partial<NotesSearch>) => {
       navigate({
         to: "/notes",
+        replace: true,
         search: (prev) => {
           const merged = { ...prev, ...next };
           const tags = merged.tags?.length ? merged.tags : undefined;
