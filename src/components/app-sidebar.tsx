@@ -924,8 +924,6 @@ function MobileSidebar() {
   }, [router]);
 
   const openCommand = useCommandStore((s) => s.open);
-  const togglePanel = useAssistantStore((s) => s.togglePanel);
-  const assistantEnabled = useAssistantEnabled();
 
   return (
     <>
@@ -949,17 +947,17 @@ function MobileSidebar() {
         </SheetContent>
       </Sheet>
 
-      {assistantEnabled && (
-        <Button
-          variant="secondary"
-          size="icon"
-          className="!rounded-full fixed right-4 bottom-[4.75rem] z-40 size-11 shadow-lg md:hidden"
-          aria-label="Open assistant"
-          onClick={() => togglePanel("assistant")}
-        >
-          <Sparkles className="size-5" />
-        </Button>
-      )}
+      <Button
+        variant="secondary"
+        size="icon"
+        className="!rounded-full fixed right-4 bottom-[4.75rem] z-40 size-11 shadow-lg md:hidden"
+        aria-label="Open today"
+        asChild
+      >
+        <Link to="/today" viewTransition>
+          <CalendarCheck className="size-5" />
+        </Link>
+      </Button>
 
       <Button
         variant="default"
