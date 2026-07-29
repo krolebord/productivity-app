@@ -1,9 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DownloadIcon, PlusIcon, RefreshCwIcon, Unplug } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { useCreateAccount } from "@/components/account-dialog";
+import { GoogleCalendarSection, useGoogleCalendarData } from "@/components/google-calendar-section";
 import { MonobankBackfillDialog } from "@/components/monobank-backfill-dialog";
 import { MonobankTokenDialog } from "@/components/monobank-token-dialog";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,10 @@ import { useDb, useDbQuery } from "@/user-db/user-db";
 
 export const Route = createFileRoute("/_app/integrations")({
   component: IntegrationsPage,
+  validateSearch: z.object({
+    calendar: z.enum(["connected", "error"]).optional(),
+    calendarError: z.string().optional(),
+  }),
 });
 
 const UNLINK_VALUE = "__unlink__";
@@ -261,11 +267,33 @@ function IntegrationsPage() {
     q.selectFrom("monobank_account").selectAll().orderBy("createdAt", "asc"),
   );
   const { data: accounts } = useDbQuery((q) => q.selectFrom("account").selectAll().orderBy("order", "asc"));
+  const calendar = useGoogleCalendarData();
+
+  useCalendarConnectResult();
 
   return (
-    <div className="@container px-4 py-4 sm:px-6 sm:py-6">
-      <h1 className="@md:mb-6 mb-4 font-semibold text-xl">Integrations</h1>
+    <div className="@container flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6">
+      <h1 className="@md:mb-2 font-semibold text-xl">Integrations</h1>
       <MonobankSection connection={connections[0]} monoAccounts={monoAccounts} accounts={accounts} />
+      <GoogleCalendarSection connections={calendar.connections} sourcesByConnection={calendar.sourcesByConnection} />
     </div>
   );
+}
+
+/** Surface the outcome of the Google consent redirect, then drop it from the URL. */
+function useCalendarConnectResult() {
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!search.calendar) return;
+
+    if (search.calendar === "connected") {
+      toast.success("Google Calendar connected.");
+    } else {
+      toast.error(search.calendarError || "Could not connect Google Calendar.");
+    }
+
+    navigate({ to: "/integrations", replace: true, search: {} });
+  }, [search.calendar, search.calendarError, navigate]);
 }

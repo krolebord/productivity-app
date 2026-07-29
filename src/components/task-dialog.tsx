@@ -1,9 +1,10 @@
 import { generateId } from "@sqlite-sync/core";
-import { CheckIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
+import { CalendarClock, CheckIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { localMidnightMs } from "@/lib/date-time";
+import { DETACHED_PROVIDER_TYPE, isCalendarBackedTask } from "@/lib/google-calendar/mapping";
 import { parseTags, serializeTags } from "@/lib/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@/lib/use-debounced-callback";
 import { cn } from "@/lib/utils";
@@ -81,11 +82,13 @@ function TaskDialogContent({
   saveTask,
   onClose,
   onDelete,
+  onDetach,
 }: {
   taskId: string;
   saveTask: DebouncedCallback<[TaskFields]>;
   onClose: () => void;
   onDelete: () => void;
+  onDetach: () => void;
 }) {
   const {
     data: [task],
@@ -178,6 +181,17 @@ function TaskDialogContent({
           placeholder="Add tags..."
         />
       </div>
+      {task && isCalendarBackedTask(task) && (
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-muted-foreground text-xs">
+          <CalendarClock className="size-3 shrink-0" />
+          <span className="min-w-0">
+            Mirrored from Google Calendar — title, time and details are overwritten on sync.
+          </span>
+          <Button type="button" variant="link" size="sm" className="h-auto px-0 text-xs" onClick={onDetach}>
+            Unlink
+          </Button>
+        </div>
+      )}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t pt-2">
         <TaskScheduleControl dueAt={dueAt} hasDueTime={hasDueTime} onChange={handleScheduleChange} />
         <Button
@@ -227,6 +241,16 @@ export function TaskDialog() {
     closeDialog();
   }
 
+  /**
+   * Unlink a mirrored task from its calendar event. `providerId` stays put so the sync job still
+   * recognises the event and never re-imports it; the task becomes an ordinary local one.
+   */
+  function detachFromCalendar() {
+    db.db.executeKysely((q) =>
+      q.updateTable("item").set({ providerType: DETACHED_PROVIDER_TYPE }).where("id", "=", taskId),
+    );
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && saveAndClose()}>
       <DialogContent className="flex flex-col gap-3 overflow-hidden pb-2 sm:max-w-lg sm:pb-2" showCloseButton={false}>
@@ -237,6 +261,7 @@ export function TaskDialog() {
             saveTask={saveTask}
             onClose={saveAndClose}
             onDelete={deleteAndClose}
+            onDetach={detachFromCalendar}
           />
         ) : (
           <DialogTitle>Edit task</DialogTitle>

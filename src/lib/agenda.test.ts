@@ -229,6 +229,7 @@ describe("buildAgendaSections", () => {
         hasDueTime: true,
         completedAt: null,
         order: 1,
+        providerType: null,
       },
       {
         id: "today-am",
@@ -238,6 +239,7 @@ describe("buildAgendaSections", () => {
         hasDueTime: true,
         completedAt: null,
         order: 2,
+        providerType: null,
       },
       {
         id: "allday",
@@ -247,6 +249,7 @@ describe("buildAgendaSections", () => {
         hasDueTime: false,
         completedAt: null,
         order: 3,
+        providerType: null,
       },
     ];
     const habits = [
@@ -279,6 +282,7 @@ describe("buildAgendaSections", () => {
         hasDueTime: true,
         completedAt: null,
         order: 1,
+        providerType: null,
       },
       {
         id: "fri",
@@ -288,6 +292,7 @@ describe("buildAgendaSections", () => {
         hasDueTime: false,
         completedAt: null,
         order: 2,
+        providerType: null,
       },
     ];
     const habits = [habit({ id: "h1", scheduleType: "daily" })];
@@ -347,6 +352,7 @@ describe("buildAgendaSections", () => {
         hasDueTime: true,
         completedAt: Date.now(),
         order: 1,
+        providerType: null,
       },
       {
         id: "open",
@@ -356,6 +362,7 @@ describe("buildAgendaSections", () => {
         hasDueTime: true,
         completedAt: null,
         order: 2,
+        providerType: null,
       },
     ];
     const sections = buildAgendaSections({

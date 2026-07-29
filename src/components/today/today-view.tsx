@@ -2,6 +2,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { format } from "date-fns";
 import {
+  CalendarClock,
   CalendarDays,
   CalendarPlus,
   CheckCircle2Icon,
@@ -32,6 +33,7 @@ import type {
 } from "@/lib/agenda";
 import { calendarDayDroppableId } from "@/lib/app-dnd";
 import { formatDueDateLabel } from "@/lib/date-time";
+import { isCalendarBackedTask } from "@/lib/google-calendar/mapping";
 import { cn } from "@/lib/utils";
 import { type CalendarDayInfo, useAgenda } from "./use-agenda";
 
@@ -605,6 +607,7 @@ function TaskRow({
   // Only parse the body when we actually need a fallback (no title).
   const preview = useMemo(() => (title ? "" : noteContentToPlainText(task.content, 100)), [title, task.content]);
   const label = title || preview || "Untitled";
+  const fromCalendar = isCalendarBackedTask(task);
   const timeLabel = task.hasDueTime && task.dueAt != null ? format(task.dueAt, "HH:mm") : null;
   const dueLabel = overdue && task.dueAt != null ? formatDueDateLabel(task.dueAt, task.hasDueTime) : null;
   const draggable = useDraggable({ id: task.id, data: { kind: "task" } });
@@ -638,6 +641,13 @@ function TaskRow({
           >
             {label}
           </span>
+          {fromCalendar && (
+            <CalendarClock
+              className="mt-px size-3 shrink-0 text-muted-foreground"
+              aria-label="From Google Calendar"
+              role="img"
+            />
+          )}
           {timeLabel && !overdue && (
             <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">{timeLabel}</span>
           )}

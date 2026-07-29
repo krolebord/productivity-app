@@ -54,6 +54,8 @@ export type AgendaTask = {
   hasDueTime: boolean;
   completedAt: number | null;
   order: number | null;
+  /** "google-calendar" for mirrored events; drives the calendar badge on the row. */
+  providerType: string | null;
 };
 
 export type AgendaTaskRow = {

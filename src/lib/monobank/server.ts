@@ -1,13 +1,9 @@
-import { getServerByName } from "partyserver";
 import { getContext } from "@/lib/context";
 import type { MonobankMetadataInput } from "@/user-db/jobs/monobank-metadata";
 import type { MonobankClientInfo } from "./api";
 import { numericToAlphaCurrency } from "./currency-codes";
 
-export async function getUserDbStub(userId: string) {
-  const env = getContext();
-  return getServerByName(env.UserDbServer, `user-${userId}`, { locationHint: "weur" });
-}
+export { getUserDbStub } from "@/lib/user-db-stub";
 
 export function buildMonobankWebhookUrl(connectionId: string, webhookSecret: string): string {
   const env = getContext();

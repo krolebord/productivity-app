@@ -15,6 +15,15 @@ import {
 } from "@sqlite-sync/cloudflare";
 import { type JobRuntime, setupJobs } from "do-jobs";
 import { type Connection, Server } from "partyserver";
+import {
+  type CalendarSyncStatusReport,
+  deleteConnectionSyncStatus,
+  readConnectionSyncStatus,
+  toSyncStatusReport,
+} from "@/lib/google-calendar/sync-status";
+import { type CalendarCleanupInput, calendarCleanupJob } from "./jobs/calendar-cleanup";
+import { type CalendarMetadataInput, calendarMetadataJob } from "./jobs/calendar-metadata";
+import { type CalendarSyncInput, calendarSyncJob } from "./jobs/calendar-sync";
 import { cleanupConversationAgentJob } from "./jobs/cleanup-conversation-agent";
 import { fetchCurrencyRatesJob } from "./jobs/fetch-currency-rates";
 import { jobs } from "./jobs/jobs";
@@ -24,6 +33,7 @@ import { syncDbSchema, type UserSyncDbSchema } from "./migrations";
 import { userDbSchemaDocContext } from "./schema-doc";
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const CODEMODE_QUERY_LIMITS = {
   maxRows: 1000,
   maxCellChars: 4000,
@@ -85,6 +95,14 @@ export class UserDbServer extends Server<Env> {
       everyMs: TWELVE_HOURS_MS,
     });
 
+    // Cheap when nothing is connected: the job exits immediately if the user has no calendar
+    // connection rows.
+    await this.jobRuntime.scheduleInterval(calendarSyncJob, {
+      input: { providerConnectionId: null },
+      dedupeKey: "calendar-sync",
+      everyMs: FIFTEEN_MINUTES_MS,
+    });
+
     syncDb.addEventListener("event-applied", (event) => {
       this.onEventApplied(event.payload).catch((error) => {
         console.error("Error handling applied event", event.payload, error);
@@ -122,6 +140,38 @@ export class UserDbServer extends Server<Env> {
 
   async enqueueMonobankImport(input: MonobankImportInput): Promise<void> {
     await this.jobRuntime.schedule(monobankImportJob, { input, at: Date.now() });
+  }
+
+  async enqueueCalendarMetadata(input: CalendarMetadataInput): Promise<void> {
+    await this.jobRuntime.schedule(calendarMetadataJob, { input, at: Date.now() });
+  }
+
+  async enqueueCalendarSync(input: CalendarSyncInput): Promise<void> {
+    await this.jobRuntime.schedule(calendarSyncJob, { input, at: Date.now() });
+  }
+
+  async enqueueCalendarCleanup(input: CalendarCleanupInput): Promise<void> {
+    await this.jobRuntime.schedule(calendarCleanupJob, { input, at: Date.now() });
+  }
+
+  /**
+   * Per-run calendar sync diagnostics ("synced 3 minutes ago", per-calendar errors).
+   *
+   * These live in DO storage rather than the synced database — see
+   * `src/lib/google-calendar/sync-status.ts` — so the integrations page fetches them on demand
+   * instead of receiving a replicated write after every 15-minute run.
+   */
+  async getCalendarSyncStatus(providerConnectionIds: string[]): Promise<CalendarSyncStatusReport[]> {
+    const reports: CalendarSyncStatusReport[] = [];
+    for (const providerConnectionId of providerConnectionIds) {
+      const status = await readConnectionSyncStatus(this.ctx.storage, providerConnectionId);
+      reports.push(toSyncStatusReport(providerConnectionId, status));
+    }
+    return reports;
+  }
+
+  async clearCalendarSyncStatus(providerConnectionId: string): Promise<void> {
+    await deleteConnectionSyncStatus(this.ctx.storage, providerConnectionId);
   }
 
   async getMonobankLinkedAccountIds(providerConnectionId: string): Promise<string[]> {

@@ -12,6 +12,7 @@ import { statementItemToImportEntry } from "@/lib/monobank/mapping";
 import { buildMonobankWebhookUrl, getUserDbStub, mapClientAccountsToMetadata } from "@/lib/monobank/server";
 import { trySetMonobankWebhook } from "@/lib/monobank/webhook-renewal";
 import { protectedProcedure } from "../common/procedure";
+import { googleCalendarRouter } from "./google-calendar.router";
 
 const tokenInput = z.object({
   token: z.string().trim().min(20, "That does not look like a valid Monobank token."),
@@ -261,6 +262,7 @@ const getRecentStatement = protectedProcedure
   });
 
 export const integrationsRouter = {
+  googleCalendar: googleCalendarRouter,
   monobank: {
     connect,
     replaceToken,

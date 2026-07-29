@@ -9,7 +9,10 @@ import { userDbSchemaDocContext } from "./schema-doc";
 // new table — so a sudden jump shows up as a failure to review, not a silent cost.
 // `createSchemaDoc` derives the doc from the schema + context alone, with no DB
 // access, which is exactly what `getSchemaDoc()` returns at runtime.
-const MAX_SCHEMA_DOC_CHARS = 16_000;
+// Raised from 16k when the Google Calendar tables (calendar_connection, calendar_source) and the
+// item provider columns were added: +1.7k, reviewed and accepted. Moving sync diagnostics out of
+// those tables did not win it back — the removed columns were offset by clearer descriptions.
+const MAX_SCHEMA_DOC_CHARS = 18_000;
 
 describe("user db schema doc", () => {
   it("stays within the context size budget", () => {

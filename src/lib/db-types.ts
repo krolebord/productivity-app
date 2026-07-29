@@ -14,6 +14,23 @@ export interface D1Migrations {
   name: string | null;
 }
 
+export interface GoogleCalendarConnection {
+  accessToken: string | null;
+  accessTokenExpiresAt: string | null;
+  createdAt: string;
+  disconnectedAt: string | null;
+  email: string;
+  googleUserId: string;
+  id: string;
+  lastError: string | null;
+  lastSyncedAt: string | null;
+  refreshToken: string;
+  scope: string;
+  status: Generated<string>;
+  updatedAt: string;
+  userId: string;
+}
+
 export interface MonobankConnection {
   createdAt: string;
   disconnectedAt: string | null;
@@ -55,6 +72,7 @@ export interface Verification {
 
 export interface DB {
   d1_migrations: D1Migrations;
+  google_calendar_connection: GoogleCalendarConnection;
   monobank_connection: MonobankConnection;
   session: Session;
   user: User;

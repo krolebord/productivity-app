@@ -64,7 +64,7 @@ export function useAgenda() {
   const { data: scheduledTasks } = useDbQuery((q) =>
     q
       .selectFrom("item")
-      .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order"])
+      .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order", "providerType"])
       .where((eb) => eb.or([eb("type", "=", "task"), eb.and([eb("type", "=", "note"), eb("dueAt", "is not", null)])]))
       .where("dueAt", "is not", null)
       .where((eb) =>
@@ -80,7 +80,7 @@ export function useAgenda() {
   const { data: inboxTasks } = useDbQuery((q) =>
     q
       .selectFrom("item")
-      .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order"])
+      .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order", "providerType"])
       .where("type", "=", "task")
       .where("dueAt", "is", null)
       .where("completedAt", "is", null)

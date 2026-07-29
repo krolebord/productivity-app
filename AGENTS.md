@@ -10,6 +10,7 @@ Auth uses magic links (sent via the Cloudflare Email binding) and Google OAuth (
 
 - [sqlite-sync docs](docs/sqlite-sync.md) — full docs for the offline-first sync library used for user data
 - [Currency API docs](docs/currency-api.md) — Frankfurter API used for exchange rates
+- [Google Calendar docs](docs/google-calendar.md) — one-way read-only event → task mirror
 
 ## Repository Structure
 

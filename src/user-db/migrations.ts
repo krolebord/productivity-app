@@ -343,6 +343,54 @@ const migrations = createMigrations((b) => ({
       defaultValue: null,
     }),
   ],
+  20: [
+    b.createTable("_calendar_connection", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("providerConnectionId", "text", (col) => col.notNull())
+        .addColumn("status", "text", (col) => col.notNull().defaultTo("connected"))
+        .addColumn("email", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("connectedAt", "integer", (col) => col.notNull().defaultTo(0))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+    b.createTable("_calendar_source", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("providerConnectionId", "text", (col) => col.notNull())
+        .addColumn("providerCalendarId", "text", (col) => col.notNull())
+        .addColumn("displayName", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("color", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("isPrimary", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("timeZone", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("enabled", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("createdAt", "integer", (col) => col.notNull())
+        .addColumn("updatedAt", "integer", (col) => col.notNull()),
+    ),
+    b.addColumn({
+      table: "_item",
+      column: "providerType",
+      type: "text",
+      defaultValue: null,
+    }),
+    b.addColumn({
+      table: "_item",
+      column: "providerId",
+      type: "text",
+      defaultValue: null,
+    }),
+    b.addColumn({
+      table: "_item",
+      column: "providerUpdatedAt",
+      type: "integer",
+      defaultValue: null,
+    }),
+    // The sync job looks up one item per incoming event, and must see tombstoned rows too (a
+    // deleted task must not be recreated), so this index deliberately has no tombstone filter.
+    b.createIndex("item_provider", (idx) => idx.on("_item").columns(["providerType", "providerId"])),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -388,6 +436,23 @@ export const syncDbSchema = defineSyncSchema({
           .nullable()
           .default(null)
           .describe("Epoch ms when the task was completed, or null when it is still open. Always null for notes."),
+        providerType: t
+          .text()
+          .nullable()
+          .default(null)
+          .describe(
+            'Source that created this task: "google-calendar", "detached" once the user unlinks it, or null for user-created items.',
+          ),
+        providerId: t
+          .text()
+          .nullable()
+          .default(null)
+          .describe("Id of the external record this task mirrors; kept after detaching so it is never re-imported."),
+        providerUpdatedAt: t
+          .integer()
+          .nullable()
+          .default(null)
+          .describe("Epoch ms the external record last changed, used to skip unchanged rows on resync."),
       })
       .describe(
         [
@@ -623,6 +688,36 @@ export const syncDbSchema = defineSyncSchema({
           "account links one-to-one to an in-app account via `linkedAccountId`. No balances are stored here.",
         ].join(" "),
       ),
+    calendar_connection: t
+      .table({
+        providerConnectionId: t.text().describe("Id of the central-D1 google_calendar_connection row this mirrors."),
+        status: t.text().default("connected").describe("connected | disconnected | error. Written only on change."),
+        email: t.text().default("").describe("Google account the calendars belong to."),
+        connectedAt: t.integer().default(0),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        "One row per connected Google account. OAuth tokens live in D1, sync diagnostics in DO storage, not here.",
+      ),
+    calendar_source: t
+      .table({
+        providerConnectionId: t.text().describe("References calendar_connection.providerConnectionId."),
+        providerCalendarId: t.text().describe("Google calendar id."),
+        displayName: t.text().default(""),
+        color: t.text().default("").describe("Hex colour, or empty."),
+        isPrimary: t.boolean().default(false),
+        timeZone: t.text().default("").describe("IANA zone the calendar's all-day dates are anchored to."),
+        enabled: t.boolean().default(false).describe("Whether this calendar's events are mirrored into tasks."),
+        createdAt: t.integer(),
+        updatedAt: t.integer(),
+      })
+      .describe(
+        [
+          "One row per calendar visible to a connected Google account. Enabled calendars mirror their events",
+          "one-way into `item` tasks with providerType google-calendar; no events are stored here.",
+        ].join(" "),
+      ),
     dashboard_settings: t
       .table({
         rangeMode: t.enum(["days", "cycle"]).default("days").describe("Dashboard range type: days | cycle."),
@@ -756,6 +851,8 @@ export type MemoryItem = typeof syncDbSchema.tables.memory.$row;
 export type SkillItem = typeof syncDbSchema.tables.skill.$row;
 export type MonobankConnectionMetaItem = typeof syncDbSchema.tables.monobank_connection.$row;
 export type MonobankAccountItem = typeof syncDbSchema.tables.monobank_account.$row;
+export type CalendarConnectionMetaItem = typeof syncDbSchema.tables.calendar_connection.$row;
+export type CalendarSourceItem = typeof syncDbSchema.tables.calendar_source.$row;
 export type DashboardSettingsItem = typeof syncDbSchema.tables.dashboard_settings.$row;
 export type HabitItem = typeof syncDbSchema.tables.habit.$row;
 export type NoteViewItem = typeof syncDbSchema.tables.note_view.$row;
