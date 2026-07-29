@@ -414,7 +414,7 @@ function TaskDragHandle({ draggable, label }: { draggable: ReturnType<typeof use
     <button
       ref={draggable.setActivatorNodeRef}
       type="button"
-      className="-ml-1 flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/60 opacity-100 hover:bg-muted hover:text-foreground active:cursor-grabbing md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+      className="-mr-1 flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/60 opacity-100 hover:bg-muted hover:text-foreground active:cursor-grabbing md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
       aria-label={`Drag ${label} to another date`}
       title="Drag to reschedule"
       {...draggable.attributes}
@@ -450,7 +450,6 @@ function InboxTaskRow({
         draggable.isDragging && "z-20 bg-card opacity-90 shadow-md",
       )}
     >
-      <TaskDragHandle draggable={draggable} label={label} />
       <Checkbox
         checked={false}
         onCheckedChange={(value) => onToggle(value === true)}
@@ -470,6 +469,7 @@ function InboxTaskRow({
       >
         <CalendarPlus className="size-3.5" />
       </Button>
+      <TaskDragHandle draggable={draggable} label={label} />
     </div>
   );
 }
@@ -620,7 +620,6 @@ function TaskRow({
         draggable.isDragging && "z-20 bg-card opacity-90 shadow-md",
       )}
     >
-      <TaskDragHandle draggable={draggable} label={label} />
       <Checkbox
         checked={completed}
         onCheckedChange={(value) => onToggle(value === true)}
@@ -676,6 +675,7 @@ function TaskRow({
           </Button>
         </div>
       )}
+      <TaskDragHandle draggable={draggable} label={label} />
     </div>
   );
 }
