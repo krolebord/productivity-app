@@ -473,7 +473,7 @@ function NotesPage() {
     }
   }
 
-  useDndDelegate({
+  useDndDelegate("note", {
     collisionDetection,
     onDragStart: handleDragStart,
     onDragOver: handleDragOver,

@@ -36,6 +36,7 @@ import { formatDueDateLabel } from "@/lib/date-time";
 import { isCalendarBackedTask } from "@/lib/google-calendar/mapping";
 import { cn } from "@/lib/utils";
 import { type CalendarDayInfo, useAgenda } from "./use-agenda";
+import { useTaskReorder } from "./use-task-reorder";
 
 const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 
@@ -60,6 +61,8 @@ export function TodayView() {
       ),
     [agenda.sections],
   );
+
+  const { displayedInboxTasks, displayedSections } = useTaskReorder(agenda.inboxTasks, activeSections);
 
   return (
     <div className="flex flex-col gap-4">
@@ -104,9 +107,9 @@ export function TodayView() {
         onCreate={(title, sendToInbox) => agenda.createTask(title, !sendToInbox)}
       />
 
-      {agenda.inboxTasks.length > 0 && (
+      {displayedInboxTasks.length > 0 && (
         <InboxSection
-          tasks={agenda.inboxTasks}
+          tasks={displayedInboxTasks}
           selectedLabel={headerLabel}
           onOpen={openTaskDialog}
           onToggle={agenda.completeInboxTask}
@@ -114,11 +117,11 @@ export function TodayView() {
         />
       )}
 
-      {activeSections.length === 0 && completedRows.length === 0 ? (
+      {displayedSections.length === 0 && completedRows.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="flex flex-col gap-5">
-          {activeSections.map((section) => (
+          {displayedSections.map((section) => (
             <AgendaSectionBlock
               key={section.bucket}
               section={section}
@@ -409,14 +412,22 @@ function InboxSection({
   );
 }
 
-function TaskDragHandle({ draggable, label }: { draggable: ReturnType<typeof useDraggable>; label: string }) {
+function TaskDragHandle({
+  draggable,
+  label,
+  reorderable,
+}: {
+  draggable: ReturnType<typeof useDraggable>;
+  label: string;
+  reorderable: boolean;
+}) {
   return (
     <button
       ref={draggable.setActivatorNodeRef}
       type="button"
       className="-mr-1 flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/60 opacity-100 hover:bg-muted hover:text-foreground active:cursor-grabbing md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-      aria-label={`Drag ${label} to another date`}
-      title="Drag to reschedule"
+      aria-label={reorderable ? `Drag ${label} to reorder or reschedule` : `Drag ${label} to another date`}
+      title={reorderable ? "Drag to reorder or reschedule" : "Drag to reschedule"}
       {...draggable.attributes}
       {...draggable.listeners}
     >
@@ -439,11 +450,15 @@ function InboxTaskRow({
   onSchedule: () => void;
 }) {
   const draggable = useDraggable({ id: task.id, data: { kind: "task" } });
+  const droppable = useDroppable({ id: task.id });
   const label = task.title.trim() || noteContentToPlainText(task.content, 100) || "Untitled";
 
   return (
     <div
-      ref={draggable.setNodeRef}
+      ref={(el) => {
+        draggable.setNodeRef(el);
+        droppable.setNodeRef(el);
+      }}
       style={{ transform: CSS.Translate.toString(draggable.transform) }}
       className={cn(
         "group relative flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-muted/60",
@@ -469,7 +484,7 @@ function InboxTaskRow({
       >
         <CalendarPlus className="size-3.5" />
       </Button>
-      <TaskDragHandle draggable={draggable} label={label} />
+      <TaskDragHandle draggable={draggable} label={label} reorderable />
     </div>
   );
 }
@@ -516,6 +531,11 @@ function AgendaSectionBlock({
               <TaskRow
                 row={row}
                 overdue={section.bucket === "overdue"}
+                reorderable={
+                  !row.completed &&
+                  !row.task.hasDueTime &&
+                  (section.bucket === "anytime" || section.bucket === "overdue")
+                }
                 onOpen={() => onOpenTask(row.id)}
                 onToggle={(completed) => onToggleTask(row.id, completed)}
                 onMoveToToday={() => onMoveTaskToToday(row.task)}
@@ -591,12 +611,14 @@ function CompletedSection({
 function TaskRow({
   row,
   overdue,
+  reorderable = false,
   onOpen,
   onToggle,
   onMoveToToday,
 }: {
   row: AgendaTaskRow;
   overdue: boolean;
+  reorderable?: boolean;
   onOpen: () => void;
   onToggle: (completed: boolean) => void;
   onMoveToToday?: () => void;
@@ -609,10 +631,14 @@ function TaskRow({
   const timeLabel = task.hasDueTime && task.dueAt != null ? format(task.dueAt, "HH:mm") : null;
   const dueLabel = overdue && task.dueAt != null ? formatDueDateLabel(task.dueAt, task.hasDueTime) : null;
   const draggable = useDraggable({ id: task.id, data: { kind: "task" } });
+  const droppable = useDroppable({ id: task.id, disabled: !reorderable });
 
   return (
     <div
-      ref={draggable.setNodeRef}
+      ref={(el) => {
+        draggable.setNodeRef(el);
+        droppable.setNodeRef(el);
+      }}
       style={{ transform: CSS.Translate.toString(draggable.transform) }}
       className={cn(
         "group relative flex items-start gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-muted/60",
@@ -663,19 +689,9 @@ function TaskRow({
           >
             <CalendarPlus className="size-3.5" />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Complete"
-            title="Complete"
-            onClick={() => onToggle(true)}
-          >
-            <CheckIcon className="size-3.5" />
-          </Button>
         </div>
       )}
-      <TaskDragHandle draggable={draggable} label={label} />
+      <TaskDragHandle draggable={draggable} label={label} reorderable={reorderable} />
     </div>
   );
 }
