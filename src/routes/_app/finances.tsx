@@ -757,6 +757,8 @@ function FinancesPage() {
                 const Icon = TYPE_ICON[type] ?? ArrowDownLeftIcon;
                 const account = accountMap.get(transaction.accountId);
                 const display = getDisplayAmountForAccount(transaction);
+                const converted =
+                  display.currency !== baseCurrency ? toBase(display.amount, display.currency) : null;
                 const title = transaction.title || type[0].toUpperCase() + type.slice(1);
                 return (
                   <button
@@ -774,14 +776,21 @@ function FinancesPage() {
                         {account?.labelText || "Untitled"} · {formatDateTimeDisplay(transaction.effectiveAt)}
                       </p>
                     </div>
-                    <p
-                      className={cn(
-                        "max-w-[45%] shrink-0 truncate text-right font-medium font-mono text-sm tabular-nums",
-                        amountClass(display.amount),
-                      )}
-                    >
-                      {formatBalance(display.amount, display.currency)}
-                    </p>
+                    <div className="max-w-[45%] shrink-0 text-right">
+                      <p
+                        className={cn(
+                          "truncate font-medium font-mono text-sm tabular-nums",
+                          amountClass(display.amount),
+                        )}
+                      >
+                        {formatBalance(display.amount, display.currency)}
+                      </p>
+                      {converted !== null ? (
+                        <p className="truncate font-mono text-muted-foreground text-xs tabular-nums">
+                          ≈ {formatBalance(converted, baseCurrency)}
+                        </p>
+                      ) : null}
+                    </div>
                   </button>
                 );
               })}
