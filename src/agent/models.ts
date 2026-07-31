@@ -44,10 +44,11 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     reasoningEffort: "high",
   },
   {
-    id: "xiaomi/mimo-v2.5-pro",
-    label: "MiMo V2.5 Pro",
-    inputModalities: ["text"],
-    pricing: { inputPerMillion: 0.435, outputPerMillion: 0.87, cacheReadPerMillion: 0.0036 },
+    id: "openai/gpt-5.6-luna",
+    label: "GPT-5.6 Luna",
+    inputModalities: ["text", "image", "file"],
+    pricing: { inputPerMillion: 0.2, outputPerMillion: 2, cacheReadPerMillion: 0.02 },
+    reasoningEffort: "high",
   },
   {
     id: "deepseek/deepseek-v4-pro",
@@ -60,15 +61,8 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     id: "openai/gpt-5.6-terra",
     label: "GPT-5.6 Terra",
     inputModalities: ["text", "image", "file"],
-    pricing: { inputPerMillion: 2.5, outputPerMillion: 15, cacheReadPerMillion: 0.25 },
+    pricing: { inputPerMillion: 2, outputPerMillion: 12, cacheReadPerMillion: 0.2 },
     reasoningEffort: "medium",
-  },
-  {
-    id: "openai/gpt-5.6-luna",
-    label: "GPT-5.6 Luna",
-    inputModalities: ["text", "image", "file"],
-    pricing: { inputPerMillion: 1, outputPerMillion: 6, cacheReadPerMillion: 0.1 },
-    reasoningEffort: "high",
   },
   {
     id: "openai/gpt-5.6-sol",
@@ -85,6 +79,13 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     reasoningEffort: "high",
   },
 
+  {
+    id: "xiaomi/mimo-v2.5-pro",
+    label: "MiMo V2.5 Pro",
+    inputModalities: ["text"],
+    pricing: { inputPerMillion: 0.435, outputPerMillion: 0.87, cacheReadPerMillion: 0.0036 },
+    selectable: false,
+  },
   {
     id: "openai/gpt-5.5",
     label: "GPT-5.5",
