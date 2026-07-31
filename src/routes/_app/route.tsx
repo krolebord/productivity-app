@@ -15,6 +15,7 @@ import { SyncStatusMonitor } from "@/components/sync-status-monitor";
 import { TaskDialog } from "@/components/task-dialog";
 import { TodayPanel } from "@/components/today/today-panel";
 import { TransactionDialog } from "@/components/transaction-dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { clearCachedAuth, readCachedAuth, writeCachedAuth } from "@/lib/auth-cache";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -69,6 +70,7 @@ function RightRailContent({ panel }: { panel: "assistant" | "today" }) {
 function RouteComponent() {
   const { db, auth } = Route.useLoaderData();
   const activePanel = useAssistantStore((s) => s.activePanel);
+  const closePanel = useAssistantStore((s) => s.closePanel);
   const isDesktop = useIsDesktop();
   const assistantEnabled = auth.assistantEnabled;
   const resolvedPanel =
@@ -113,13 +115,24 @@ function RouteComponent() {
           </Group>
         </div>
         {hasMountedMobileAssistant.current && !isDesktop && (
-          <div
-            className={mobileAssistantOpen ? "fixed inset-0 z-50 bg-background md:hidden" : "hidden"}
-            aria-hidden={!mobileAssistantOpen}
-            inert={!mobileAssistantOpen}
+          <Sheet
+            open={mobileAssistantOpen}
+            onOpenChange={(open) => {
+              if (!open) closePanel();
+            }}
           >
-            <RightRailContent panel="assistant" />
-          </div>
+            <SheetContent
+              side="right"
+              forceMount
+              className="w-full max-w-md gap-0 p-0 data-[state=closed]:pointer-events-none data-[state=closed]:invisible md:hidden"
+            >
+              <SheetHeader className="sr-only">
+                <SheetTitle>Assistant</SheetTitle>
+                <SheetDescription>Chat with the assistant</SheetDescription>
+              </SheetHeader>
+              <RightRailContent panel="assistant" />
+            </SheetContent>
+          </Sheet>
         )}
         <CommandPalette />
         <NoteDialog />

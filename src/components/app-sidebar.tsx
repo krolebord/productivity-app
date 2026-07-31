@@ -233,7 +233,7 @@ function TodayNavItem({
   );
 }
 
-function AssistantToggle({ collapsed }: { collapsed: boolean }) {
+function AssistantToggle({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const activePanel = useAssistantStore((s) => s.activePanel);
   const togglePanel = useAssistantStore((s) => s.togglePanel);
   const assistantEnabled = useAssistantEnabled();
@@ -250,7 +250,10 @@ function AssistantToggle({ collapsed }: { collapsed: boolean }) {
         variant="ghost"
         size={collapsed ? "icon" : "sm"}
         className={cn(!collapsed && "w-full justify-start gap-2", open && "text-primary")}
-        onClick={() => togglePanel("assistant")}
+        onClick={() => {
+          togglePanel("assistant");
+          onNavigate?.();
+        }}
         aria-label={open ? "Close assistant" : "Open assistant"}
         aria-keyshortcuts={TOGGLE_ASSISTANT_HOTKEY}
       >
@@ -459,38 +462,36 @@ function SidebarContent({
       <Separator />
 
       <div className={cn("flex p-2", collapsed ? "flex-col items-center gap-1" : "flex-col gap-1")}>
+        <AssistantToggle collapsed={collapsed} onNavigate={onNavigate} />
         {onToggleCollapse && (
-          <>
-            <AssistantToggle collapsed={collapsed} />
-            <SidebarTooltip
-              label={
-                collapsed
-                  ? `Expand sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
-                  : `Collapse sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
-              }
-              collapsed={collapsed}
+          <SidebarTooltip
+            label={
+              collapsed
+                ? `Expand sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
+                : `Collapse sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
+            }
+            collapsed={collapsed}
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size={collapsed ? "icon" : "sm"}
+              className={cn(!collapsed && "w-full justify-start gap-2")}
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-keyshortcuts={TOGGLE_SIDEBAR_HOTKEY}
             >
-              <Button
-                type="button"
-                variant="ghost"
-                size={collapsed ? "icon" : "sm"}
-                className={cn(!collapsed && "w-full justify-start gap-2")}
-                onClick={onToggleCollapse}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                aria-keyshortcuts={TOGGLE_SIDEBAR_HOTKEY}
-              >
-                {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left">Collapse</span>
-                    <kbd className="pointer-events-none hidden rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground md:inline">
-                      {formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)}
-                    </kbd>
-                  </>
-                )}
-              </Button>
-            </SidebarTooltip>
-          </>
+              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left">Collapse</span>
+                  <kbd className="pointer-events-none hidden rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground md:inline">
+                    {formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)}
+                  </kbd>
+                </>
+              )}
+            </Button>
+          </SidebarTooltip>
         )}
       </div>
 
@@ -1002,7 +1003,6 @@ export function AppSidebar() {
   useHotkey(
     TOGGLE_ASSISTANT_HOTKEY,
     (e) => {
-      if (!window.matchMedia("(min-width: 768px)").matches) return;
       e.preventDefault();
       togglePanel("assistant");
     },

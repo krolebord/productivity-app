@@ -32,14 +32,28 @@ function SheetOverlay({ className, ...props }: React.ComponentProps<typeof Dialo
   );
 }
 
-function SheetContent({ className, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+const sheetSideClasses = {
+  left: "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 max-w-72 border-r",
+  right:
+    "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 max-w-72 border-l",
+} as const;
+
+function SheetContent({
+  className,
+  children,
+  side = "left",
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  side?: keyof typeof sheetSideClasses;
+}) {
   return (
     <SheetPortal>
       <SheetOverlay />
       <DialogPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left fixed inset-y-0 left-0 z-50 flex h-full w-3/4 max-w-72 flex-col border-r bg-background shadow-lg outline-none duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in",
+          "fixed z-50 flex flex-col bg-background shadow-lg outline-none duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in",
+          sheetSideClasses[side],
           className,
         )}
         {...props}
