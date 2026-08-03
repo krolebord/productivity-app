@@ -17,7 +17,12 @@ import { getServerByName } from "partyserver";
 import { z } from "zod";
 import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
 import { ChartSpecSchema } from "./chart-spec";
-import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, getAssistantModel, resolveAssistantModelId } from "./models";
+import {
+  type AssistantModelId,
+  DEFAULT_ASSISTANT_MODEL,
+  resolveAssistantModelId,
+  resolveAssistantReasoningEffort,
+} from "./models";
 
 type WorkspaceUploadInput = {
   filename: string;
@@ -120,19 +125,25 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     return current + 1;
   }
 
-  getModel(modelId: AssistantModelId = DEFAULT_ASSISTANT_MODEL): LanguageModel {
+  getModel(modelId: AssistantModelId = DEFAULT_ASSISTANT_MODEL, reasoningEffortOverride?: unknown): LanguageModel {
     const openrouter = createOpenRouter({
       apiKey: this.env.OPENROUTER_API_KEY,
     });
-    const reasoningEffort = getAssistantModel(modelId)?.reasoningEffort;
+    const reasoningEffort = resolveAssistantReasoningEffort(modelId, reasoningEffortOverride);
     return openrouter.chat(modelId, {
       usage: { include: true },
-      ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
+      ...(reasoningEffort
+        ? {
+            // OpenRouter accepts GPT-5.6's `max`; the SDK typings lag behind.
+            reasoning: { effort: reasoningEffort as "xhigh" | "high" | "medium" | "low" | "minimal" | "none" },
+          }
+        : {}),
     });
   }
 
   async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
-    const model = this.getModel(resolveAssistantModelId(ctx.body?.model));
+    const modelId = resolveAssistantModelId(ctx.body?.model);
+    const model = this.getModel(modelId, ctx.body?.reasoningEffort);
     const memories = await this.getMemoriesBlock();
     return memories ? { model, system: `${ctx.system}\n\n${memories}` } : { model };
   }

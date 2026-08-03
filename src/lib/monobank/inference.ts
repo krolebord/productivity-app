@@ -12,7 +12,7 @@ type ClientMonobankDb = Pick<SQLiteTransactionWrapper<UserDb>, "executeKysely">;
 type ServerMonobankDb = Pick<ServerSyncDb<UserSyncDbSchema>, "executeKysely">;
 type MonobankClassificationEnv = Pick<Env, "OPENROUTER_API_KEY">;
 
-const MONOBANK_CATEGORY_MODEL = "deepseek/deepseek-v4-flash";
+const MONOBANK_CATEGORY_MODEL = "deepseek/deepseek-v4-flash-0731";
 const OTHER_CATEGORY = "Other";
 
 export type MonobankClassification = {

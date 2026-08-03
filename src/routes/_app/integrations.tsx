@@ -196,7 +196,9 @@ function MonobankSection({
               <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
                 <span className={cn("font-medium", status.className)}>{status.label}</span>
                 {isConnected && webhook ? <span className={webhook.className}>{webhook.label}</span> : null}
-                {connection?.displayName ? <span className="text-muted-foreground">{connection.displayName}</span> : null}
+                {connection?.displayName ? (
+                  <span className="text-muted-foreground">{connection.displayName}</span>
+                ) : null}
               </div>
               {isConnected && connection.lastError ? (
                 <p className="mt-1 text-rose-600 text-xs dark:text-rose-400">{connection.lastError}</p>

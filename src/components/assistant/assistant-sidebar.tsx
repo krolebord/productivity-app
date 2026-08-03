@@ -42,7 +42,13 @@ import {
   type AssistantModel,
   type AssistantModelId,
   type AssistantModelInputModality,
+  type AssistantReasoningEffort,
+  formatReasoningEffortLabel,
+  GPT_5_6_REASONING_EFFORTS,
+  getAssistantModel,
+  modelSupportsSelectableReasoning,
   resolveAssistantModelId,
+  resolveAssistantReasoningEffort,
 } from "@/agent/models";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
@@ -62,6 +68,7 @@ type ConversationRow = {
   createdAt: number;
   updatedAt: number;
   model: string | null;
+  reasoningEffort: string | null;
   totalCost: number;
   totalTokens: number;
 };
@@ -127,6 +134,11 @@ function formatModelPrice(price: number) {
 
 function formatModelPricing(model: AssistantModel) {
   return `${formatModelPrice(model.pricing.inputPerMillion)} in / ${formatModelPrice(model.pricing.outputPerMillion)} out per 1M`;
+}
+
+function preferredConversationReasoningEffort(modelId: AssistantModelId, preferred: unknown): string | null {
+  if (!modelSupportsSelectableReasoning(modelId)) return null;
+  return resolveAssistantReasoningEffort(modelId, preferred) ?? null;
 }
 
 function DownloadFileChip({ conversationId, file }: { conversationId: string; file: UploadedWorkspaceFile }) {
@@ -686,6 +698,59 @@ function ModelSelect({
   );
 }
 
+function ReasoningEffortSelect({
+  effort,
+  locked,
+  onSelect,
+}: {
+  effort: AssistantReasoningEffort;
+  locked: boolean;
+  onSelect: (effort: AssistantReasoningEffort) => void;
+}) {
+  if (locked) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs">
+            <Brain className="size-3.5 shrink-0" />
+            <span className="truncate">{formatReasoningEffortLabel(effort)}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Reasoning effort is fixed once the conversation starts</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Select reasoning effort"
+            >
+              <Brain className="size-3.5 shrink-0" />
+              <span className="truncate">{formatReasoningEffortLabel(effort)}</span>
+              <ChevronDown className="size-3 shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Reasoning effort</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="w-40">
+        {GPT_5_6_REASONING_EFFORTS.map((level) => (
+          <DropdownMenuItem key={level} className="gap-2" onClick={() => onSelect(level)}>
+            <span className="flex-1">{formatReasoningEffortLabel(level)}</span>
+            {level === effort && <Check className="size-3.5 shrink-0" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function ConversationCost({ conversation }: { conversation: ConversationRow }) {
   if (!conversation.totalCost && !conversation.totalTokens) return null;
 
@@ -715,6 +780,7 @@ function ConversationView({
   const closePanel = useAssistantStore((s) => s.closePanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const preferredModel = useAssistantStore((s) => s.model);
+  const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
   const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agentIdCopied, setAgentIdCopied] = useState(false);
   const agentId = `user-${auth.userId}:${conversation.id}`;
@@ -757,6 +823,7 @@ function ConversationView({
         createdAt: now,
         updatedAt: now,
         model: preferredModel,
+        reasoningEffort: preferredConversationReasoningEffort(preferredModel, preferredReasoningEffort),
         tombstone: false,
         totalCost: 0,
         totalTokens: 0,
@@ -881,19 +948,50 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
   }, [composerFocusNonce]);
 
   const setPreferredModel = useAssistantStore((s) => s.setModel);
+  const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
+  const setPreferredReasoningEffort = useAssistantStore((s) => s.setReasoningEffort);
   const model = resolveAssistantModelId(conversation.model);
+  const reasoningEffort =
+    resolveAssistantReasoningEffort(model, conversation.reasoningEffort ?? preferredReasoningEffort) ??
+    getAssistantModel(model)?.reasoningEffort ??
+    "medium";
   const modelRef = useRef(model);
+  const reasoningEffortRef = useRef(reasoningEffort);
   modelRef.current = model;
+  reasoningEffortRef.current = reasoningEffort;
 
   const agent = useAgent({ agent: "assistant-agent", name: agentId });
   const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({
     agent,
-    body: () => ({ model: modelRef.current }),
+    body: () => ({
+      model: modelRef.current,
+      ...(modelSupportsSelectableReasoning(modelRef.current)
+        ? { reasoningEffort: reasoningEffortRef.current }
+        : {}),
+    }),
   });
 
   function selectModel(next: AssistantModelId) {
     setPreferredModel(next);
-    db.db.executeKysely((q) => q.updateTable("conversation").set({ model: next }).where("id", "=", conversation.id));
+    db.db.executeKysely((q) =>
+      q
+        .updateTable("conversation")
+        .set({
+          model: next,
+          reasoningEffort: preferredConversationReasoningEffort(
+            next,
+            conversation.reasoningEffort ?? preferredReasoningEffort,
+          ),
+        })
+        .where("id", "=", conversation.id),
+    );
+  }
+
+  function selectReasoningEffort(next: AssistantReasoningEffort) {
+    setPreferredReasoningEffort(next);
+    db.db.executeKysely((q) =>
+      q.updateTable("conversation").set({ reasoningEffort: next }).where("id", "=", conversation.id),
+    );
   }
   const isWorking = uploading || status === "submitted" || status === "streaming" || isServerStreaming;
 
@@ -1053,7 +1151,16 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
           </div>
         )}
         <div className="flex items-center justify-between gap-2">
-          <ModelSelect model={model} locked={messages.length > 0} onSelect={selectModel} />
+          <div className="flex min-w-0 items-center gap-1">
+            <ModelSelect model={model} locked={messages.length > 0} onSelect={selectModel} />
+            {modelSupportsSelectableReasoning(model) && (
+              <ReasoningEffortSelect
+                effort={reasoningEffort}
+                locked={messages.length > 0}
+                onSelect={selectReasoningEffort}
+              />
+            )}
+          </div>
           <ConversationCost conversation={conversation} />
         </div>
         <div className="flex min-w-0 items-end gap-2">
@@ -1115,6 +1222,7 @@ export function useNewConversation() {
   const openPanel = useAssistantStore((s) => s.openPanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const preferredModel = useAssistantStore((s) => s.model);
+  const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
 
   return useCallback(() => {
     openPanel("assistant");
@@ -1143,13 +1251,14 @@ export function useNewConversation() {
         createdAt: now,
         updatedAt: now,
         model: preferredModel,
+        reasoningEffort: preferredConversationReasoningEffort(preferredModel, preferredReasoningEffort),
         tombstone: false,
         totalCost: 0,
         totalTokens: 0,
       }),
     );
     setActiveConversation(id);
-  }, [db, openPanel, setActiveConversation, preferredModel]);
+  }, [db, openPanel, setActiveConversation, preferredModel, preferredReasoningEffort]);
 }
 
 export function AssistantSidebar() {
@@ -1157,6 +1266,7 @@ export function AssistantSidebar() {
   const activeConversationId = useAssistantStore((s) => s.activeConversationId);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const preferredModel = useAssistantStore((s) => s.model);
+  const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
 
   const { data: conversations } = useDbQuery((db) =>
     db
@@ -1185,13 +1295,14 @@ export function AssistantSidebar() {
         createdAt: now,
         updatedAt: now,
         model: preferredModel,
+        reasoningEffort: preferredConversationReasoningEffort(preferredModel, preferredReasoningEffort),
         tombstone: false,
         totalCost: 0,
         totalTokens: 0,
       }),
     );
     setActiveConversation(id);
-  }, [conversations, db, setActiveConversation, preferredModel]);
+  }, [conversations, db, setActiveConversation, preferredModel, preferredReasoningEffort]);
 
   if (!active) {
     return (

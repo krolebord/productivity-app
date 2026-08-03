@@ -757,8 +757,7 @@ function FinancesPage() {
                 const Icon = TYPE_ICON[type] ?? ArrowDownLeftIcon;
                 const account = accountMap.get(transaction.accountId);
                 const display = getDisplayAmountForAccount(transaction);
-                const converted =
-                  display.currency !== baseCurrency ? toBase(display.amount, display.currency) : null;
+                const converted = display.currency !== baseCurrency ? toBase(display.amount, display.currency) : null;
                 const title = transaction.title || type[0].toUpperCase() + type.slice(1);
                 return (
                   <button

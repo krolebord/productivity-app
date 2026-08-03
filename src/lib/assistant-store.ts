@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { type AssistantModelId, DEFAULT_ASSISTANT_MODEL, resolveAssistantModelId } from "@/agent/models";
+import {
+  type AssistantModelId,
+  type AssistantReasoningEffort,
+  DEFAULT_ASSISTANT_MODEL,
+  isAssistantReasoningEffort,
+  resolveAssistantModelId,
+} from "@/agent/models";
 
 export type RightPanel = "assistant" | "today";
 
@@ -8,6 +14,8 @@ interface AssistantStore {
   activePanel: RightPanel | null;
   activeConversationId: string | null;
   model: AssistantModelId;
+  /** Preferred reasoning effort for GPT-5.6; null means use the model catalog default. */
+  reasoningEffort: AssistantReasoningEffort | null;
   /**
    * Draft text for the message composer. Lifted into the store (rather than local
    * component state) so anything on the page can append context tokens to it — see
@@ -25,6 +33,7 @@ interface AssistantStore {
   togglePanel: (panel: RightPanel) => void;
   setActiveConversation: (id: string | null) => void;
   setModel: (model: AssistantModelId) => void;
+  setReasoningEffort: (effort: AssistantReasoningEffort | null) => void;
   setInputDraft: (value: string) => void;
   appendToInput: (text: string) => void;
   requestComposerFocus: () => void;
@@ -40,6 +49,7 @@ export const useAssistantStore = create<AssistantStore>()(
       activePanel: null,
       activeConversationId: null,
       model: DEFAULT_ASSISTANT_MODEL,
+      reasoningEffort: null,
       inputDraft: "",
       composerFocusNonce: 0,
       openPanel: (panel) => set({ activePanel: panel }),
@@ -47,6 +57,7 @@ export const useAssistantStore = create<AssistantStore>()(
       togglePanel: (panel) => set((s) => ({ activePanel: s.activePanel === panel ? null : panel })),
       setActiveConversation: (id) => set({ activeConversationId: id }),
       setModel: (model) => set({ model }),
+      setReasoningEffort: (reasoningEffort) => set({ reasoningEffort }),
       setInputDraft: (inputDraft) => set({ inputDraft }),
       appendToInput: (text) =>
         set((s) => {
@@ -61,6 +72,7 @@ export const useAssistantStore = create<AssistantStore>()(
         activePanel: state.activePanel,
         activeConversationId: state.activeConversationId,
         model: state.model,
+        reasoningEffort: state.reasoningEffort,
       }),
       merge: (persisted, current) => {
         const raw = (persisted ?? {}) as PersistedAssistantState;
@@ -72,7 +84,11 @@ export const useAssistantStore = create<AssistantStore>()(
           activePanel = open ? "assistant" : null;
         }
         const state = { ...current, ...rest, activePanel };
-        return { ...state, model: resolveAssistantModelId(state.model) };
+        return {
+          ...state,
+          model: resolveAssistantModelId(state.model),
+          reasoningEffort: isAssistantReasoningEffort(state.reasoningEffort) ? state.reasoningEffort : null,
+        };
       },
     },
   ),

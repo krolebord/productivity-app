@@ -1,4 +1,5 @@
 export type AssistantModelId =
+  | "deepseek/deepseek-v4-flash-0731"
   | "deepseek/deepseek-v4-flash"
   | "deepseek/deepseek-v4-pro"
   | "openai/gpt-5.6-terra"
@@ -14,7 +15,17 @@ export type AssistantModelId =
 
 export type AssistantModelInputModality = "audio" | "file" | "image" | "text" | "video";
 
-export type AssistantReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
+export type AssistantReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max";
+
+/** OpenRouter `supported_efforts` for GPT-5.6, ascending for the UI. */
+export const GPT_5_6_REASONING_EFFORTS = [
+  "none",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const satisfies readonly AssistantReasoningEffort[];
 
 export type AssistantModel = {
   id: AssistantModelId;
@@ -26,6 +37,8 @@ export type AssistantModel = {
     cacheReadPerMillion?: number;
   };
   reasoningEffort?: AssistantReasoningEffort;
+  /** When true, the UI may override `reasoningEffort` per conversation. GPT-5.6 only for now. */
+  selectableReasoning?: boolean;
   selectable?: boolean;
 };
 
@@ -37,10 +50,10 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     pricing: { inputPerMillion: 0.105, outputPerMillion: 0.28, cacheReadPerMillion: 0.028 },
   },
   {
-    id: "deepseek/deepseek-v4-flash",
+    id: "deepseek/deepseek-v4-flash-0731",
     label: "DeepSeek V4 Flash",
     inputModalities: ["text"],
-    pricing: { inputPerMillion: 0.077, outputPerMillion: 0.154, cacheReadPerMillion: 0.0154 },
+    pricing: { inputPerMillion: 0.09, outputPerMillion: 0.18, cacheReadPerMillion: 0.018 },
     reasoningEffort: "high",
   },
   {
@@ -49,6 +62,7 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     inputModalities: ["text", "image", "file"],
     pricing: { inputPerMillion: 0.2, outputPerMillion: 2, cacheReadPerMillion: 0.02 },
     reasoningEffort: "high",
+    selectableReasoning: true,
   },
   {
     id: "deepseek/deepseek-v4-pro",
@@ -58,11 +72,20 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     reasoningEffort: "high",
   },
   {
+    id: "deepseek/deepseek-v4-flash",
+    label: "DeepSeek V4 Flash (preview)",
+    inputModalities: ["text"],
+    pricing: { inputPerMillion: 0.14, outputPerMillion: 0.28, cacheReadPerMillion: 0.028 },
+    reasoningEffort: "high",
+    selectable: false,
+  },
+  {
     id: "openai/gpt-5.6-terra",
     label: "GPT-5.6 Terra",
     inputModalities: ["text", "image", "file"],
     pricing: { inputPerMillion: 2, outputPerMillion: 12, cacheReadPerMillion: 0.2 },
     reasoningEffort: "medium",
+    selectableReasoning: true,
   },
   {
     id: "openai/gpt-5.6-sol",
@@ -70,6 +93,7 @@ export const ASSISTANT_MODELS: AssistantModel[] = [
     inputModalities: ["text", "image", "file"],
     pricing: { inputPerMillion: 5, outputPerMillion: 30, cacheReadPerMillion: 0.5 },
     reasoningEffort: "low",
+    selectableReasoning: true,
   },
   {
     id: "x-ai/grok-4.5",
@@ -135,4 +159,40 @@ export function resolveAssistantModelId(value: unknown): AssistantModelId {
 
 export function getAssistantModel(id: AssistantModelId): AssistantModel | undefined {
   return ASSISTANT_MODELS.find((model) => model.id === id);
+}
+
+export function modelSupportsSelectableReasoning(id: AssistantModelId): boolean {
+  return getAssistantModel(id)?.selectableReasoning === true;
+}
+
+export function isAssistantReasoningEffort(value: unknown): value is AssistantReasoningEffort {
+  return typeof value === "string" && (GPT_5_6_REASONING_EFFORTS as readonly string[]).includes(value);
+}
+
+/** Resolve effort for a turn: catalog default, overridden only when the model allows selection. */
+export function resolveAssistantReasoningEffort(
+  modelId: AssistantModelId,
+  value: unknown,
+): AssistantReasoningEffort | undefined {
+  const model = getAssistantModel(modelId);
+  const defaultEffort = model?.reasoningEffort;
+  if (!model?.selectableReasoning) return defaultEffort;
+  return isAssistantReasoningEffort(value) ? value : defaultEffort;
+}
+
+export function formatReasoningEffortLabel(effort: AssistantReasoningEffort): string {
+  switch (effort) {
+    case "none":
+      return "None";
+    case "low":
+      return "Low";
+    case "medium":
+      return "Medium";
+    case "high":
+      return "High";
+    case "xhigh":
+      return "XHigh";
+    case "max":
+      return "Max";
+  }
 }

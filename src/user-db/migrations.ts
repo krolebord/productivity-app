@@ -392,6 +392,14 @@ const migrations = createMigrations((b) => ({
       idx.on("_item").columns(["type", "dueAt", "order"]).where(sql.ref("tombstone"), "=", 0),
     ),
   ],
+  22: [
+    b.addColumn({
+      table: "_conversation",
+      column: "reasoningEffort",
+      type: "text",
+      defaultValue: null,
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -537,6 +545,11 @@ export const syncDbSchema = defineSyncSchema({
         createdAt: t.integer(),
         updatedAt: t.integer(),
         model: t.text().nullable().default(null).describe("Model id, fixed after the first message."),
+        reasoningEffort: t
+          .text()
+          .nullable()
+          .default(null)
+          .describe("Optional reasoning effort override."),
         totalCost: t.real().default(0).describe("Cumulative cost in USD."),
         totalTokens: t.integer().default(0).describe("Cumulative tokens."),
       })
