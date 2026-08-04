@@ -22,7 +22,7 @@
   // VITE_APP_URL via `wrangler deploy --var` so deployments run in production mode.
   "vars": {
     "MODE": "development",
-    "VITE_APP_URL": "http://localhost:3001"
+    "VITE_APP_URL": "http://localhost:3301"
   },
   "worker_loaders": [
     {

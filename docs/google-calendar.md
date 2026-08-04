@@ -11,7 +11,7 @@ The integration reuses the existing OAuth client (`GOOGLE_CLIENT_ID` / `GOOGLE_C
 only two things need adding to it:
 
 1. **Authorized redirect URI**: `<VITE_APP_URL>/api/auth/callback/google-calendar`
-   (plus `http://localhost:3001/api/auth/callback/google-calendar` for local dev).
+   (plus `http://localhost:3301/api/auth/callback/google-calendar` for local dev).
 2. **Scope**: `https://www.googleapis.com/auth/calendar.readonly`.
 
 `calendar.readonly` is a Google *sensitive* scope. Keep the Cloud project's consent screen in

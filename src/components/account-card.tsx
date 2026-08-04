@@ -157,7 +157,7 @@ export function AccountCard({ account }: AccountCardProps) {
             size="sm"
             onClick={(event) => {
               event.stopPropagation();
-              navigate({ to: "/transactions", search: { accountId: account.id } });
+              navigate({ to: "/finances/transactions", search: { accountId: account.id } });
             }}
           >
             Activity

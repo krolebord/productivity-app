@@ -193,7 +193,7 @@ export function CommandPalette() {
             <CoinsIcon className="size-4" />
             Currencies
           </CommandItem>
-          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/transactions" }))}>
+          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/finances/transactions" }))}>
             <ArrowLeftRightIcon className="size-4" />
             Transactions
           </CommandItem>

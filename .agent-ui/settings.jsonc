@@ -1,0 +1,24 @@
+{
+  // Project icon shown in the Agent UI sidebar.
+  "iconPath": "public/pwa-192x192.png",
+
+  "commands": [
+    {
+      "id": "dev-server",
+      "name": "Dev server",
+      "run": "pnpm dev",
+      "singleton": true
+    },
+    {
+      "id": "dev-server-tailnet",
+      "name": "Dev server (Tailnet)",
+      // Runs on local 3302, exposed on access port 3301 — the port VITE_APP_URL
+      // in .env points at, since magic links and the Google OAuth redirect only
+      // resolve on that exact origin. The 30xx range belongs to other projects.
+      // HMR rides the same port: Vite leaves the client's socket port unset, so
+      // it reconnects over wss:// to whatever host/port served the page.
+      "run": "ts-serve 3302:3301 && DEV_PORT=3302 DEV_ALLOWED_HOSTS=agent-ui-vps.tailc07dd9.ts.net pnpm dev",
+      "singleton": true
+    }
+  ]
+}

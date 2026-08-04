@@ -421,7 +421,7 @@ function SidebarContent({
             to="/finances"
             label="Finances"
             icon={ChartPie}
-            isActive={currentPath === "/finances"}
+            isActive={currentPath?.startsWith("/finances") ?? false}
             collapsed={collapsed}
             onNavigate={onNavigate}
           />
@@ -621,7 +621,7 @@ function SortableAccountRow({
           ? getAttachClickHandler(attachRef)
           : () => {
               if (!sortable.isDragging) {
-                navigate({ to: "/transactions", search: { accountId: account.id }, viewTransition: true });
+                navigate({ to: "/finances/transactions", search: { accountId: account.id }, viewTransition: true });
                 onNavigate?.();
               }
             }
@@ -660,10 +660,12 @@ function AccountsNavItem({
   const matches = useMatches();
   const lastMatch = matches[matches.length - 1];
   const activeAccountId =
-    lastMatch?.fullPath === "/transactions" ? (lastMatch.search as { accountId?: string }).accountId : undefined;
+    lastMatch?.fullPath === "/finances/transactions"
+      ? (lastMatch.search as { accountId?: string }).accountId
+      : undefined;
 
   const isAccountsPageActive = currentPath === "/accounts";
-  const isActive = currentPath === "/transactions" || isAccountsPageActive;
+  const isActive = isAccountsPageActive;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -697,7 +699,7 @@ function AccountsNavItem({
   if (collapsed) {
     return (
       <SidebarNavLink
-        to="/transactions"
+        to="/accounts"
         label="Accounts"
         icon={Wallet}
         isActive={isActive}
@@ -717,12 +719,7 @@ function AccountsNavItem({
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
         )}
       >
-        <Link
-          to="/transactions"
-          viewTransition
-          onClick={onNavigate}
-          className="flex flex-1 items-center gap-2 px-3 py-2"
-        >
+        <Link to="/accounts" viewTransition onClick={onNavigate} className="flex flex-1 items-center gap-2 px-3 py-2">
           <Wallet className="size-4 shrink-0" />
           Accounts
         </Link>

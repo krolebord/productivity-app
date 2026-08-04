@@ -136,7 +136,7 @@ function applyTransactionSort<O>(query: SelectQueryBuilder<UserDb, "transaction_
   }
 }
 
-export const Route = createFileRoute("/_app/transactions")({
+export const Route = createFileRoute("/_app/finances/transactions")({
   component: TransactionsPage,
   validateSearch: transactionsSearchSchema,
 });
@@ -390,7 +390,7 @@ function TransactionsPage() {
 
   function patchSearch(next: Partial<typeof search>) {
     navigate({
-      to: "/transactions",
+      to: "/finances/transactions",
       replace: true,
       search: (prev) => {
         const merged = { ...prev, ...next };
@@ -574,10 +574,10 @@ function TransactionsPage() {
   const inactiveFilters = FILTER_ORDER.filter((key) => filterMeta[key].value === null);
 
   return (
-    <div className="@container mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
+    <div className="flex flex-col gap-6">
       <div className="flex @2xl:flex-row flex-col @2xl:items-start @2xl:justify-between gap-3">
         <div>
-          <h1 className="font-semibold text-xl">Transactions</h1>
+          <h2 className="font-semibold text-lg">Transactions</h2>
           <p className="text-muted-foreground text-sm">
             {selectedAccount
               ? `Showing ledger activity for ${selectedAccount.labelText || "Untitled account"}.`

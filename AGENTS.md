@@ -38,7 +38,7 @@ wrangler.jsonc             # Cloudflare config (D1, Durable Objects, email, asse
 ## Commands
 
 ```bash
-pnpm dev                  # Dev server on port 3001
+pnpm dev                  # Dev server on port 3301
 pnpm typecheck            # Type-check (tsgo)
 pnpm format               # Format + lint fix with Biome
 pnpm build                # Production build
@@ -49,5 +49,11 @@ pnpm db:new-migration     # Create a new D1 migration
 pnpm generate:types:db    # Regenerate src/lib/db-types.ts from local D1 (kysely-codegen)
 pnpm generate:types:env   # Regenerate worker-configuration.d.ts (wrangler types)
 ```
+
+Two env vars tune the dev server (read from `.env` or the shell): `DEV_PORT` overrides
+the 3301 default, and `DEV_ALLOWED_HOSTS` is a comma-separated host allowlist for
+reaching it through a proxy. The `Dev server (Tailnet)` preset in
+`.agent-ui/settings.jsonc` uses both to publish dev over Tailscale — HMR needs no extra
+port because Vite reconnects to whatever origin served the page.
 
 Note: the central D1 database uses SQL migrations in `migrations/`; the per-user synced database defines its schema/migrations in code at `src/user-db/migrations.ts`.
