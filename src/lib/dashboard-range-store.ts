@@ -1,4 +1,13 @@
-import { differenceInCalendarDays, endOfDay, getDaysInMonth, startOfDay, subDays, subMonths } from "date-fns";
+import {
+  differenceInCalendarDays,
+  endOfDay,
+  format,
+  getDaysInMonth,
+  isSameDay,
+  startOfDay,
+  subDays,
+  subMonths,
+} from "date-fns";
 
 export type DashboardRangeMode = "days" | "cycle";
 
@@ -16,6 +25,11 @@ function ordinal(n: number) {
   return `${n}${suffixes[(v - 20) % 10] ?? suffixes[v] ?? suffixes[0]}`;
 }
 
+/** "Jul 25 – Aug 5", collapsed to a single date when the window is one day. */
+function formatSpan(start: Date, end: Date) {
+  return isSameDay(start, end) ? format(start, "MMM d") : `${format(start, "MMM d")} – ${format(end, "MMM d")}`;
+}
+
 export function cycleStartOnOrBefore(now: Date, cycleDay: number): Date {
   const thisMonth = new Date(now.getFullYear(), now.getMonth(), Math.min(cycleDay, getDaysInMonth(now)));
   if (thisMonth.getTime() <= now.getTime()) {
@@ -30,7 +44,10 @@ export interface ResolvedDashboardRange {
   rangeEnd: number;
   prevRangeStart: number;
   prevRangeEnd: number;
+  /** How the window was configured, e.g. "Since the 25th". */
   label: string;
+  /** The dates the window actually covers, e.g. "Jul 25 – Aug 5". */
+  spanLabel: string;
   cardSuffix: string;
   prevLabel: string;
 }
@@ -51,18 +68,21 @@ export function resolveDashboardRange(config: DashboardRangeConfig, now: Date): 
       prevRangeStart: startOfDay(prevStart).getTime(),
       prevRangeEnd: endOfDay(subDays(cycleStart, 1)).getTime(),
       label: `Since the ${ordinal(config.cycleDay)}`,
+      spanLabel: formatSpan(cycleStart, now),
       cardSuffix: `${dayCount}d`,
       prevLabel: "previous cycle",
     };
   }
 
   const { days } = config;
+  const windowStart = subDays(now, days - 1);
   return {
-    rangeStart: startOfDay(subDays(now, days - 1)).getTime(),
+    rangeStart: startOfDay(windowStart).getTime(),
     rangeEnd: endOfDay(now).getTime(),
     prevRangeStart: startOfDay(subDays(now, days * 2 - 1)).getTime(),
     prevRangeEnd: endOfDay(subDays(now, days)).getTime(),
     label: `Last ${days} days`,
+    spanLabel: formatSpan(windowStart, now),
     cardSuffix: `${days}d`,
     prevLabel: `previous ${days} days`,
   };

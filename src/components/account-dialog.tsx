@@ -1,5 +1,6 @@
 import { generateId } from "@sqlite-sync/core";
 import { useStore } from "@tanstack/react-form";
+import { Trash2Icon } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -191,6 +192,22 @@ function AccountDialogContent() {
     closeDialog();
   }
 
+  /**
+   * Deleting is only offered once the account has no entries pointing at it:
+   * removing it while transactions reference it would leave them orphaned.
+   */
+  function deleteAccount() {
+    if (mode !== "edit" || !accountId) return;
+
+    if (hasTransactionHistory) {
+      toast.error("Delete or move related transactions before removing this account.");
+      return;
+    }
+
+    db.db.executeKysely((q) => q.deleteFrom("account").where("id", "=", accountId));
+    closeDialog();
+  }
+
   const form = useAppForm({
     validationLogic: createDynamicValidationLogic(),
     validators: dynamicZodValidators(accountFormSchema),
@@ -309,6 +326,19 @@ function AccountDialogContent() {
         </form.AppField>
 
         <DialogFooter>
+          {mode === "edit" && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={deleteAccount}
+              disabled={hasTransactionHistory}
+              title={hasTransactionHistory ? "This account still has transactions." : undefined}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:mr-auto"
+            >
+              <Trash2Icon className="size-4" />
+              Delete
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={closeDialog}>
             Cancel
           </Button>

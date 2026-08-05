@@ -17,7 +17,6 @@ import {
   StickyNote,
   SunMoonIcon,
   TagsIcon,
-  Wallet,
   Workflow,
 } from "lucide-react";
 import { useSyncExternalStore } from "react";
@@ -173,7 +172,10 @@ export function CommandPalette() {
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Navigation">
-          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/finances" }))}>
+          <CommandItem
+            onSelect={() => runAndClose(() => navigate({ to: "/finances" }))}
+            keywords={["accounts", "balances", "net worth", "overview"]}
+          >
             <ChartPie className="size-4" />
             Finances
           </CommandItem>
@@ -185,17 +187,16 @@ export function CommandPalette() {
             <ListTodoIcon className="size-4" />
             Today
           </CommandItem>
-          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/accounts" }))}>
-            <Wallet className="size-4" />
-            Accounts
-          </CommandItem>
-          <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/currencies" }))}>
-            <CoinsIcon className="size-4" />
-            Currencies
-          </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/finances/transactions" }))}>
             <ArrowLeftRightIcon className="size-4" />
             Transactions
+          </CommandItem>
+          <CommandItem
+            onSelect={() => runAndClose(() => navigate({ to: "/finances/rates" }))}
+            keywords={["currencies", "exchange", "rates"]}
+          >
+            <CoinsIcon className="size-4" />
+            Rates
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => navigate({ to: "/integrations" }))}>
             <Plug className="size-4" />

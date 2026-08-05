@@ -2,39 +2,37 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { endOfDay, format, isToday, isYesterday, startOfDay, startOfYear, subDays } from "date-fns";
 import { type SelectQueryBuilder, sql } from "kysely";
 import {
-  ArrowDownLeftIcon,
-  ArrowLeftRightIcon,
   ArrowUpDownIcon,
-  ArrowUpRightIcon,
   CheckIcon,
   ChevronLeftIcon,
   Landmark,
+  PencilIcon,
   PlusIcon,
   SearchIcon,
-  SlidersHorizontalIcon,
   XIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { formatBalance } from "@/components/account-card";
+import { useAccountDialogStore } from "@/components/account-dialog";
+import { AccountDot, AccountVisibilityToggle } from "@/components/account-row";
 import { CategoryImportancePrompt } from "@/components/category-importance-prompt";
-import {
-  useCreateExpense,
-  useCreateIncome,
-  useCreateTransfer,
-  useTransactionDialogStore,
-} from "@/components/transaction-dialog";
+import { EmptyState, PageToolbar, SectionCard } from "@/components/page-shell";
+import { useCreateExpense, useTransactionDialogStore } from "@/components/transaction-dialog";
+import { TransactionRow } from "@/components/transaction-row";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { ComboboxInput } from "@/components/ui/combobox-input";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatDateTimeDisplay } from "@/lib/date-time";
+import { formatBalance } from "@/lib/currency/format";
+import { useAccounts } from "@/lib/finance/accounts";
+import { useDisplayCurrency } from "@/lib/finance/display-currency";
+import type { AmountConverter } from "@/lib/finance/overview";
+import { IMPORTANCE_STYLE } from "@/lib/finance-ui";
 import {
   getDisplayAmountForAccount,
   IMPORTANCE_TIERS,
-  type ImportanceTier,
   TRANSACTION_TYPES,
   type TransactionType,
 } from "@/lib/transactions";
@@ -42,7 +40,7 @@ import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { useDebounceCallback } from "@/lib/use-debounced-callback";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
-import type { UserDb } from "@/user-db/migrations";
+import type { AccountItem, UserDb } from "@/user-db/migrations";
 import { useDbQuery } from "@/user-db/user-db";
 
 const TRANSACTION_SORTS = ["date_desc", "date_asc", "amount_desc", "amount_asc", "title_asc", "title_desc"] as const;
@@ -140,40 +138,6 @@ export const Route = createFileRoute("/_app/finances/transactions")({
   component: TransactionsPage,
   validateSearch: transactionsSearchSchema,
 });
-
-const TYPE_STYLE = {
-  expense: {
-    icon: ArrowDownLeftIcon,
-    dot: "bg-red-500",
-    badge: "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400",
-    accent: "text-red-600 dark:text-red-400",
-  },
-  income: {
-    icon: ArrowUpRightIcon,
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
-    accent: "text-emerald-600 dark:text-emerald-400",
-  },
-  transfer: {
-    icon: ArrowLeftRightIcon,
-    dot: "bg-blue-500",
-    badge: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
-    accent: "text-blue-600 dark:text-blue-400",
-  },
-  adjustment: {
-    icon: SlidersHorizontalIcon,
-    dot: "bg-amber-500",
-    badge: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
-    accent: "text-amber-600 dark:text-amber-400",
-  },
-} satisfies Record<TransactionType, { icon: unknown; dot: string; badge: string; accent: string }>;
-
-const IMPORTANCE_STYLE = {
-  fixed: { label: "Fixed", badge: "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400" },
-  flexible: { label: "Flexible", badge: "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400" },
-  optional: { label: "Optional", badge: "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-400" },
-  investment: { label: "Invest", badge: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400" },
-} satisfies Record<ImportanceTier, { label: string; badge: string }>;
 
 const SORT_LABELS = {
   date_desc: "Newest first",
@@ -297,6 +261,55 @@ function TransactionsTotal({ search, loaded }: { search: TransactionsSearch; loa
   );
 }
 
+/**
+ * The account header for a filtered ledger. Doubles as the account's own card:
+ * clicking it edits the account, so there is no separate accounts page to visit
+ * for that.
+ */
+function SelectedAccountCard({
+  account,
+  baseCurrency,
+  convert,
+}: {
+  account: AccountItem;
+  baseCurrency: string;
+  convert: AmountConverter;
+}) {
+  const openAccountDialog = useAccountDialogStore((state) => state.openEdit);
+  const converted = account.currency === baseCurrency ? null : convert(Number(account.balance), account.currency);
+
+  return (
+    <div className="group flex items-start gap-2 rounded-lg border bg-card shadow-xs">
+      <button
+        type="button"
+        aria-label={`Edit ${account.labelText || "untitled account"}`}
+        onClick={() => openAccountDialog(account.id)}
+        className="min-w-0 flex-1 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/40"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <AccountDot color={account.labelColor} className="size-3" />
+          <span className="truncate font-medium text-sm">{account.labelText || "Untitled account"}</span>
+          <span className="shrink-0 text-muted-foreground text-xs">{account.currency}</span>
+          {/* Always visible: on touch there is no hover to reveal that the card edits. */}
+          <PencilIcon className="size-3 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />
+        </span>
+        <span className="mt-0.5 block font-mono font-semibold text-base tabular-nums">
+          {formatBalance(account.balance, account.currency)}
+        </span>
+        {converted === null ? null : (
+          <span className="block font-mono text-muted-foreground text-xs tabular-nums">
+            ≈ {formatBalance(converted, baseCurrency)}
+          </span>
+        )}
+        {account.description ? (
+          <span className="mt-1 line-clamp-2 block text-muted-foreground text-sm">{account.description}</span>
+        ) : null}
+      </button>
+      <AccountVisibilityToggle account={account} className="mt-2 mr-2" />
+    </div>
+  );
+}
+
 function TransactionsPage() {
   const search = Route.useSearch();
   const sort = search.sort ?? "date_desc";
@@ -305,8 +318,6 @@ function TransactionsPage() {
   const openEdit = useTransactionDialogStore((state) => state.openEdit);
   const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
   const createExpense = useCreateExpense(search.accountId ? { accountId: search.accountId } : undefined);
-  const createIncome = useCreateIncome(search.accountId ? { accountId: search.accountId } : undefined);
-  const createTransfer = useCreateTransfer(search.accountId ? { accountId: search.accountId } : undefined);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -347,8 +358,11 @@ function TransactionsPage() {
     search.to,
   ]);
 
-  const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
+  const accounts = useAccounts();
   const currencyOptions = Array.from(new Set(accounts.map((account) => account.currency))).sort();
+
+  // Same display currency the overview uses, so amounts read alike on both tabs.
+  const { baseCurrency, convert } = useDisplayCurrency();
 
   const { data: categoryRows } = useDbQuery((db) =>
     db
@@ -575,35 +589,9 @@ function TransactionsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex @2xl:flex-row flex-col @2xl:items-start @2xl:justify-between gap-3">
-        <div>
-          <h2 className="font-semibold text-lg">Transactions</h2>
-          <p className="text-muted-foreground text-sm">
-            {selectedAccount
-              ? `Showing ledger activity for ${selectedAccount.labelText || "Untitled account"}.`
-              : "Track expenses, income, transfers, and balance adjustments."}
-          </p>
-        </div>
-
-        <div className="hidden gap-2 md:flex">
-          <Button onClick={createExpense} size="sm" className="@2xl:flex-none flex-1">
-            <ArrowDownLeftIcon className="size-4" />
-            Expense
-          </Button>
-          <Button onClick={createIncome} size="sm" variant="outline" className="@2xl:flex-none flex-1">
-            <ArrowUpRightIcon className="size-4" />
-            Income
-          </Button>
-          <Button onClick={createTransfer} size="sm" variant="outline" className="@2xl:flex-none flex-1">
-            <ArrowLeftRightIcon className="size-4" />
-            Transfer
-          </Button>
-        </div>
-      </div>
-
       <CategoryImportancePrompt />
 
-      <div className="flex flex-wrap items-center gap-2">
+      <PageToolbar>
         <div className="relative min-w-[14rem] flex-1 sm:max-w-sm">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -636,40 +624,37 @@ function TransactionsPage() {
         <span className="hidden h-6 w-px self-center bg-border sm:block" />
 
         {activeFilters.map((key) => (
-          <Popover key={key} open={openFilter === key} onOpenChange={(open) => setOpenFilter(open ? key : null)}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 py-0 pr-1 pl-3 text-blue-700 text-sm transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50"
-              >
-                <span className="max-w-[14rem] truncate">
-                  {filterMeta[key].label}: <span className="font-semibold">{filterMeta[key].value}</span>
-                </span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Clear ${filterMeta[key].label} filter`}
-                  className="flex size-5 items-center justify-center rounded-full hover:bg-blue-200/70 dark:hover:bg-blue-800/70"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    clearFilter(key);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      clearFilter(key);
-                    }
-                  }}
+          // The chip is two sibling buttons — edit and clear — so neither ends up
+          // nested inside the other.
+          <span
+            key={key}
+            className="inline-flex h-8 items-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-sm dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300"
+          >
+            <Popover open={openFilter === key} onOpenChange={(open) => setOpenFilter(open ? key : null)}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Edit ${filterMeta[key].label} filter`}
+                  className="inline-flex h-full max-w-[14rem] items-center rounded-l-full pr-1.5 pl-3 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"
                 >
-                  <XIcon className="size-3.5" />
-                </span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-0">
-              {renderFilterEditor(key)}
-            </PopoverContent>
-          </Popover>
+                  <span className="truncate">
+                    {filterMeta[key].label}: <span className="font-semibold">{filterMeta[key].value}</span>
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto p-0">
+                {renderFilterEditor(key)}
+              </PopoverContent>
+            </Popover>
+            <button
+              type="button"
+              aria-label={`Clear ${filterMeta[key].label} filter`}
+              className="mr-1 flex size-5 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-blue-200/70 dark:hover:bg-blue-800/70"
+              onClick={() => clearFilter(key)}
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          </span>
         ))}
 
         {inactiveFilters.length > 0 ? (
@@ -741,48 +726,24 @@ function TransactionsPage() {
             Clear all
           </button>
         ) : null}
-      </div>
+      </PageToolbar>
 
       {selectedAccount ? (
-        <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 shadow-xs">
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                className="inline-block size-3 shrink-0 rounded-full"
-                style={{ backgroundColor: selectedAccount.labelColor }}
-              />
-              <span className="truncate font-medium text-sm">{selectedAccount.labelText || "Untitled account"}</span>
-              <span className="shrink-0 text-muted-foreground text-xs">{selectedAccount.currency}</span>
-            </div>
-            <p className="mt-0.5 font-mono font-semibold text-base tabular-nums">
-              {formatBalance(selectedAccount.balance, selectedAccount.currency)}
-            </p>
-          </div>
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            className="shrink-0"
-            aria-label="New transaction"
-            onClick={createExpense}
-          >
-            <PlusIcon className="size-4" />
-          </Button>
-        </div>
+        <SelectedAccountCard account={selectedAccount} baseCurrency={baseCurrency} convert={convert} />
       ) : null}
 
       {transactions.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card px-6 py-14 text-center">
-          <Landmark className="size-8 text-muted-foreground" />
-          <div>
-            <p className="font-medium">No transactions match this view.</p>
-            <p className="text-muted-foreground text-sm">Create an entry or relax the current filters.</p>
-          </div>
-          <Button onClick={createExpense} variant="outline">
-            <PlusIcon className="size-4" />
-            New expense
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Landmark className="size-8 text-muted-foreground" />}
+          title="No transactions match this view."
+          description="Create an entry or relax the current filters."
+          action={
+            <Button onClick={createExpense} variant="outline">
+              <PlusIcon className="size-4" />
+              New expense
+            </Button>
+          }
+        />
       ) : (
         <div className="flex flex-col gap-4">
           {dayGroups.map((group) => (
@@ -792,96 +753,36 @@ function TransactionsPage() {
                   {group.label}
                 </div>
               ) : null}
-              <div className="divide-y overflow-hidden rounded-lg border bg-card shadow-xs">
+              <SectionCard bodyClassName="divide-y">
                 {group.transactions.map((transaction) => {
                   const primaryAccount = accountMap.get(transaction.accountId);
                   const secondaryAccount = transaction.counterpartyAccountId
                     ? accountMap.get(transaction.counterpartyAccountId)
                     : undefined;
                   const display = getDisplayAmountForAccount(transaction, search.accountId);
-                  const isTransfer = transaction.type === "transfer";
-                  const typeStyle = TYPE_STYLE[transaction.type as TransactionType] ?? TYPE_STYLE.expense;
-                  const title =
-                    transaction.title ||
-                    (transaction.type === "expense"
-                      ? "Expense"
-                      : transaction.type === "income"
-                        ? "Income"
-                        : transaction.type === "adjustment"
-                          ? "Adjustment"
-                          : "Transfer");
+                  const converted =
+                    display.currency === baseCurrency ? null : convert(display.amount, display.currency);
 
                   return (
-                    <button
+                    <TransactionRow
                       key={transaction.id}
-                      type="button"
+                      variant="detailed"
+                      transaction={transaction}
+                      primaryAccount={primaryAccount}
+                      secondaryAccount={secondaryAccount}
+                      displayAmount={display}
+                      convertedAmount={converted === null ? undefined : { amount: converted, currency: baseCurrency }}
+                      showTransferPair={!search.accountId}
+                      isAttachMode={isContextKeyHeld}
                       onClick={
                         isContextKeyHeld
                           ? getAttachClickHandler({ table: "transaction_entry", id: transaction.id })
                           : () => openEdit(transaction.id)
                       }
-                      className={cn(
-                        "flex w-full @xl:flex-row flex-col @xl:items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40",
-                        isContextKeyHeld && "cursor-copy",
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate font-medium">{title}</span>
-                          {transaction.category ? (
-                            <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
-                              {transaction.category}
-                            </span>
-                          ) : null}
-                          {transaction.importance ? (
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 font-medium text-[11px]",
-                                IMPORTANCE_STYLE[transaction.importance].badge,
-                              )}
-                            >
-                              {IMPORTANCE_STYLE[transaction.importance].label}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
-                          <span>{formatDateTimeDisplay(transaction.effectiveAt)}</span>
-                          <span>
-                            {primaryAccount?.labelText || "Untitled"}
-                            {isTransfer && secondaryAccount
-                              ? ` \u2192 ${secondaryAccount.labelText || "Untitled"}`
-                              : null}
-                          </span>
-                        </div>
-
-                        {transaction.notes ? (
-                          <p className="mt-1 line-clamp-2 text-muted-foreground text-sm">{transaction.notes}</p>
-                        ) : null}
-                      </div>
-
-                      <div className="shrink-0 text-right">
-                        {isTransfer && !search.accountId ? (
-                          <div className="space-y-1">
-                            <p className={cn("font-medium font-mono tabular-nums", typeStyle.accent)}>
-                              {formatBalance(transaction.amount, transaction.accountCurrency)}
-                            </p>
-                            {transaction.counterpartyAmount !== null ? (
-                              <p className="font-mono text-muted-foreground text-sm tabular-nums">
-                                {formatBalance(transaction.counterpartyAmount, transaction.counterpartyCurrency)}
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <p className={cn("font-medium font-mono tabular-nums", typeStyle.accent)}>
-                            {formatBalance(display.amount, display.currency)}
-                          </p>
-                        )}
-                      </div>
-                    </button>
+                    />
                   );
                 })}
-              </div>
+              </SectionCard>
             </div>
           ))}
 

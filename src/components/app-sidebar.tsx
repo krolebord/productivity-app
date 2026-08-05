@@ -1,27 +1,13 @@
-import type { DragEndEvent } from "@dnd-kit/core";
-import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { formatForDisplay } from "@tanstack/hotkeys";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { Link, useMatches, useNavigate, useRouter } from "@tanstack/react-router";
-import type { LucideIcon } from "lucide-react";
+import { Link, useRouter } from "@tanstack/react-router";
 import {
   ArrowDownLeftIcon,
   ArrowLeftRightIcon,
   ArrowUpRightIcon,
-  Bot,
-  Brain,
   CalendarCheck,
   ChartPie,
-  ChevronDown,
   ChevronsUpDown,
-  Coins,
   ListTodoIcon,
   Loader2,
   LogOut,
@@ -30,9 +16,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
-  Plug,
   PlusIcon,
-  Repeat,
   Search,
   Sparkles,
   StickyNote,
@@ -40,17 +24,19 @@ import {
   Wallet,
   Wifi,
   WifiOff,
-  Workflow,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCreateAccount } from "@/components/account-dialog";
 import { useCreateNote } from "@/components/note-dialog";
+import { SidebarNav, useSidebarLocation } from "@/components/sidebar/sidebar-nav";
+import { SidebarPanel, SidebarTooltip } from "@/components/sidebar/sidebar-primitives";
 import { useCreateTask } from "@/components/task-dialog";
 import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/components/transaction-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
 import { type DefaultHome, useDefaultHomeStore } from "@/lib/default-home-store";
+import { TRANSACTION_TYPE_STYLE } from "@/lib/finance-ui";
 import {
   NEW_ACCOUNT_HOTKEY,
   NEW_EXPENSE_HOTKEY,
@@ -61,17 +47,14 @@ import {
   TOGGLE_ASSISTANT_HOTKEY,
   TOGGLE_SIDEBAR_HOTKEY,
 } from "@/lib/hotkeys";
-import { type NoteViewSearch, noteViewSearch, viewMatchesSearch } from "@/lib/note-views";
 import { useSidebarStore } from "@/lib/sidebar-store";
 import { type Theme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
-import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
-import { useDb, useDbQuery, useDbState } from "@/user-db/user-db";
+import { useDb, useDbState } from "@/user-db/user-db";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,13 +69,6 @@ import {
 import { Separator } from "./ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-
-const navItems = [{ to: "/habits", label: "Habits", icon: Repeat }] as const;
-
-const agentNavItems = [
-  { to: "/memories", label: "Memories", icon: Brain },
-  { to: "/skills", label: "Skills", icon: Workflow },
-] as const;
 
 const remoteStateConfig = {
   online: { label: "Online", icon: <Wifi className="size-4" />, className: "text-emerald-500" },
@@ -126,151 +102,6 @@ function RemoteStateIndicator() {
   );
 }
 
-function SidebarTooltip({
-  label,
-  collapsed,
-  children,
-}: {
-  label: string;
-  collapsed: boolean;
-  children: React.ReactNode;
-}) {
-  if (!collapsed) return children;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="right" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-function SidebarNavLink({
-  to,
-  label,
-  icon: Icon,
-  isActive,
-  collapsed,
-  onNavigate,
-}: {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-  isActive: boolean;
-  collapsed: boolean;
-  onNavigate?: () => void;
-}) {
-  return (
-    <SidebarTooltip label={label} collapsed={collapsed}>
-      <Link
-        to={to}
-        onClick={onNavigate}
-        viewTransition
-        className={cn(
-          "flex items-center rounded-md font-medium text-sm transition-colors",
-          collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-          isActive
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-        )}
-      >
-        <Icon className="size-4 shrink-0" />
-        {!collapsed && label}
-      </Link>
-    </SidebarTooltip>
-  );
-}
-
-function TodayNavItem({
-  currentPath,
-  collapsed,
-  onNavigate,
-}: {
-  currentPath: string | undefined;
-  collapsed: boolean;
-  onNavigate?: () => void;
-}) {
-  const isDesktop = useIsDesktop();
-  const activePanel = useAssistantStore((s) => s.activePanel);
-  const togglePanel = useAssistantStore((s) => s.togglePanel);
-
-  if (!isDesktop) {
-    return (
-      <SidebarNavLink
-        to="/today"
-        label="Today"
-        icon={CalendarCheck}
-        isActive={currentPath === "/today"}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
-      />
-    );
-  }
-
-  const open = activePanel === "today";
-  const isActive = open || currentPath === "/today";
-
-  return (
-    <SidebarTooltip label="Today" collapsed={collapsed}>
-      <button
-        type="button"
-        onClick={() => togglePanel("today")}
-        aria-label={open ? "Close today panel" : "Open today panel"}
-        className={cn(
-          "flex items-center rounded-md font-medium text-sm transition-colors",
-          collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
-          isActive
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-        )}
-      >
-        <CalendarCheck className="size-4 shrink-0" />
-        {!collapsed && "Today"}
-      </button>
-    </SidebarTooltip>
-  );
-}
-
-function AssistantToggle({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
-  const activePanel = useAssistantStore((s) => s.activePanel);
-  const togglePanel = useAssistantStore((s) => s.togglePanel);
-  const assistantEnabled = useAssistantEnabled();
-  const open = activePanel === "assistant";
-
-  if (!assistantEnabled) {
-    return null;
-  }
-
-  return (
-    <SidebarTooltip label={`Assistant (${formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)})`} collapsed={collapsed}>
-      <Button
-        type="button"
-        variant="ghost"
-        size={collapsed ? "icon" : "sm"}
-        className={cn(!collapsed && "w-full justify-start gap-2", open && "text-primary")}
-        onClick={() => {
-          togglePanel("assistant");
-          onNavigate?.();
-        }}
-        aria-label={open ? "Close assistant" : "Open assistant"}
-        aria-keyshortcuts={TOGGLE_ASSISTANT_HOTKEY}
-      >
-        <Sparkles className="size-4" />
-        {!collapsed && (
-          <>
-            <span className="flex-1 text-left">Assistant</span>
-            <kbd className="pointer-events-none hidden rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground md:inline">
-              {formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)}
-            </kbd>
-          </>
-        )}
-      </Button>
-    </SidebarTooltip>
-  );
-}
-
 function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
   const openCommand = useCommandStore((s) => s.open);
   const createNote = useCreateNote();
@@ -292,17 +123,17 @@ function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
         New task
       </DropdownMenuItem>
       <DropdownMenuItem onClick={createExpense}>
-        <ArrowDownLeftIcon className="size-4 text-red-500" />
+        <ArrowDownLeftIcon className={cn("size-4", TRANSACTION_TYPE_STYLE.expense.accent)} />
         New expense
         <DropdownMenuShortcut>{formatForDisplay(NEW_EXPENSE_HOTKEY)}</DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem onClick={createIncome}>
-        <ArrowUpRightIcon className="size-4 text-emerald-500" />
+        <ArrowUpRightIcon className={cn("size-4", TRANSACTION_TYPE_STYLE.income.accent)} />
         New income
         <DropdownMenuShortcut>{formatForDisplay(NEW_INCOME_HOTKEY)}</DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem onClick={createTransfer}>
-        <ArrowLeftRightIcon className="size-4 text-blue-500" />
+        <ArrowLeftRightIcon className={cn("size-4", TRANSACTION_TYPE_STYLE.transfer.accent)} />
         New transfer
         <DropdownMenuShortcut>{formatForDisplay(NEW_TRANSFER_HOTKEY)}</DropdownMenuShortcut>
       </DropdownMenuItem>
@@ -375,6 +206,137 @@ function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+/**
+ * Today and the assistant are overlay panels, not destinations, so they sit
+ * together above the nav list instead of being split between it and the footer.
+ * On mobile there is no room for a side panel, so Today is a page there.
+ */
+function SidebarPanelRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
+  const isDesktop = useIsDesktop();
+  const location = useSidebarLocation();
+  const activePanel = useAssistantStore((s) => s.activePanel);
+  const togglePanel = useAssistantStore((s) => s.togglePanel);
+  const assistantEnabled = useAssistantEnabled();
+
+  return (
+    <div className={cn("flex gap-1 px-2 pb-2", collapsed ? "flex-col items-center" : "flex-row")}>
+      {isDesktop ? (
+        <SidebarPanel
+          icon={CalendarCheck}
+          label="Today"
+          isOpen={activePanel === "today" || location.isPath("/today")}
+          collapsed={collapsed}
+          onToggle={() => togglePanel("today")}
+        />
+      ) : (
+        <SidebarPanel
+          icon={CalendarCheck}
+          label="Today"
+          isOpen={location.isPath("/today")}
+          collapsed={collapsed}
+          target={{ to: "/today" }}
+          onNavigate={onNavigate}
+        />
+      )}
+      {assistantEnabled && (
+        <SidebarPanel
+          icon={Sparkles}
+          label="Assistant"
+          isOpen={activePanel === "assistant"}
+          collapsed={collapsed}
+          hotkey={TOGGLE_ASSISTANT_HOTKEY}
+          onToggle={() => {
+            togglePanel("assistant");
+            onNavigate?.();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SidebarUserMenu({ collapsed }: { collapsed: boolean }) {
+  const auth = useAuth();
+  const logout = useSignOut();
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const defaultHome = useDefaultHomeStore((s) => s.defaultHome);
+  const setDefaultHome = useDefaultHomeStore((s) => s.setDefaultHome);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex items-center rounded-md transition-colors hover:bg-sidebar-accent",
+            collapsed ? "justify-center p-2" : "w-full gap-2 p-3 text-left",
+          )}
+        >
+          <Avatar className="size-8 shrink-0">
+            <AvatarFallback className="text-xs">{auth.userName.slice(0, 2)}</AvatarFallback>
+          </Avatar>
+          {!collapsed && (
+            <>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate font-medium text-sm">{auth.userName}</span>
+                <span className="truncate text-muted-foreground text-xs">{auth.userEmail}</span>
+              </div>
+              <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/50" />
+            </>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side={collapsed ? "right" : "top"} align="start" className="w-56">
+        <DropdownMenuLabel className="font-normal">
+          <div className="flex items-center gap-2">
+            <Avatar className="size-8">
+              <AvatarFallback className="text-xs">{auth.userName.slice(0, 2)}</AvatarFallback>
+            </Avatar>
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate font-medium text-sm">{auth.userName}</span>
+              <span className="truncate text-muted-foreground text-xs">{auth.userEmail}</span>
+            </div>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-muted-foreground text-xs">Default home</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={defaultHome} onValueChange={(value) => setDefaultHome(value as DefaultHome)}>
+          <DropdownMenuRadioItem value="finances">
+            <ChartPie className="size-4" />
+            Finances
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="today">
+            <CalendarCheck className="size-4" />
+            Today
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-muted-foreground text-xs">Theme</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>
+          <DropdownMenuRadioItem value="light">
+            <Sun className="size-4" />
+            Light
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">
+            <Moon className="size-4" />
+            Dark
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">
+            <Monitor className="size-4" />
+            System
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={logout} disabled={logout.isPending}>
+          <LogOut className="size-4" />
+          Logout
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function SidebarContent({
   collapsed = false,
   onToggleCollapse,
@@ -384,15 +346,6 @@ function SidebarContent({
   onToggleCollapse?: () => void;
   onNavigate?: () => void;
 }) {
-  const auth = useAuth();
-  const logout = useSignOut();
-  const matches = useMatches();
-  const currentPath = matches[matches.length - 1]?.fullPath;
-  const theme = useThemeStore((s) => s.theme);
-  const setTheme = useThemeStore((s) => s.setTheme);
-  const defaultHome = useDefaultHomeStore((s) => s.defaultHome);
-  const setDefaultHome = useDefaultHomeStore((s) => s.setDefaultHome);
-
   return (
     <>
       <div className={cn("flex items-center", collapsed ? "flex-col gap-1 px-2 py-3" : "h-14 justify-between px-4")}>
@@ -415,516 +368,51 @@ function SidebarContent({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <SidebarActionRow collapsed={collapsed} />
+        <SidebarPanelRow collapsed={collapsed} onNavigate={onNavigate} />
 
-        <nav className="flex flex-col gap-1 p-2">
-          <SidebarNavLink
-            to="/finances"
-            label="Finances"
-            icon={ChartPie}
-            isActive={currentPath?.startsWith("/finances") ?? false}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
-          <TodayNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
-          <NotesNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
-          {navItems.map((item) => (
-            <SidebarNavLink
-              key={item.to}
-              to={item.to}
-              label={item.label}
-              icon={item.icon}
-              isActive={currentPath === item.to}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-            />
-          ))}
-          <AccountsNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
-          <SidebarNavLink
-            to="/currencies"
-            label="Currencies"
-            icon={Coins}
-            isActive={currentPath === "/currencies"}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
-          <SidebarNavLink
-            to="/integrations"
-            label="Integrations"
-            icon={Plug}
-            isActive={currentPath === "/integrations"}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
-          <AgentsNavItem currentPath={currentPath} collapsed={collapsed} onNavigate={onNavigate} />
-        </nav>
+        <Separator />
+
+        <SidebarNav collapsed={collapsed} onNavigate={onNavigate} />
       </div>
 
-      <Separator />
-
-      <div className={cn("flex p-2", collapsed ? "flex-col items-center gap-1" : "flex-col gap-1")}>
-        <AssistantToggle collapsed={collapsed} onNavigate={onNavigate} />
-        {onToggleCollapse && (
-          <SidebarTooltip
-            label={
-              collapsed
-                ? `Expand sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
-                : `Collapse sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
-            }
-            collapsed={collapsed}
-          >
-            <Button
-              type="button"
-              variant="ghost"
-              size={collapsed ? "icon" : "sm"}
-              className={cn(!collapsed && "w-full justify-start gap-2")}
-              onClick={onToggleCollapse}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-keyshortcuts={TOGGLE_SIDEBAR_HOTKEY}
-            >
-              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-              {!collapsed && (
-                <>
-                  <span className="flex-1 text-left">Collapse</span>
-                  <kbd className="pointer-events-none hidden rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground md:inline">
-                    {formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)}
-                  </kbd>
-                </>
-              )}
-            </Button>
-          </SidebarTooltip>
-        )}
-      </div>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              "flex items-center rounded-md transition-colors hover:bg-sidebar-accent",
-              collapsed ? "justify-center p-2" : "w-full gap-2 p-3 text-left",
-            )}
-          >
-            <Avatar className="size-8 shrink-0">
-              <AvatarFallback className="text-xs">{auth.userName.slice(0, 2)}</AvatarFallback>
-            </Avatar>
-            {!collapsed && (
-              <>
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate font-medium text-sm">{auth.userName}</span>
-                  <span className="truncate text-muted-foreground text-xs">{auth.userEmail}</span>
-                </div>
-                <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/50" />
-              </>
-            )}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side={collapsed ? "right" : "top"} align="start" className="w-56">
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex items-center gap-2">
-              <Avatar className="size-8">
-                <AvatarFallback className="text-xs">{auth.userName.slice(0, 2)}</AvatarFallback>
-              </Avatar>
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate font-medium text-sm">{auth.userName}</span>
-                <span className="truncate text-muted-foreground text-xs">{auth.userEmail}</span>
-              </div>
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-muted-foreground text-xs">Default home</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={defaultHome} onValueChange={(value) => setDefaultHome(value as DefaultHome)}>
-            <DropdownMenuRadioItem value="finances">
-              <ChartPie className="size-4" />
-              Finances
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="today">
-              <CalendarCheck className="size-4" />
-              Today
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-muted-foreground text-xs">Theme</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>
-            <DropdownMenuRadioItem value="light">
-              <Sun className="size-4" />
-              Light
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="dark">
-              <Moon className="size-4" />
-              Dark
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="system">
-              <Monitor className="size-4" />
-              System
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={logout} disabled={logout.isPending}>
-            <LogOut className="size-4" />
-            Logout
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
-  );
-}
-
-function formatCompactBalance(balance: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      currencyDisplay: "narrowSymbol",
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(balance);
-  } catch {
-    return `${currency} ${balance.toFixed(0)}`;
-  }
-}
-
-type AccountRow = {
-  id: string;
-  labelColor: string;
-  labelText: string;
-  balance: number;
-  currency: string;
-  order: number;
-};
-
-function SortableAccountRow({
-  account,
-  isActive,
-  onNavigate,
-}: {
-  account: AccountRow;
-  isActive: boolean;
-  onNavigate?: () => void;
-}) {
-  const sortable = useSortable({ id: account.id, data: { order: account.order } });
-  const navigate = useNavigate();
-  const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
-  const attachRef = { table: "account", id: account.id } as const;
-
-  return (
-    <button
-      type="button"
-      ref={sortable.setNodeRef}
-      style={{
-        transform: CSS.Translate.toString(sortable.transform),
-        transition: sortable.transition,
-      }}
-      {...sortable.attributes}
-      {...sortable.listeners}
-      onClick={
-        isContextKeyHeld
-          ? getAttachClickHandler(attachRef)
-          : () => {
-              if (!sortable.isDragging) {
-                navigate({ to: "/finances/transactions", search: { accountId: account.id }, viewTransition: true });
-                onNavigate?.();
+      {onToggleCollapse && (
+        <>
+          <Separator />
+          <div className={cn("flex p-2", collapsed ? "flex-col items-center" : "flex-col")}>
+            <SidebarTooltip
+              label={
+                collapsed
+                  ? `Expand sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
+                  : `Collapse sidebar (${formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)})`
               }
-            }
-      }
-      className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-        isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70",
-        sortable.isDragging && "opacity-50",
-        isContextKeyHeld && "cursor-copy",
-      )}
-    >
-      <span className="inline-block size-2.5 shrink-0 rounded-full" style={{ backgroundColor: account.labelColor }} />
-      <span className="flex-1 truncate text-left">{account.labelText || "Untitled"}</span>
-      <span className="font-mono text-muted-foreground text-xs tabular-nums">
-        {formatCompactBalance(account.balance, account.currency)}
-      </span>
-    </button>
-  );
-}
-
-function AccountsNavItem({
-  currentPath,
-  collapsed,
-  onNavigate,
-}: {
-  currentPath: string | undefined;
-  collapsed: boolean;
-  onNavigate?: () => void;
-}) {
-  const db = useDb();
-  const { data: accounts } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
-
-  const groupOpen = useSidebarStore((s) => s.groups.accounts);
-  const setGroupOpen = useSidebarStore((s) => s.setGroupOpen);
-
-  const matches = useMatches();
-  const lastMatch = matches[matches.length - 1];
-  const activeAccountId =
-    lastMatch?.fullPath === "/finances/transactions"
-      ? (lastMatch.search as { accountId?: string }).accountId
-      : undefined;
-
-  const isAccountsPageActive = currentPath === "/accounts";
-  const isActive = isAccountsPageActive;
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldOrder = over.data.current?.order;
-    const newOrder = active.data.current?.order;
-    if (oldOrder === undefined || newOrder === undefined) return;
-
-    db.db.executeTransaction((trx) => {
-      trx.executeKysely((q) =>
-        q
-          .updateTable("account")
-          .set({ order: oldOrder })
-          .where("id", "=", active.id as string),
-      );
-      trx.executeKysely((q) =>
-        q
-          .updateTable("account")
-          .set({ order: newOrder })
-          .where("id", "=", over.id as string),
-      );
-    });
-  }
-
-  if (collapsed) {
-    return (
-      <SidebarNavLink
-        to="/accounts"
-        label="Accounts"
-        icon={Wallet}
-        isActive={isActive}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
-      />
-    );
-  }
-
-  return (
-    <Collapsible open={groupOpen ?? accounts.length > 0} onOpenChange={(open) => setGroupOpen("accounts", open)}>
-      <div
-        className={cn(
-          "flex items-center gap-2 rounded-md font-medium text-sm transition-colors",
-          isActive
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-        )}
-      >
-        <Link to="/accounts" viewTransition onClick={onNavigate} className="flex flex-1 items-center gap-2 px-3 py-2">
-          <Wallet className="size-4 shrink-0" />
-          Accounts
-        </Link>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
-            aria-label="Toggle accounts list"
-          >
-            <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
-          </button>
-        </CollapsibleTrigger>
-      </div>
-      <CollapsibleContent>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={accounts.map((a) => a.id)} strategy={verticalListSortingStrategy}>
-            <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-sidebar-border/50 border-l pl-3">
-              {accounts.map((account) => (
-                <SortableAccountRow
-                  key={account.id}
-                  account={account}
-                  isActive={activeAccountId === account.id}
-                  onNavigate={onNavigate}
-                />
-              ))}
-              <Link
-                to="/accounts"
-                viewTransition
-                onClick={onNavigate}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-                  isAccountsPageActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70",
-                )}
+              collapsed={collapsed}
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size={collapsed ? "icon" : "sm"}
+                className={cn(!collapsed && "w-full justify-start gap-2")}
+                onClick={onToggleCollapse}
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-keyshortcuts={TOGGLE_SIDEBAR_HOTKEY}
               >
-                <span className="flex-1 truncate text-left">All accounts</span>
-              </Link>
-            </div>
-          </SortableContext>
-        </DndContext>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
+                {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+                {!collapsed && (
+                  <>
+                    <span className="flex-1 text-left">Collapse</span>
+                    <kbd className="pointer-events-none hidden rounded border bg-background px-1.5 font-mono text-[10px] text-muted-foreground md:inline">
+                      {formatForDisplay(TOGGLE_SIDEBAR_HOTKEY)}
+                    </kbd>
+                  </>
+                )}
+              </Button>
+            </SidebarTooltip>
+          </div>
+        </>
+      )}
 
-function NotesNavItem({
-  currentPath,
-  collapsed,
-  onNavigate,
-}: {
-  currentPath: string | undefined;
-  collapsed: boolean;
-  onNavigate?: () => void;
-}) {
-  const { data: views } = useDbQuery((db) =>
-    db.selectFrom("note_view").selectAll().orderBy("order", "asc").orderBy("createdAt", "asc"),
-  );
-
-  const groupOpen = useSidebarStore((s) => s.groups.notes);
-  const setGroupOpen = useSidebarStore((s) => s.setGroupOpen);
-
-  const matches = useMatches();
-  const lastMatch = matches[matches.length - 1];
-  const notesSearch = lastMatch?.fullPath === "/notes" ? (lastMatch.search as NoteViewSearch) : undefined;
-
-  const isActive = currentPath === "/notes";
-
-  if (collapsed || views.length === 0) {
-    return (
-      <SidebarNavLink
-        to="/notes"
-        label="Notes"
-        icon={StickyNote}
-        isActive={isActive}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
-      />
-    );
-  }
-
-  const activeViewId = notesSearch ? views.find((view) => viewMatchesSearch(view, notesSearch))?.id : undefined;
-
-  return (
-    <Collapsible open={groupOpen ?? true} onOpenChange={(open) => setGroupOpen("notes", open)}>
-      <div
-        className={cn(
-          "flex items-center gap-2 rounded-md font-medium text-sm transition-colors",
-          isActive
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-        )}
-      >
-        <Link to="/notes" viewTransition onClick={onNavigate} className="flex flex-1 items-center gap-2 px-3 py-2">
-          <StickyNote className="size-4 shrink-0" />
-          Notes
-        </Link>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
-            aria-label="Toggle notes views"
-          >
-            <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
-          </button>
-        </CollapsibleTrigger>
-      </div>
-      <CollapsibleContent>
-        <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-sidebar-border/50 border-l pl-3">
-          {views.map((view) => (
-            <Link
-              key={view.id}
-              to="/notes"
-              search={noteViewSearch(view)}
-              viewTransition
-              onClick={onNavigate}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-                activeViewId === view.id
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70",
-              )}
-            >
-              <span className="flex-1 truncate text-left">{view.name || "Untitled"}</span>
-            </Link>
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-function AgentsNavItem({
-  currentPath,
-  collapsed,
-  onNavigate,
-}: {
-  currentPath: string | undefined;
-  collapsed: boolean;
-  onNavigate?: () => void;
-}) {
-  const isActive = currentPath === "/agents" || agentNavItems.some((item) => currentPath === item.to);
-
-  const groupOpen = useSidebarStore((s) => s.groups.agents);
-  const setGroupOpen = useSidebarStore((s) => s.setGroupOpen);
-
-  if (collapsed) {
-    return (
-      <SidebarNavLink
-        to="/agents"
-        label="Agents"
-        icon={Bot}
-        isActive={isActive}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
-      />
-    );
-  }
-
-  return (
-    <Collapsible open={groupOpen ?? true} onOpenChange={(open) => setGroupOpen("agents", open)}>
-      <div
-        className={cn(
-          "flex items-center gap-2 rounded-md font-medium text-sm transition-colors",
-          isActive
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-        )}
-      >
-        <Link to="/agents" viewTransition onClick={onNavigate} className="flex flex-1 items-center gap-2 px-3 py-2">
-          <Bot className="size-4 shrink-0" />
-          Agents
-        </Link>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
-            aria-label="Toggle agents list"
-          >
-            <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
-          </button>
-        </CollapsibleTrigger>
-      </div>
-      <CollapsibleContent>
-        <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-sidebar-border/50 border-l pl-3">
-          {agentNavItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              viewTransition
-              onClick={onNavigate}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-                currentPath === item.to
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70",
-              )}
-            >
-              <item.icon className="size-3.5 shrink-0" />
-              <span className="flex-1 truncate text-left">{item.label}</span>
-            </Link>
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+      <SidebarUserMenu collapsed={collapsed} />
+    </>
   );
 }
 

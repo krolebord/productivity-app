@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
-import { formatBalance } from "@/components/account-card";
 import { ImportanceBadge, ImportanceSelector } from "@/components/importance-selector";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { formatBalance } from "@/lib/currency/format";
 import { formatDateTimeDisplay } from "@/lib/date-time";
 import {
   changeCategoryImportanceDefault,

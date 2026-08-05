@@ -26,6 +26,8 @@ import { Route as AppAgentsRouteImport } from './routes/_app/agents'
 import { Route as AppAccountsRouteImport } from './routes/_app/accounts'
 import { Route as AppFinancesIndexRouteImport } from './routes/_app/finances.index'
 import { Route as AppFinancesTransactionsRouteImport } from './routes/_app/finances.transactions'
+import { Route as AppFinancesRatesRouteImport } from './routes/_app/finances.rates'
+import { Route as AppFinancesAccountsRouteImport } from './routes/_app/finances.accounts'
 
 const AuthRouteRoute = AuthRouteRouteImport.update({
   id: '/_auth',
@@ -110,6 +112,16 @@ const AppFinancesTransactionsRoute = AppFinancesTransactionsRouteImport.update({
   path: '/transactions',
   getParentRoute: () => AppFinancesRoute,
 } as any)
+const AppFinancesRatesRoute = AppFinancesRatesRouteImport.update({
+  id: '/rates',
+  path: '/rates',
+  getParentRoute: () => AppFinancesRoute,
+} as any)
+const AppFinancesAccountsRoute = AppFinancesAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
+  getParentRoute: () => AppFinancesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -125,6 +137,8 @@ export interface FileRoutesByFullPath {
   '/today': typeof AppTodayRoute
   '/magic-link-verify': typeof AuthMagicLinkVerifyRoute
   '/sign-in': typeof AuthSignInRoute
+  '/finances/accounts': typeof AppFinancesAccountsRoute
+  '/finances/rates': typeof AppFinancesRatesRoute
   '/finances/transactions': typeof AppFinancesTransactionsRoute
   '/finances/': typeof AppFinancesIndexRoute
 }
@@ -141,6 +155,8 @@ export interface FileRoutesByTo {
   '/today': typeof AppTodayRoute
   '/magic-link-verify': typeof AuthMagicLinkVerifyRoute
   '/sign-in': typeof AuthSignInRoute
+  '/finances/accounts': typeof AppFinancesAccountsRoute
+  '/finances/rates': typeof AppFinancesRatesRoute
   '/finances/transactions': typeof AppFinancesTransactionsRoute
   '/finances': typeof AppFinancesIndexRoute
 }
@@ -161,6 +177,8 @@ export interface FileRoutesById {
   '/_auth/magic-link-verify': typeof AuthMagicLinkVerifyRoute
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/finances/accounts': typeof AppFinancesAccountsRoute
+  '/_app/finances/rates': typeof AppFinancesRatesRoute
   '/_app/finances/transactions': typeof AppFinancesTransactionsRoute
   '/_app/finances/': typeof AppFinancesIndexRoute
 }
@@ -180,6 +198,8 @@ export interface FileRouteTypes {
     | '/today'
     | '/magic-link-verify'
     | '/sign-in'
+    | '/finances/accounts'
+    | '/finances/rates'
     | '/finances/transactions'
     | '/finances/'
   fileRoutesByTo: FileRoutesByTo
@@ -196,6 +216,8 @@ export interface FileRouteTypes {
     | '/today'
     | '/magic-link-verify'
     | '/sign-in'
+    | '/finances/accounts'
+    | '/finances/rates'
     | '/finances/transactions'
     | '/finances'
   id:
@@ -215,6 +237,8 @@ export interface FileRouteTypes {
     | '/_auth/magic-link-verify'
     | '/_auth/sign-in'
     | '/_app/'
+    | '/_app/finances/accounts'
+    | '/_app/finances/rates'
     | '/_app/finances/transactions'
     | '/_app/finances/'
   fileRoutesById: FileRoutesById
@@ -345,15 +369,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFinancesTransactionsRouteImport
       parentRoute: typeof AppFinancesRoute
     }
+    '/_app/finances/rates': {
+      id: '/_app/finances/rates'
+      path: '/rates'
+      fullPath: '/finances/rates'
+      preLoaderRoute: typeof AppFinancesRatesRouteImport
+      parentRoute: typeof AppFinancesRoute
+    }
+    '/_app/finances/accounts': {
+      id: '/_app/finances/accounts'
+      path: '/accounts'
+      fullPath: '/finances/accounts'
+      preLoaderRoute: typeof AppFinancesAccountsRouteImport
+      parentRoute: typeof AppFinancesRoute
+    }
   }
 }
 
 interface AppFinancesRouteChildren {
+  AppFinancesAccountsRoute: typeof AppFinancesAccountsRoute
+  AppFinancesRatesRoute: typeof AppFinancesRatesRoute
   AppFinancesTransactionsRoute: typeof AppFinancesTransactionsRoute
   AppFinancesIndexRoute: typeof AppFinancesIndexRoute
 }
 
 const AppFinancesRouteChildren: AppFinancesRouteChildren = {
+  AppFinancesAccountsRoute: AppFinancesAccountsRoute,
+  AppFinancesRatesRoute: AppFinancesRatesRoute,
   AppFinancesTransactionsRoute: AppFinancesTransactionsRoute,
   AppFinancesIndexRoute: AppFinancesIndexRoute,
 }

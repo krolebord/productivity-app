@@ -1,15 +1,10 @@
 import { useStore } from "@tanstack/react-form";
-import {
-  ArrowDownLeftIcon,
-  ArrowLeftRightIcon,
-  ArrowUpRightIcon,
-  SlidersHorizontalIcon,
-  Trash2Icon,
-} from "lucide-react";
+import { ArrowLeftRightIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { formatDateTimeLocal, parseDateTimeLocal } from "@/lib/date-time";
+import { TRANSACTION_TYPE_STYLE } from "@/lib/finance-ui";
 import { createDynamicValidationLogic, dynamicZodValidators } from "@/lib/form-schemas";
 import {
   createTransaction,
@@ -96,33 +91,6 @@ export function useCreateIncome(defaults?: Omit<TransactionDialogDraft, "type">)
 export function useCreateTransfer(defaults?: Omit<TransactionDialogDraft, "type">) {
   return useOpenTransaction({ ...defaults, type: "transfer" });
 }
-
-const TYPE_CONFIG = {
-  expense: {
-    icon: ArrowDownLeftIcon,
-    label: "Expense",
-    activeClass: "bg-background text-red-600 shadow-sm dark:bg-input/50 dark:text-red-400",
-    dotColor: "bg-red-500",
-  },
-  income: {
-    icon: ArrowUpRightIcon,
-    label: "Income",
-    activeClass: "bg-background text-emerald-600 shadow-sm dark:bg-input/50 dark:text-emerald-400",
-    dotColor: "bg-emerald-500",
-  },
-  transfer: {
-    icon: ArrowLeftRightIcon,
-    label: "Transfer",
-    activeClass: "bg-background text-blue-600 shadow-sm dark:bg-input/50 dark:text-blue-400",
-    dotColor: "bg-blue-500",
-  },
-  adjustment: {
-    icon: SlidersHorizontalIcon,
-    label: "Adjust",
-    activeClass: "bg-background text-amber-600 shadow-sm dark:bg-input/50 dark:text-amber-400",
-    dotColor: "bg-amber-500",
-  },
-};
 
 const DEFAULT_IMPORTANCE: ImportanceTier = "flexible";
 
@@ -350,12 +318,12 @@ function TransactionDialogContent() {
     form.setFieldValue("counterpartyAmount", amount);
   }
 
-  const typeConfig = TYPE_CONFIG[currentType];
+  const typeStyle = TRANSACTION_TYPE_STYLE[currentType];
 
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={cn("size-2 shrink-0 rounded-full transition-colors", typeConfig.dotColor)} />
+        <span className={cn("size-2 shrink-0 rounded-full transition-colors", typeStyle.dot)} />
         <DialogTitle>{getDialogTitle(mode, currentType)}</DialogTitle>
       </div>
       <DialogDescription className="sr-only">Create or edit a balance-affecting transaction.</DialogDescription>
@@ -387,8 +355,8 @@ function TransactionDialogContent() {
               <field.FormItem>
                 <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted/50 p-1">
                   {TRANSACTION_TYPES.map((type) => {
-                    const config = TYPE_CONFIG[type];
-                    const Icon = config.icon;
+                    const style = TRANSACTION_TYPE_STYLE[type];
+                    const Icon = style.icon;
                     const isActive = field.state.value === type;
                     return (
                       <button
@@ -398,12 +366,12 @@ function TransactionDialogContent() {
                         className={cn(
                           "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 font-medium text-sm transition-all",
                           isActive
-                            ? config.activeClass
+                            ? style.activeClass
                             : "text-muted-foreground hover:bg-background/50 hover:text-foreground",
                         )}
                       >
                         <Icon className="size-3.5 shrink-0" />
-                        <span className="hidden sm:inline">{config.label}</span>
+                        <span className="hidden sm:inline">{style.shortLabel}</span>
                       </button>
                     );
                   })}
