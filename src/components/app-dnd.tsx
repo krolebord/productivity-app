@@ -1,9 +1,17 @@
 import type { CollisionDetection, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
-import { closestCenter, DndContext, PointerSensor, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
+import {
+  closestCenter,
+  DndContext,
+  MeasuringStrategy,
+  PointerSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { format } from "date-fns";
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { parseDateKey } from "@/lib/agenda";
-import { calendarDayFromDroppableId } from "@/lib/app-dnd";
+import { dayDropDateKey, INBOX_DROP_ID, isDropZoneId } from "@/lib/app-dnd";
 import { combineLocalDateAndTime, localMidnightMs } from "@/lib/date-time";
 import { useDb } from "@/user-db/user-db";
 
@@ -24,6 +32,15 @@ type DndDelegateRegistry = {
 };
 
 const DndDelegateContext = createContext<DndDelegateRegistry | null>(null);
+
+export type ActiveDrag = { id: string; kind: string | undefined };
+
+const ActiveDragContext = createContext<ActiveDrag | null>(null);
+
+/** The item currently being dragged anywhere in the app, or null. Lets pages reveal drop zones mid-drag. */
+export function useActiveDrag(): ActiveDrag | null {
+  return useContext(ActiveDragContext);
+}
 
 function activeKind(event: {
   active: { data: { current?: Record<string, unknown> | undefined } };
@@ -70,20 +87,17 @@ export function AppDndProvider({ children }: { children: ReactNode }) {
     get: (kind) => (kind ? (delegatesRef.current.get(kind) ?? null) : null),
   }).current;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
 
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
-      const calendarDays = args.droppableContainers.filter(
-        (container) => calendarDayFromDroppableId(String(container.id)) != null,
-      );
-      if (calendarDays.length > 0) {
-        const hits = pointerWithin({ ...args, droppableContainers: calendarDays });
+      const zones = args.droppableContainers.filter((container) => isDropZoneId(String(container.id)));
+      if (zones.length > 0) {
+        const hits = pointerWithin({ ...args, droppableContainers: zones });
         if (hits.length > 0) return hits;
       }
 
-      const rest = args.droppableContainers.filter(
-        (container) => calendarDayFromDroppableId(String(container.id)) == null,
-      );
+      const rest = args.droppableContainers.filter((container) => !isDropZoneId(String(container.id)));
       const restArgs = { ...args, droppableContainers: rest };
       const kind = typeof args.active.data.current?.kind === "string" ? args.active.data.current.kind : undefined;
       const delegate = registry.get(kind);
@@ -122,29 +136,75 @@ export function AppDndProvider({ children }: { children: ReactNode }) {
     [db],
   );
 
+  /** Unschedules an item into the inbox; a dropped note becomes an undated task. */
+  const moveItemToInbox = useCallback(
+    (itemId: string) => {
+      db.db.executeTransaction((trx) => {
+        const [maxOrderRow] = trx.executeKysely((q) =>
+          q
+            .selectFrom("item")
+            .select((eb) => eb.fn.max("order").as("maxOrder"))
+            .where("type", "=", "task"),
+        ).rows;
+        trx.executeKysely((q) =>
+          q
+            .updateTable("item")
+            .set({
+              type: "task",
+              dueAt: null,
+              hasDueTime: false,
+              completedAt: null,
+              order: Number(maxOrderRow?.maxOrder ?? 0) + 1,
+            })
+            .where("id", "=", itemId),
+        );
+      });
+    },
+    [db],
+  );
+
   return (
     <DndDelegateContext.Provider value={registry}>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={collisionDetection}
-        onDragStart={(event) => registry.get(activeKind(event))?.onDragStart(event)}
-        onDragMove={(event) => registry.get(activeKind(event))?.onDragMove?.(event)}
-        onDragOver={(event) => registry.get(activeKind(event))?.onDragOver(event)}
-        onDragEnd={(event) => {
-          const overId = event.over ? String(event.over.id) : null;
-          const dateKey = overId ? calendarDayFromDroppableId(overId) : null;
-          const kind = activeKind(event);
-          if (dateKey && (kind === "task" || kind === "note")) {
-            scheduleItemOnDay(String(event.active.id), dateKey);
-            registry.get(kind)?.onDragCancel();
-            return;
-          }
-          registry.get(kind)?.onDragEnd(event);
-        }}
-        onDragCancel={(event) => registry.get(activeKind(event))?.onDragCancel()}
-      >
-        {children}
-      </DndContext>
+      <ActiveDragContext.Provider value={activeDrag}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          // The inbox drop target is only enabled once a drag starts, so containers
+          // must be re-measured after that first render rather than only on drag start.
+          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+          onDragStart={(event) => {
+            setActiveDrag({ id: String(event.active.id), kind: activeKind(event) });
+            registry.get(activeKind(event))?.onDragStart(event);
+          }}
+          onDragMove={(event) => registry.get(activeKind(event))?.onDragMove?.(event)}
+          onDragOver={(event) => registry.get(activeKind(event))?.onDragOver(event)}
+          onDragEnd={(event) => {
+            setActiveDrag(null);
+            const overId = event.over ? String(event.over.id) : null;
+            const kind = activeKind(event);
+            if (overId && (kind === "task" || kind === "note")) {
+              const dateKey = dayDropDateKey(overId);
+              if (dateKey) {
+                scheduleItemOnDay(String(event.active.id), dateKey);
+                registry.get(kind)?.onDragCancel();
+                return;
+              }
+              if (overId === INBOX_DROP_ID) {
+                moveItemToInbox(String(event.active.id));
+                registry.get(kind)?.onDragCancel();
+                return;
+              }
+            }
+            registry.get(kind)?.onDragEnd(event);
+          }}
+          onDragCancel={(event) => {
+            setActiveDrag(null);
+            registry.get(activeKind(event))?.onDragCancel();
+          }}
+        >
+          {children}
+        </DndContext>
+      </ActiveDragContext.Provider>
     </DndDelegateContext.Provider>
   );
 }

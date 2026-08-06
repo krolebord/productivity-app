@@ -1,7 +1,7 @@
 import { generateId } from "@sqlite-sync/core";
 import { addMonths, endOfMonth } from "date-fns";
 import { useCallback, useMemo, useState } from "react";
-import { parseScheduleWeekdays } from "@/components/habit-dialog";
+import { parseScheduleMonthDays, parseScheduleWeekdays } from "@/components/habit-dialog";
 import {
   type AgendaHabit,
   type AgendaSection,
@@ -54,7 +54,10 @@ export function useAgenda() {
   const { data: habitsRaw } = useDbQuery((q) => q.selectFrom("habit").selectAll().orderBy("order", "asc"));
 
   const habits: AgendaHabit[] = useMemo(
-    () => habitsRaw.map((h) => toAgendaHabit(h, parseScheduleWeekdays(h.scheduleWeekdays))),
+    () =>
+      habitsRaw.map((h) =>
+        toAgendaHabit(h, parseScheduleWeekdays(h.scheduleWeekdays), parseScheduleMonthDays(h.scheduleMonthDays)),
+      ),
     [habitsRaw],
   );
 

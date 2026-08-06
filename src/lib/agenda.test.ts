@@ -13,6 +13,7 @@ function habit(partial: Partial<AgendaHabit> & Pick<AgendaHabit, "id" | "schedul
     name: partial.name ?? partial.id,
     scheduleInterval: partial.scheduleInterval ?? 1,
     scheduleWeekdays: partial.scheduleWeekdays ?? [],
+    scheduleMonthDays: partial.scheduleMonthDays ?? [],
     timeOfDay: partial.timeOfDay ?? null,
     target: partial.target ?? 1,
     unit: partial.unit ?? "",
@@ -41,6 +42,50 @@ describe("isHabitDueOnDay", () => {
     expect(isHabitDueOnDay(h, "2026-07-06", today, undefined)).toBe(true);
     expect(isHabitDueOnDay(h, "2026-07-07", today, undefined)).toBe(false);
     expect(isHabitDueOnDay(h, "2026-07-08", today, undefined)).toBe(true);
+  });
+
+  describe("monthDays", () => {
+    it("is due only on the selected days of month", () => {
+      const h = habit({ id: "md", scheduleType: "monthDays", scheduleMonthDays: [1, 25] });
+      expect(isHabitDueOnDay(h, "2026-07-01", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-25", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-24", today, undefined)).toBe(false);
+      expect(isHabitDueOnDay(h, "2026-08-25", today, undefined)).toBe(true);
+    });
+
+    it("clamps days past the end of a short month onto its last day", () => {
+      const h = habit({ id: "md31", scheduleType: "monthDays", scheduleMonthDays: [31] });
+      // February 2026 has 28 days; April has 30.
+      expect(isHabitDueOnDay(h, "2026-02-28", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-02-27", today, undefined)).toBe(false);
+      expect(isHabitDueOnDay(h, "2026-04-30", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-31", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2026-07-30", today, undefined)).toBe(false);
+    });
+
+    it("clamps onto February 29 in a leap year", () => {
+      const h = habit({ id: "md30", scheduleType: "monthDays", scheduleMonthDays: [30] });
+      expect(isHabitDueOnDay(h, "2028-02-29", today, undefined)).toBe(true);
+      expect(isHabitDueOnDay(h, "2028-02-28", today, undefined)).toBe(false);
+    });
+
+    it("fires once when a clamped day collides with another selected day", () => {
+      const h = habit({ id: "md-collide", scheduleType: "monthDays", scheduleMonthDays: [28, 31] });
+      expect(isHabitDueOnDay(h, "2026-02-28", today, undefined)).toBe(true);
+      const sections = buildAgendaSections({
+        selectedKey: "2026-02-28",
+        todayKey: today,
+        tasks: [],
+        habits: [h],
+        entriesByHabit: new Map(),
+      });
+      expect(sections.flatMap((s) => s.rows)).toHaveLength(1);
+    });
+
+    it("is not due when no days are selected", () => {
+      const h = habit({ id: "md-empty", scheduleType: "monthDays", scheduleMonthDays: [] });
+      expect(isHabitDueOnDay(h, "2026-07-25", today, undefined)).toBe(false);
+    });
   });
 
   it("hides habits from the archive day onward unless recorded that day", () => {

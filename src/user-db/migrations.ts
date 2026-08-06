@@ -400,6 +400,15 @@ const migrations = createMigrations((b) => ({
       defaultValue: null,
     }),
   ],
+  23: [
+    b.addColumn({
+      table: "_habit",
+      column: "scheduleMonthDays",
+      type: "text",
+      defaultValue: "[]",
+      build: (col) => col.notNull(),
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -545,11 +554,7 @@ export const syncDbSchema = defineSyncSchema({
         createdAt: t.integer(),
         updatedAt: t.integer(),
         model: t.text().nullable().default(null).describe("Model id, fixed after the first message."),
-        reasoningEffort: t
-          .text()
-          .nullable()
-          .default(null)
-          .describe("Optional reasoning effort override."),
+        reasoningEffort: t.text().nullable().default(null).describe("Optional reasoning effort override."),
         totalCost: t.real().default(0).describe("Cumulative cost in USD."),
         totalTokens: t.integer().default(0).describe("Cumulative tokens."),
       })
@@ -662,11 +667,25 @@ export const syncDbSchema = defineSyncSchema({
       .table({
         name: t.text().default(""),
         scheduleType: t
-          .enum(["daily", "weekly", "monthly", "everyNDays", "weekdays"])
+          .enum(["daily", "weekly", "monthly", "everyNDays", "weekdays", "monthDays"])
           .default("daily")
-          .describe('Due cadence; "weekdays" uses scheduleWeekdays and "everyNDays" uses scheduleInterval.'),
+          .describe(
+            [
+              'Due cadence; "weekdays" uses scheduleWeekdays, "monthDays" uses scheduleMonthDays,',
+              'and "everyNDays" uses scheduleInterval.',
+            ].join(" "),
+          ),
         scheduleInterval: t.integer().default(1).describe('Days between completions for "everyNDays".'),
         scheduleWeekdays: t.text().default("[]").describe('ISO weekday numbers (1=Mon … 7=Sun) for "weekdays".'),
+        scheduleMonthDays: t
+          .text()
+          .default("[]")
+          .describe(
+            [
+              'Day-of-month numbers (1–31) for "monthDays". Days past the end of a short month',
+              "clamp to that month's last day.",
+            ].join(" "),
+          ),
         timeOfDay: t
           .enum(["morning", "afternoon", "evening", "night"])
           .nullable()

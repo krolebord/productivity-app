@@ -19,7 +19,12 @@ import { CSS } from "@dnd-kit/utilities";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, PlusIcon, Repeat } from "lucide-react";
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { parseScheduleWeekdays, useCreateHabit, useHabitDialogStore } from "@/components/habit-dialog";
+import {
+  parseScheduleMonthDays,
+  parseScheduleWeekdays,
+  useCreateHabit,
+  useHabitDialogStore,
+} from "@/components/habit-dialog";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { habitTargetPeriodLabel } from "@/lib/agenda";
@@ -48,7 +53,24 @@ const TIME_OF_DAY_LABELS: Record<NonNullable<HabitItem["timeOfDay"]>, string> = 
   night: "Night",
 };
 
-export function formatHabitSchedule(habit: Pick<HabitItem, "scheduleType" | "scheduleInterval" | "scheduleWeekdays">) {
+function ordinal(n: number) {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+export function formatHabitSchedule(
+  habit: Pick<HabitItem, "scheduleType" | "scheduleInterval" | "scheduleWeekdays" | "scheduleMonthDays">,
+) {
   switch (habit.scheduleType) {
     case "daily":
       return "Every day";
@@ -64,6 +86,11 @@ export function formatHabitSchedule(habit: Pick<HabitItem, "scheduleType" | "sch
       const days = parseScheduleWeekdays(habit.scheduleWeekdays);
       if (days.length === 0) return "No days selected";
       return days.map((d) => WEEKDAY_LABELS[d] ?? String(d)).join(", ");
+    }
+    case "monthDays": {
+      const days = parseScheduleMonthDays(habit.scheduleMonthDays);
+      if (days.length === 0) return "No days selected";
+      return `${days.map(ordinal).join(", ")} of each month`;
     }
     default:
       return "Custom";

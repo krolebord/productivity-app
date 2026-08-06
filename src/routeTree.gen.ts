@@ -9,32 +9,32 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
+import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
-import { Route as AuthMagicLinkVerifyRouteImport } from './routes/_auth/magic-link-verify'
-import { Route as AppTodayRouteImport } from './routes/_app/today'
-import { Route as AppSkillsRouteImport } from './routes/_app/skills'
-import { Route as AppNotesRouteImport } from './routes/_app/notes'
-import { Route as AppMemoriesRouteImport } from './routes/_app/memories'
-import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
-import { Route as AppHabitsRouteImport } from './routes/_app/habits'
-import { Route as AppFinancesRouteImport } from './routes/_app/finances'
-import { Route as AppCurrenciesRouteImport } from './routes/_app/currencies'
-import { Route as AppAgentsRouteImport } from './routes/_app/agents'
 import { Route as AppAccountsRouteImport } from './routes/_app/accounts'
+import { Route as AppAgentsRouteImport } from './routes/_app/agents'
+import { Route as AppCurrenciesRouteImport } from './routes/_app/currencies'
+import { Route as AppFinancesRouteImport } from './routes/_app/finances'
+import { Route as AppHabitsRouteImport } from './routes/_app/habits'
+import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
+import { Route as AppMemoriesRouteImport } from './routes/_app/memories'
+import { Route as AppNotesRouteImport } from './routes/_app/notes'
+import { Route as AppSkillsRouteImport } from './routes/_app/skills'
+import { Route as AppTodayRouteImport } from './routes/_app/today'
+import { Route as AuthMagicLinkVerifyRouteImport } from './routes/_auth/magic-link-verify'
+import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AppFinancesIndexRouteImport } from './routes/_app/finances.index'
-import { Route as AppFinancesTransactionsRouteImport } from './routes/_app/finances.transactions'
-import { Route as AppFinancesRatesRouteImport } from './routes/_app/finances.rates'
 import { Route as AppFinancesAccountsRouteImport } from './routes/_app/finances.accounts'
+import { Route as AppFinancesRatesRouteImport } from './routes/_app/finances.rates'
+import { Route as AppFinancesTransactionsRouteImport } from './routes/_app/finances.transactions'
 
-const AuthRouteRoute = AuthRouteRouteImport.update({
-  id: '/_auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRouteRoute = AuthRouteRouteImport.update({
+  id: '/_auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -42,54 +42,9 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AuthSignInRoute = AuthSignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
-const AuthMagicLinkVerifyRoute = AuthMagicLinkVerifyRouteImport.update({
-  id: '/magic-link-verify',
-  path: '/magic-link-verify',
-  getParentRoute: () => AuthRouteRoute,
-} as any)
-const AppTodayRoute = AppTodayRouteImport.update({
-  id: '/today',
-  path: '/today',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppSkillsRoute = AppSkillsRouteImport.update({
-  id: '/skills',
-  path: '/skills',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppNotesRoute = AppNotesRouteImport.update({
-  id: '/notes',
-  path: '/notes',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppMemoriesRoute = AppMemoriesRouteImport.update({
-  id: '/memories',
-  path: '/memories',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
-  id: '/integrations',
-  path: '/integrations',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppHabitsRoute = AppHabitsRouteImport.update({
-  id: '/habits',
-  path: '/habits',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppFinancesRoute = AppFinancesRouteImport.update({
-  id: '/finances',
-  path: '/finances',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppCurrenciesRoute = AppCurrenciesRouteImport.update({
-  id: '/currencies',
-  path: '/currencies',
+const AppAccountsRoute = AppAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AppAgentsRoute = AppAgentsRouteImport.update({
@@ -97,19 +52,64 @@ const AppAgentsRoute = AppAgentsRouteImport.update({
   path: '/agents',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AppAccountsRoute = AppAccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
+const AppCurrenciesRoute = AppCurrenciesRouteImport.update({
+  id: '/currencies',
+  path: '/currencies',
   getParentRoute: () => AppRouteRoute,
+} as any)
+const AppFinancesRoute = AppFinancesRouteImport.update({
+  id: '/finances',
+  path: '/finances',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppHabitsRoute = AppHabitsRouteImport.update({
+  id: '/habits',
+  path: '/habits',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppMemoriesRoute = AppMemoriesRouteImport.update({
+  id: '/memories',
+  path: '/memories',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppNotesRoute = AppNotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppSkillsRoute = AppSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppTodayRoute = AppTodayRouteImport.update({
+  id: '/today',
+  path: '/today',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AuthMagicLinkVerifyRoute = AuthMagicLinkVerifyRouteImport.update({
+  id: '/magic-link-verify',
+  path: '/magic-link-verify',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthSignInRoute = AuthSignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => AuthRouteRoute,
 } as any)
 const AppFinancesIndexRoute = AppFinancesIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppFinancesRoute,
 } as any)
-const AppFinancesTransactionsRoute = AppFinancesTransactionsRouteImport.update({
-  id: '/transactions',
-  path: '/transactions',
+const AppFinancesAccountsRoute = AppFinancesAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
   getParentRoute: () => AppFinancesRoute,
 } as any)
 const AppFinancesRatesRoute = AppFinancesRatesRouteImport.update({
@@ -117,9 +117,9 @@ const AppFinancesRatesRoute = AppFinancesRatesRouteImport.update({
   path: '/rates',
   getParentRoute: () => AppFinancesRoute,
 } as any)
-const AppFinancesAccountsRoute = AppFinancesAccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
+const AppFinancesTransactionsRoute = AppFinancesTransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
   getParentRoute: () => AppFinancesRoute,
 } as any)
 
@@ -250,18 +250,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_auth': {
-      id: '/_auth'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app': {
       id: '/_app'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_auth': {
+      id: '/_auth'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -271,74 +271,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
-    '/_auth/sign-in': {
-      id: '/_auth/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof AuthSignInRouteImport
-      parentRoute: typeof AuthRouteRoute
-    }
-    '/_auth/magic-link-verify': {
-      id: '/_auth/magic-link-verify'
-      path: '/magic-link-verify'
-      fullPath: '/magic-link-verify'
-      preLoaderRoute: typeof AuthMagicLinkVerifyRouteImport
-      parentRoute: typeof AuthRouteRoute
-    }
-    '/_app/today': {
-      id: '/_app/today'
-      path: '/today'
-      fullPath: '/today'
-      preLoaderRoute: typeof AppTodayRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/_app/skills': {
-      id: '/_app/skills'
-      path: '/skills'
-      fullPath: '/skills'
-      preLoaderRoute: typeof AppSkillsRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/_app/notes': {
-      id: '/_app/notes'
-      path: '/notes'
-      fullPath: '/notes'
-      preLoaderRoute: typeof AppNotesRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/_app/memories': {
-      id: '/_app/memories'
-      path: '/memories'
-      fullPath: '/memories'
-      preLoaderRoute: typeof AppMemoriesRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/_app/integrations': {
-      id: '/_app/integrations'
-      path: '/integrations'
-      fullPath: '/integrations'
-      preLoaderRoute: typeof AppIntegrationsRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/_app/habits': {
-      id: '/_app/habits'
-      path: '/habits'
-      fullPath: '/habits'
-      preLoaderRoute: typeof AppHabitsRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/_app/finances': {
-      id: '/_app/finances'
-      path: '/finances'
-      fullPath: '/finances'
-      preLoaderRoute: typeof AppFinancesRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/_app/currencies': {
-      id: '/_app/currencies'
-      path: '/currencies'
-      fullPath: '/currencies'
-      preLoaderRoute: typeof AppCurrenciesRouteImport
+    '/_app/accounts': {
+      id: '/_app/accounts'
+      path: '/accounts'
+      fullPath: '/accounts'
+      preLoaderRoute: typeof AppAccountsRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/_app/agents': {
@@ -348,12 +285,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAgentsRouteImport
       parentRoute: typeof AppRouteRoute
     }
-    '/_app/accounts': {
-      id: '/_app/accounts'
-      path: '/accounts'
-      fullPath: '/accounts'
-      preLoaderRoute: typeof AppAccountsRouteImport
+    '/_app/currencies': {
+      id: '/_app/currencies'
+      path: '/currencies'
+      fullPath: '/currencies'
+      preLoaderRoute: typeof AppCurrenciesRouteImport
       parentRoute: typeof AppRouteRoute
+    }
+    '/_app/finances': {
+      id: '/_app/finances'
+      path: '/finances'
+      fullPath: '/finances'
+      preLoaderRoute: typeof AppFinancesRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/habits': {
+      id: '/_app/habits'
+      path: '/habits'
+      fullPath: '/habits'
+      preLoaderRoute: typeof AppHabitsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/integrations': {
+      id: '/_app/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof AppIntegrationsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/memories': {
+      id: '/_app/memories'
+      path: '/memories'
+      fullPath: '/memories'
+      preLoaderRoute: typeof AppMemoriesRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/notes': {
+      id: '/_app/notes'
+      path: '/notes'
+      fullPath: '/notes'
+      preLoaderRoute: typeof AppNotesRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/skills': {
+      id: '/_app/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof AppSkillsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/today': {
+      id: '/_app/today'
+      path: '/today'
+      fullPath: '/today'
+      preLoaderRoute: typeof AppTodayRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_auth/magic-link-verify': {
+      id: '/_auth/magic-link-verify'
+      path: '/magic-link-verify'
+      fullPath: '/magic-link-verify'
+      preLoaderRoute: typeof AuthMagicLinkVerifyRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/_auth/sign-in': {
+      id: '/_auth/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof AuthSignInRouteImport
+      parentRoute: typeof AuthRouteRoute
     }
     '/_app/finances/': {
       id: '/_app/finances/'
@@ -362,11 +362,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFinancesIndexRouteImport
       parentRoute: typeof AppFinancesRoute
     }
-    '/_app/finances/transactions': {
-      id: '/_app/finances/transactions'
-      path: '/transactions'
-      fullPath: '/finances/transactions'
-      preLoaderRoute: typeof AppFinancesTransactionsRouteImport
+    '/_app/finances/accounts': {
+      id: '/_app/finances/accounts'
+      path: '/accounts'
+      fullPath: '/finances/accounts'
+      preLoaderRoute: typeof AppFinancesAccountsRouteImport
       parentRoute: typeof AppFinancesRoute
     }
     '/_app/finances/rates': {
@@ -376,11 +376,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFinancesRatesRouteImport
       parentRoute: typeof AppFinancesRoute
     }
-    '/_app/finances/accounts': {
-      id: '/_app/finances/accounts'
-      path: '/accounts'
-      fullPath: '/finances/accounts'
-      preLoaderRoute: typeof AppFinancesAccountsRouteImport
+    '/_app/finances/transactions': {
+      id: '/_app/finances/transactions'
+      path: '/transactions'
+      fullPath: '/finances/transactions'
+      preLoaderRoute: typeof AppFinancesTransactionsRouteImport
       parentRoute: typeof AppFinancesRoute
     }
   }

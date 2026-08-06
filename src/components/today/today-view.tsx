@@ -17,6 +17,7 @@ import {
   PlusIcon,
 } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
+import { useActiveDrag } from "@/components/app-dnd";
 import { noteContentToPlainText } from "@/components/note-extensions";
 import { useTaskDialogStore } from "@/components/task-dialog";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,7 @@ import type {
   AgendaTaskRow,
   DayHabitProgress,
 } from "@/lib/agenda";
-import { calendarDayDroppableId } from "@/lib/app-dnd";
+import { dayDropId, INBOX_DROP_ID } from "@/lib/app-dnd";
 import { formatDueDateLabel } from "@/lib/date-time";
 import { isCalendarBackedTask } from "@/lib/google-calendar/mapping";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,13 @@ export function TodayView() {
   );
 
   const { displayedInboxTasks, displayedSections } = useTaskReorder(agenda.inboxTasks, activeSections);
+
+  // Drag affordances reuse UI that is already on screen — the calendar cells and
+  // the inbox header — so nothing mounts mid-drag and the agenda never reflows.
+  const activeDrag = useActiveDrag();
+  const draggedId = activeDrag && (activeDrag.kind === "task" || activeDrag.kind === "note") ? activeDrag.id : null;
+  const draggedFromInbox = draggedId != null && agenda.inboxTasks.some((task) => task.id === draggedId);
+  const inboxDropActive = draggedId != null && !draggedFromInbox;
 
   return (
     <div className="flex flex-col gap-4">
@@ -98,6 +106,7 @@ export function TodayView() {
         selectedDate={agenda.selectedDate}
         selectedKey={agenda.selectedKey}
         todayKey={agenda.todayKey}
+        dragActive={draggedId != null}
         onSelect={agenda.selectDateKey}
         onShift={agenda.shiftCalendar}
       />
@@ -111,6 +120,7 @@ export function TodayView() {
         <InboxSection
           tasks={displayedInboxTasks}
           selectedLabel={headerLabel}
+          dropActive={inboxDropActive}
           onOpen={openTaskDialog}
           onToggle={agenda.completeInboxTask}
           onSchedule={agenda.scheduleInboxTask}
@@ -153,6 +163,7 @@ function CalendarStrip({
   selectedDate,
   selectedKey,
   todayKey,
+  dragActive,
   onSelect,
   onShift,
 }: {
@@ -161,6 +172,7 @@ function CalendarStrip({
   selectedDate: Date;
   selectedKey: string;
   todayKey: string;
+  dragActive: boolean;
   onSelect: (dateKey: string) => void;
   onShift: (delta: number) => void;
 }) {
@@ -189,6 +201,7 @@ function CalendarStrip({
               initial={WEEKDAY_INITIALS[index]}
               selected={day.dateKey === selectedKey}
               isToday={day.dateKey === todayKey}
+              dragActive={dragActive}
               onSelect={onSelect}
             />
           ))}
@@ -223,6 +236,7 @@ function CalendarStrip({
             selected={day.dateKey === selectedKey}
             isToday={day.dateKey === todayKey}
             muted={day.date.getMonth() !== selectedMonth}
+            dragActive={dragActive}
             onSelect={onSelect}
           />
         ))}
@@ -237,6 +251,7 @@ function DayCell({
   selected,
   isToday,
   muted = false,
+  dragActive = false,
   onSelect,
 }: {
   day: CalendarDayInfo;
@@ -244,9 +259,10 @@ function DayCell({
   selected: boolean;
   isToday: boolean;
   muted?: boolean;
+  dragActive?: boolean;
   onSelect: (dateKey: string) => void;
 }) {
-  const droppable = useDroppable({ id: calendarDayDroppableId(day.dateKey) });
+  const droppable = useDroppable({ id: dayDropId(day.dateKey) });
 
   return (
     <button
@@ -257,10 +273,15 @@ function DayCell({
       aria-current={isToday ? "date" : undefined}
       aria-pressed={selected}
       className={cn(
-        "relative flex flex-col items-center gap-px rounded-md py-1 transition-colors",
+        // Not `transition-colors`: that includes outline-color in Tailwind v4, which
+        // would fade the drag outline in from `currentcolor` instead of showing it flat.
+        "relative flex flex-col items-center gap-px rounded-md py-1 transition-[color,background-color]",
         selected ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         !selected && isToday && "text-foreground",
         muted && !selected && "opacity-40",
+        // Outlines and rings sit outside the box model, so drag affordances never reflow the strip.
+        dragActive && !droppable.isOver && "outline-dashed outline-1 outline-border",
+        dragActive && muted && "opacity-70",
         droppable.isOver && "opacity-100 ring-2 ring-ring ring-offset-1 ring-offset-background",
       )}
     >
@@ -367,30 +388,44 @@ function QuickAddTask({
 function InboxSection({
   tasks,
   selectedLabel,
+  dropActive,
   onOpen,
   onToggle,
   onSchedule,
 }: {
   tasks: AgendaTask[];
   selectedLabel: string;
+  dropActive: boolean;
   onOpen: (id: string) => void;
   onToggle: (id: string, completed: boolean) => void;
   onSchedule: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // Disabled outside a drag so it never shadows the inbox rows' own reorder targets.
+  const droppable = useDroppable({ id: INBOX_DROP_ID, disabled: !dropActive });
+  const isOver = dropActive && droppable.isOver;
 
   return (
-    <section className="rounded-lg border border-dashed bg-muted/20">
+    <section
+      ref={droppable.setNodeRef}
+      className={cn(
+        "rounded-lg border border-dashed bg-muted/20 transition-colors",
+        dropActive && "border-primary/40",
+        isOver && "border-primary bg-primary/10 ring-2 ring-ring ring-offset-1 ring-offset-background",
+      )}
+    >
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
         className="flex w-full items-center gap-2 px-3 py-2 text-left"
       >
-        <InboxIcon className="size-4 text-muted-foreground" />
+        <InboxIcon className={cn("size-4 text-muted-foreground", isOver && "text-primary")} />
         <span className="font-medium text-sm">Inbox</span>
         <span className="text-muted-foreground text-xs tabular-nums">{tasks.length}</span>
-        <span className="ml-auto text-muted-foreground text-xs">Not scheduled</span>
+        <span className={cn("ml-auto text-xs", isOver ? "font-medium text-primary" : "text-muted-foreground")}>
+          {dropActive ? "Drop to unschedule" : "Not scheduled"}
+        </span>
         <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", !expanded && "-rotate-90")} />
       </button>
       {expanded && (

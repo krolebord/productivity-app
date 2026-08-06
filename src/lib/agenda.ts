@@ -21,7 +21,7 @@ export const AGENDA_BUCKET_LABELS: Record<AgendaBucket, string> = {
   anytime: "Anytime",
 };
 
-export type HabitScheduleType = "daily" | "weekly" | "monthly" | "everyNDays" | "weekdays";
+export type HabitScheduleType = "daily" | "weekly" | "monthly" | "everyNDays" | "weekdays" | "monthDays";
 
 export type HabitPeriodScheduleType = "weekly" | "monthly";
 export type HabitTimeOfDay = "morning" | "afternoon" | "evening" | "night" | null;
@@ -32,6 +32,7 @@ export type AgendaHabit = {
   scheduleType: HabitScheduleType;
   scheduleInterval: number;
   scheduleWeekdays: number[];
+  scheduleMonthDays: number[];
   timeOfDay: HabitTimeOfDay;
   target: number;
   unit: string;
@@ -239,6 +240,9 @@ export function isHabitDueOnDay(
       return habit.scheduleWeekdays.includes(weekday);
     }
 
+    case "monthDays":
+      return isMonthDayDueOnDay(habit.scheduleMonthDays, dateKey);
+
     case "weekly":
     case "monthly":
       return isPeriodDueOnDay(habit, habit.scheduleType, dateKey, todayKey, entries, valueOnDay);
@@ -249,6 +253,18 @@ export function isHabitDueOnDay(
     default:
       return false;
   }
+}
+
+/**
+ * Day-of-month schedules fire on their chosen dates; a date past the end of a
+ * short month (e.g. the 31st in February) clamps onto that month's last day, so
+ * every selected day fires exactly once per month.
+ */
+function isMonthDayDueOnDay(monthDays: readonly number[], dateKey: string): boolean {
+  const date = parseDateKey(dateKey);
+  const dayOfMonth = date.getDate();
+  const lastDayOfMonth = endOfMonth(date).getDate();
+  return monthDays.some((day) => (day > lastDayOfMonth ? dayOfMonth === lastDayOfMonth : dayOfMonth === day));
 }
 
 function isPeriodDueOnDay(
@@ -467,6 +483,7 @@ export function toAgendaHabit(
     createdAt: number;
   },
   scheduleWeekdays: number[],
+  scheduleMonthDays: number[],
 ): AgendaHabit {
   return {
     id: habit.id,
@@ -474,6 +491,7 @@ export function toAgendaHabit(
     scheduleType: habit.scheduleType,
     scheduleInterval: habit.scheduleInterval,
     scheduleWeekdays,
+    scheduleMonthDays,
     timeOfDay: habit.timeOfDay,
     target: habit.target,
     unit: habit.unit,

@@ -965,9 +965,7 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
     agent,
     body: () => ({
       model: modelRef.current,
-      ...(modelSupportsSelectableReasoning(modelRef.current)
-        ? { reasoningEffort: reasoningEffortRef.current }
-        : {}),
+      ...(modelSupportsSelectableReasoning(modelRef.current) ? { reasoningEffort: reasoningEffortRef.current } : {}),
     }),
   });
 

@@ -24,6 +24,7 @@ const SCHEDULE_TYPES = [
   { value: "monthly", label: "Once a month" },
   { value: "everyNDays", label: "Every N days" },
   { value: "weekdays", label: "Specific weekdays" },
+  { value: "monthDays", label: "Specific days of month" },
 ] as const satisfies ReadonlyArray<{ value: HabitScheduleType; label: string }>;
 
 const TIME_OF_DAY_OPTIONS = [
@@ -44,12 +45,15 @@ const WEEKDAYS = [
   { value: 7, label: "Sun" },
 ] as const;
 
+const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+
 const habitFormSchema = z
   .object({
     name: z.string().trim().min(1, "Name is required."),
-    scheduleType: z.enum(["daily", "weekly", "monthly", "everyNDays", "weekdays"]),
+    scheduleType: z.enum(["daily", "weekly", "monthly", "everyNDays", "weekdays", "monthDays"]),
     scheduleInterval: z.string(),
     scheduleWeekdays: z.array(z.number().int().min(1).max(7)),
+    scheduleMonthDays: z.array(z.number().int().min(1).max(31)),
     timeOfDay: z.enum(["anytime", "morning", "afternoon", "evening", "night"]),
     target: z.string(),
     unit: z.string(),
@@ -74,6 +78,14 @@ const habitFormSchema = z
       });
     }
 
+    if (value.scheduleType === "monthDays" && value.scheduleMonthDays.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Pick at least one day of the month.",
+        path: ["scheduleMonthDays"],
+      });
+    }
+
     const target = Number.parseFloat(value.target);
     if (!Number.isFinite(target) || target < 1) {
       ctx.addIssue({
@@ -84,14 +96,22 @@ const habitFormSchema = z
     }
   });
 
-export function parseScheduleWeekdays(raw: string): number[] {
+function parseDayNumbers(raw: string, max: number): number[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 7);
+    return parsed.filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= max);
   } catch {
     return [];
   }
+}
+
+export function parseScheduleWeekdays(raw: string): number[] {
+  return parseDayNumbers(raw, 7);
+}
+
+export function parseScheduleMonthDays(raw: string): number[] {
+  return parseDayNumbers(raw, 31);
 }
 
 export const useHabitDialogStore = create(
@@ -136,6 +156,8 @@ function HabitDialogContent() {
       scheduleType === "everyNDays" ? Math.max(1, Number.parseInt(value.scheduleInterval, 10) || 1) : 1;
     const scheduleWeekdays =
       scheduleType === "weekdays" ? JSON.stringify([...value.scheduleWeekdays].sort((a, b) => a - b)) : "[]";
+    const scheduleMonthDays =
+      scheduleType === "monthDays" ? JSON.stringify([...value.scheduleMonthDays].sort((a, b) => a - b)) : "[]";
     const timeOfDay = value.timeOfDay === "anytime" ? null : value.timeOfDay;
     const target = Math.max(1, Number.parseFloat(value.target) || 1);
     const unit = value.unit.trim();
@@ -157,6 +179,7 @@ function HabitDialogContent() {
             scheduleType,
             scheduleInterval,
             scheduleWeekdays,
+            scheduleMonthDays,
             timeOfDay,
             target,
             unit,
@@ -185,6 +208,7 @@ function HabitDialogContent() {
           scheduleType,
           scheduleInterval,
           scheduleWeekdays,
+          scheduleMonthDays,
           timeOfDay,
           target,
           unit,
@@ -219,6 +243,7 @@ function HabitDialogContent() {
       scheduleType: (existing?.scheduleType ?? "daily") as HabitScheduleType,
       scheduleInterval: String(existing?.scheduleInterval ?? 3),
       scheduleWeekdays: existing ? parseScheduleWeekdays(existing.scheduleWeekdays) : [],
+      scheduleMonthDays: existing ? parseScheduleMonthDays(existing.scheduleMonthDays) : [],
       timeOfDay: (existing?.timeOfDay ?? "anytime") as "anytime" | HabitTimeOfDay,
       target: String(existing?.target ?? 1),
       unit: existing?.unit ?? "",
@@ -305,6 +330,48 @@ function HabitDialogContent() {
                         )}
                       >
                         {day.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </field.FieldContainer>
+            )}
+          </form.AppField>
+        )}
+
+        {scheduleType === "monthDays" && (
+          <form.AppField name="scheduleMonthDays">
+            {(field) => (
+              <field.FieldContainer
+                labelText="Days of month"
+                description={
+                  field.state.value.some((day) => day > 28)
+                    ? "Days after the 28th fall on the last day of shorter months."
+                    : undefined
+                }
+              >
+                <div className="grid grid-cols-7 gap-1">
+                  {MONTH_DAYS.map((day) => {
+                    const selected = field.state.value.includes(day);
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => {
+                          const next = selected
+                            ? field.state.value.filter((d) => d !== day)
+                            : [...field.state.value, day].sort((a, b) => a - b);
+                          field.handleChange(next);
+                        }}
+                        className={cn(
+                          "rounded-md border py-1.5 text-center font-medium text-sm tabular-nums transition-colors",
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                        )}
+                      >
+                        {day}
                       </button>
                     );
                   })}
