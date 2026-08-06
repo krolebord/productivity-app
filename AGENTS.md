@@ -33,20 +33,19 @@ wrangler.jsonc             # Cloudflare config (D1, Durable Objects, email, asse
 - **Frontend**: React 19, TanStack Router/Query/Form, Tailwind v4, Radix UI, zustand
 - **Data**: @sqlite-sync (per-user CRDT-synced SQLite), kysely + kysely-d1 (central DB)
 - **API**: oRPC (`/rpc/*`), plain handlers (`/api/*`), WebSocket sync (`/user-db/*`)
-- **Tooling**: pnpm, Biome (format/lint), tsgo (typecheck), Vite + @cloudflare/vite-plugin
+- **Tooling**: pnpm, Biome (format/lint), tsc (typecheck), Vite + @cloudflare/vite-plugin
 
 ## Commands
 
 ```bash
 pnpm dev                  # Dev server on port 3301
-pnpm typecheck            # Type-check (tsgo)
+pnpm typecheck            # Type-check (tsc — TypeScript 7, native)
 pnpm format               # Format + lint fix with Biome
 pnpm build                # Production build
 pnpm deploy               # Build + wrangler deploy
 
 pnpm db:local:migrate     # Apply D1 migrations locally
 pnpm db:new-migration     # Create a new D1 migration
-pnpm generate:types:db    # Regenerate src/lib/db-types.ts from local D1 (kysely-codegen)
 pnpm generate:types:env   # Regenerate worker-configuration.d.ts (wrangler types)
 ```
 
@@ -57,3 +56,7 @@ reaching it through a proxy. The `Dev server (Tailnet)` preset in
 port because Vite reconnects to whatever origin served the page.
 
 Note: the central D1 database uses SQL migrations in `migrations/`; the per-user synced database defines its schema/migrations in code at `src/user-db/migrations.ts`.
+
+When you add a migration under `migrations/`, hand-update the matching Kysely types in
+`src/lib/db-types.ts` in the same change — they are no longer generated. Enum columns are
+narrowed to domain unions separately, in `src/lib/db.ts`.

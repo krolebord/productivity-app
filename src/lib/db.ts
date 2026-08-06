@@ -7,8 +7,8 @@ import type { MonobankConnectionStatus, MonobankWebhookStatus } from "./monobank
 
 export type UserRole = "user" | "admin";
 
-// Refine the codegen-generated types (which only know these enum columns as `string`) with our
-// domain unions. Lives here rather than in db-types.ts, which is regenerated.
+// Refine the base table types (which only know these enum columns as `string`) with our
+// domain unions. Lives here rather than in db-types.ts, which mirrors the raw SQL schema.
 type DB = Omit<GeneratedDB, "user" | "monobank_connection" | "google_calendar_connection"> & {
   user: Omit<GeneratedDB["user"], "role"> & { role: Generated<UserRole> };
   monobank_connection: Omit<GeneratedDB["monobank_connection"], "status" | "webhookStatus"> & {
