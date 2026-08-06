@@ -23,14 +23,15 @@ import { useTaskDialogStore } from "@/components/task-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import type {
-  AgendaHabit,
-  AgendaHabitRow,
-  AgendaRow,
-  AgendaSection,
-  AgendaTask,
-  AgendaTaskRow,
-  DayHabitProgress,
+import {
+  type AgendaHabit,
+  type AgendaHabitRow,
+  type AgendaRow,
+  type AgendaSection,
+  type AgendaTask,
+  type AgendaTaskRow,
+  type DayHabitProgress,
+  parseDateKey,
 } from "@/lib/agenda";
 import { dayDropId, INBOX_DROP_ID } from "@/lib/app-dnd";
 import { formatDueDateLabel } from "@/lib/date-time";
@@ -578,6 +579,7 @@ function AgendaSectionBlock({
             ) : (
               <HabitRow
                 row={row}
+                overdue={section.bucket === "overdue"}
                 onToggle={(done) => onToggleHabit(row.habit, row.dateKey, done)}
                 onIncrement={() => onIncrementHabit(row.id, row.dateKey, row.dayValue)}
               />
@@ -631,6 +633,7 @@ function CompletedSection({
               ) : (
                 <HabitRow
                   row={row}
+                  overdue={false}
                   onToggle={(done) => onToggleHabit(row.habit, row.dateKey, done)}
                   onIncrement={() => onIncrementHabit(row.id, row.dateKey, row.dayValue)}
                 />
@@ -733,10 +736,12 @@ function TaskRow({
 
 function HabitRow({
   row,
+  overdue,
   onToggle,
   onIncrement,
 }: {
   row: AgendaHabitRow;
+  overdue: boolean;
   onToggle: (done: boolean) => void;
   onIncrement: () => void;
 }) {
@@ -745,6 +750,9 @@ function HabitRow({
   const ratio = habit.target > 0 ? Math.min(1, value / habit.target) : 0;
   const unitLabel = habit.unit.trim();
   const progressLabel = unitLabel ? `${value}/${habit.target} ${unitLabel}` : `${value}/${habit.target}`;
+  // Overdue rows record against a past day, so name the day they belong to.
+  const missedLabel = overdue ? format(parseDateKey(row.dateKey), "MMM d") : null;
+  const completeLabel = missedLabel ? `Complete ${habit.name} for ${missedLabel}` : `Complete ${habit.name}`;
 
   return (
     <div className={cn("flex items-center gap-2 rounded-md px-1.5 py-1.5", done && "opacity-60")}>
@@ -753,7 +761,7 @@ function HabitRow({
           <Checkbox
             checked={done}
             onCheckedChange={(v) => onToggle(v === true)}
-            aria-label={done ? `Uncheck ${habit.name}` : `Complete ${habit.name}`}
+            aria-label={done ? `Uncheck ${habit.name}` : completeLabel}
           />
         ) : (
           <span
@@ -790,6 +798,7 @@ function HabitRow({
           {habit.name}
           {!editable && <span className="sr-only">{done ? " (done)" : " (not done)"}</span>}
         </p>
+        {missedLabel && <p className="mt-0.5 text-destructive text-xs">{missedLabel}</p>}
         {!isSimple && <p className="text-muted-foreground text-xs tabular-nums">{progressLabel}</p>}
       </div>
 

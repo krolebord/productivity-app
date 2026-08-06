@@ -67,7 +67,8 @@ export type AgendaHabitRow = {
   kind: "habit";
   id: string;
   habit: AgendaHabit;
-  bucket: Exclude<AgendaBucket, "overdue">;
+  bucket: AgendaBucket;
+  /** The day this row records against — a past day for rows in the overdue bucket. */
   dateKey: string;
   value: number;
   dayValue: number;
@@ -235,13 +236,9 @@ export function isHabitDueOnDay(
     case "daily":
       return true;
 
-    case "weekdays": {
-      const weekday = getISODay(parseDateKey(dateKey));
-      return habit.scheduleWeekdays.includes(weekday);
-    }
-
+    case "weekdays":
     case "monthDays":
-      return isMonthDayDueOnDay(habit.scheduleMonthDays, dateKey);
+      return isCalendarDueOnDay(habit, dateKey);
 
     case "weekly":
     case "monthly":
@@ -265,6 +262,60 @@ function isMonthDayDueOnDay(monthDays: readonly number[], dateKey: string): bool
   const dayOfMonth = date.getDate();
   const lastDayOfMonth = endOfMonth(date).getDate();
   return monthDays.some((day) => (day > lastDayOfMonth ? dayOfMonth === lastDayOfMonth : dayOfMonth === day));
+}
+
+/**
+ * The two schedules that pick fixed calendar days, and so are due purely as a
+ * function of the day — completion history never moves their next occurrence.
+ */
+function isCalendarSchedule(scheduleType: HabitScheduleType): scheduleType is "weekdays" | "monthDays" {
+  return scheduleType === "weekdays" || scheduleType === "monthDays";
+}
+
+function isCalendarDueOnDay(habit: AgendaHabit, dateKey: string): boolean {
+  if (habit.scheduleType === "weekdays") return habit.scheduleWeekdays.includes(getISODay(parseDateKey(dateKey)));
+  if (habit.scheduleType === "monthDays") return isMonthDayDueOnDay(habit.scheduleMonthDays, dateKey);
+  return false;
+}
+
+/** Enough to reach the previous occurrence of any schedule of each kind. */
+const OCCURRENCE_LOOKBACK_DAYS = { weekdays: 7, monthDays: 31 } as const;
+
+/**
+ * The unfinished past occurrence a calendar-scheduled habit should nag about
+ * today, or null when there is none.
+ *
+ * Unlike `everyNDays`/`weekly`/`monthly`, `weekdays` and `monthDays` habits are
+ * pure calendar predicates, so a missed day would otherwise vanish silently.
+ * Each occurrence stays overdue until it is completed or the next occurrence
+ * arrives and supersedes it — which caps this at one row per habit.
+ *
+ * Deliberately kept out of `isHabitDueOnDay`: that also feeds the calendar day
+ * rings via `getDayHabitProgress`, where a carried-over miss would count as due
+ * again on every following day and skew the history.
+ */
+export function getOverdueHabitOccurrence(
+  habit: AgendaHabit,
+  todayKey: string,
+  entries: HabitEntryValuesByDate | undefined,
+): string | null {
+  if (!isCalendarSchedule(habit.scheduleType)) return null;
+  // Archiving means "stop showing me this", including past misses.
+  if (isHabitArchivedOn(habit, todayKey)) return null;
+  // Today's own row supersedes any earlier miss.
+  if (isCalendarDueOnDay(habit, todayKey)) return null;
+
+  const createdKey = toDateKey(new Date(habit.createdAt));
+  const today = parseDateKey(todayKey);
+
+  for (let back = 1; back <= OCCURRENCE_LOOKBACK_DAYS[habit.scheduleType]; back += 1) {
+    const dateKey = toDateKey(addLocalDays(today, -back));
+    // Days before the habit existed are not misses.
+    if (dateKey < createdKey) return null;
+    if (!isCalendarDueOnDay(habit, dateKey)) continue;
+    return isHabitDoneOnDay(habit.target, getEntryValue(entries, dateKey)) ? null : dateKey;
+  }
+  return null;
 }
 
 function isPeriodDueOnDay(
@@ -437,6 +488,25 @@ export function buildAgendaSections(args: {
 
   for (const habit of habits) {
     const entries = entriesByHabit.get(habit.id);
+
+    // Like overdue tasks, a missed occurrence only surfaces on today, and stays
+    // pinned to the day it was scheduled for so checking it off records there.
+    const missedKey = isToday ? getOverdueHabitOccurrence(habit, todayKey, entries) : null;
+    if (missedKey != null) {
+      const missedValue = getEntryValue(entries, missedKey);
+      rowsByBucket.overdue.push({
+        kind: "habit",
+        id: habit.id,
+        habit,
+        bucket: "overdue",
+        dateKey: missedKey,
+        value: missedValue,
+        dayValue: missedValue,
+        done: false,
+        editable: true,
+      });
+    }
+
     if (!isHabitDueOnDay(habit, selectedKey, todayKey, entries)) continue;
 
     const value = getHabitProgressValue(habit, selectedKey, entries);

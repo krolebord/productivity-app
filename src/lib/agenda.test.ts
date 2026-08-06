@@ -3,6 +3,7 @@ import {
   type AgendaHabit,
   buildAgendaSections,
   getDayHabitProgress,
+  getOverdueHabitOccurrence,
   isHabitDueOnDay,
   taskBucket,
   toDateKey,
@@ -218,6 +219,104 @@ describe("isHabitDueOnDay", () => {
   });
 });
 
+describe("getOverdueHabitOccurrence", () => {
+  // 2026-07-06 is a Monday, so 2026-07-09 is a Thursday.
+  describe("weekdays", () => {
+    const h = habit({ id: "w", scheduleType: "weekdays", scheduleWeekdays: [1, 3, 5] });
+
+    it("carries the last missed weekday", () => {
+      expect(getOverdueHabitOccurrence(h, "2026-07-09", undefined)).toBe("2026-07-08");
+    });
+
+    it("clears once that day is completed", () => {
+      expect(getOverdueHabitOccurrence(h, "2026-07-09", entries(["2026-07-08", 1]))).toBeNull();
+    });
+
+    it("is superseded on days the habit is due again", () => {
+      expect(getOverdueHabitOccurrence(h, "2026-07-08", undefined)).toBeNull();
+      // Friday's own row replaces Wednesday's miss, even with Wednesday unfinished.
+      expect(getOverdueHabitOccurrence(h, "2026-07-10", undefined)).toBeNull();
+    });
+
+    it("looks no further back than the previous occurrence", () => {
+      // Monday and Wednesday both missed; only Wednesday is still outstanding.
+      expect(getOverdueHabitOccurrence(h, "2026-07-09", entries(["2026-07-06", 1]))).toBe("2026-07-08");
+    });
+
+    it("is not overdue when no weekdays are selected", () => {
+      const none = habit({ id: "w-empty", scheduleType: "weekdays", scheduleWeekdays: [] });
+      expect(getOverdueHabitOccurrence(none, "2026-07-09", undefined)).toBeNull();
+    });
+  });
+
+  describe("monthDays", () => {
+    const h = habit({ id: "md", scheduleType: "monthDays", scheduleMonthDays: [1] });
+
+    it("stays overdue for the rest of the month", () => {
+      expect(getOverdueHabitOccurrence(h, "2026-07-09", undefined)).toBe("2026-07-01");
+      expect(getOverdueHabitOccurrence(h, "2026-07-31", undefined)).toBe("2026-07-01");
+    });
+
+    it("clears once that day is completed", () => {
+      expect(getOverdueHabitOccurrence(h, "2026-07-09", entries(["2026-07-01", 1]))).toBeNull();
+    });
+
+    it("stays overdue while progress falls short of the target", () => {
+      const h3 = habit({ id: "md3", scheduleType: "monthDays", scheduleMonthDays: [1], target: 3 });
+      expect(getOverdueHabitOccurrence(h3, "2026-07-09", entries(["2026-07-01", 2]))).toBe("2026-07-01");
+      expect(getOverdueHabitOccurrence(h3, "2026-07-09", entries(["2026-07-01", 3]))).toBeNull();
+    });
+
+    it("hands over to the next month's occurrence", () => {
+      expect(getOverdueHabitOccurrence(h, "2026-08-01", undefined)).toBeNull();
+      // July's miss is gone; August 1 is now the outstanding one.
+      expect(getOverdueHabitOccurrence(h, "2026-08-02", undefined)).toBe("2026-08-01");
+    });
+
+    it("carries a day clamped onto the end of a short month", () => {
+      const h31 = habit({
+        id: "md31",
+        scheduleType: "monthDays",
+        scheduleMonthDays: [31],
+        createdAt: new Date(2025, 11, 1).getTime(),
+      });
+      expect(getOverdueHabitOccurrence(h31, "2026-03-01", undefined)).toBe("2026-02-28");
+      expect(getOverdueHabitOccurrence(h31, "2026-03-30", undefined)).toBe("2026-02-28");
+      expect(getOverdueHabitOccurrence(h31, "2026-03-31", undefined)).toBeNull();
+    });
+  });
+
+  it("ignores occurrences from before the habit existed", () => {
+    const h = habit({
+      id: "md-new",
+      scheduleType: "monthDays",
+      scheduleMonthDays: [1],
+      createdAt: new Date(2026, 6, 3).getTime(),
+    });
+    expect(getOverdueHabitOccurrence(h, "2026-07-09", undefined)).toBeNull();
+  });
+
+  it("ignores archived habits", () => {
+    const h = habit({
+      id: "w-archived",
+      scheduleType: "weekdays",
+      scheduleWeekdays: [1, 3, 5],
+      archivedAt: new Date(2026, 6, 9).getTime(),
+    });
+    expect(getOverdueHabitOccurrence(h, "2026-07-09", undefined)).toBeNull();
+  });
+
+  it("leaves schedules that already carry themselves alone", () => {
+    const today = "2026-07-09";
+    expect(getOverdueHabitOccurrence(habit({ id: "d", scheduleType: "daily" }), today, undefined)).toBeNull();
+    expect(getOverdueHabitOccurrence(habit({ id: "wk", scheduleType: "weekly" }), today, undefined)).toBeNull();
+    expect(getOverdueHabitOccurrence(habit({ id: "mo", scheduleType: "monthly" }), today, undefined)).toBeNull();
+    expect(
+      getOverdueHabitOccurrence(habit({ id: "n", scheduleType: "everyNDays", scheduleInterval: 3 }), today, undefined),
+    ).toBeNull();
+  });
+});
+
 describe("taskBucket", () => {
   it("maps hours to buckets and all-day to anytime", () => {
     expect(taskBucket({ dueAt: new Date(2026, 6, 9, 9).getTime(), hasDueTime: true })).toBe("morning");
@@ -374,6 +473,74 @@ describe("buildAgendaSections", () => {
     expect(row?.kind === "habit" && row.value).toBe(2);
     expect(row?.kind === "habit" && row.dayValue).toBe(1);
     expect(row?.kind === "habit" && row.done).toBe(false);
+  });
+
+  it("puts a missed habit occurrence in overdue, pinned to the day it was due", () => {
+    const today = "2026-07-09";
+    const habits = [habit({ id: "w", scheduleType: "weekdays", scheduleWeekdays: [1, 3, 5], target: 3 })];
+    const sections = buildAgendaSections({
+      selectedKey: today,
+      todayKey: today,
+      tasks: [],
+      habits,
+      entriesByHabit: new Map([["w", entries(["2026-07-08", 1])]]),
+    });
+
+    const overdue = sections.find((s) => s.bucket === "overdue");
+    const row = overdue?.rows[0];
+    expect(row?.kind === "habit" && row.habit.id).toBe("w");
+    expect(row?.kind === "habit" && row.dateKey).toBe("2026-07-08");
+    expect(row?.kind === "habit" && row.value).toBe(1);
+    expect(row?.kind === "habit" && row.done).toBe(false);
+    // Past days stay editable, so the miss can be recorded where it belongs.
+    expect(row?.kind === "habit" && row.editable).toBe(true);
+  });
+
+  it("shows a missed habit occurrence only on today", () => {
+    const today = "2026-07-09";
+    const habits = [habit({ id: "w", scheduleType: "weekdays", scheduleWeekdays: [1, 3, 5] })];
+    for (const selectedKey of ["2026-07-07", "2026-07-10"]) {
+      const sections = buildAgendaSections({
+        selectedKey,
+        todayKey: today,
+        tasks: [],
+        habits,
+        entriesByHabit: new Map(),
+      });
+      expect(sections.some((s) => s.bucket === "overdue")).toBe(false);
+    }
+  });
+
+  it("keeps a carried-over miss out of the day's habit progress", () => {
+    const today = "2026-07-09";
+    const habits = [habit({ id: "w", scheduleType: "weekdays", scheduleWeekdays: [1, 3, 5] })];
+    // Thursday is not a scheduled day, so its ring must stay empty.
+    expect(getDayHabitProgress(habits, today, today, new Map())).toEqual({ due: 0, done: 0 });
+  });
+
+  it("sorts overdue habits after overdue tasks", () => {
+    const today = "2026-07-09";
+    const tasks = [
+      {
+        id: "over",
+        title: "Old",
+        content: "",
+        dueAt: new Date(2026, 6, 7, 10).getTime(),
+        hasDueTime: true,
+        completedAt: null,
+        order: 1,
+        providerType: null,
+      },
+    ];
+    const habits = [habit({ id: "w", scheduleType: "weekdays", scheduleWeekdays: [1, 3, 5] })];
+    const sections = buildAgendaSections({
+      selectedKey: today,
+      todayKey: today,
+      tasks,
+      habits,
+      entriesByHabit: new Map(),
+    });
+    expect(sections.find((s) => s.bucket === "overdue")?.rows.map((r) => r.id)).toEqual(["over", "w"]);
   });
 
   it("sorts completed rows to the bottom of a section", () => {
