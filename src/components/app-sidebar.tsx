@@ -28,7 +28,7 @@ import {
 import { useEffect, useState } from "react";
 import { useCreateAccount } from "@/components/account-dialog";
 import { useCreateNote } from "@/components/note-dialog";
-import { SidebarNav, useSidebarLocation } from "@/components/sidebar/sidebar-nav";
+import { SidebarNav, useIntegrationsHasError, useSidebarLocation } from "@/components/sidebar/sidebar-nav";
 import { SidebarPanel, SidebarTooltip } from "@/components/sidebar/sidebar-primitives";
 import { useCreateTask } from "@/components/task-dialog";
 import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/components/transaction-dialog";
@@ -419,6 +419,7 @@ function SidebarContent({
 function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const hasIntegrationError = useIntegrationsHasError();
 
   useEffect(() => {
     return router.subscribe("onBeforeNavigate", () => setOpen(false));
@@ -434,9 +435,15 @@ function MobileSidebar() {
             variant="secondary"
             size="icon"
             className="!rounded-full fixed bottom-4 left-4 z-40 size-11 shadow-lg md:hidden"
-            aria-label="Open menu"
+            aria-label={hasIntegrationError ? "Open menu (integrations error)" : "Open menu"}
           >
             <Menu className="size-5" />
+            {hasIntegrationError ? (
+              <span
+                className="absolute top-1.5 right-1.5 size-2.5 rounded-full bg-rose-500 ring-2 ring-background"
+                aria-hidden="true"
+              />
+            ) : null}
           </Button>
         </SheetTrigger>
         <SheetContent className="bg-sidebar text-sidebar-foreground">
