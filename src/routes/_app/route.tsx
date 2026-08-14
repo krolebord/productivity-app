@@ -100,7 +100,8 @@ function RouteComponent() {
             onLayoutChanged={onLayoutChanged}
           >
             <Panel id="main" minSize="40%">
-              <main className="h-full overflow-auto">
+              {/* pb clears the mobile FABs so the last rows stay readable. */}
+              <main className="h-full overflow-auto pb-36 md:pb-0">
                 <Outlet />
               </main>
             </Panel>
