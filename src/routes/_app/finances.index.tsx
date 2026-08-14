@@ -241,11 +241,12 @@ function FinancesPage() {
 
       <SectionCard
         title={chartTitle}
+        actionsClassName="w-full @lg:w-auto"
         actions={
           <div
             role="group"
             aria-label="Overview chart"
-            className="flex @lg:inline-flex rounded-md border bg-muted/50 p-0.5"
+            className="flex w-full @lg:inline-flex rounded-md border bg-muted/50 p-0.5"
           >
             {CHART_TABS.map((tab) => (
               <button

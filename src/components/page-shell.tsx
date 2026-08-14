@@ -85,6 +85,7 @@ export function SectionCard({
   children,
   bodyClassName,
   className,
+  actionsClassName,
 }: {
   title?: ReactNode;
   icon?: ReactNode;
@@ -92,6 +93,7 @@ export function SectionCard({
   children: ReactNode;
   bodyClassName?: string;
   className?: string;
+  actionsClassName?: string;
 }) {
   return (
     <section className={cn("min-w-0 overflow-hidden rounded-lg border bg-card shadow-xs", className)}>
@@ -101,7 +103,9 @@ export function SectionCard({
             {icon}
             <span className="truncate">{title}</span>
           </h2>
-          {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
+          {actions ? (
+            <div className={cn("flex shrink-0 items-center gap-1.5", actionsClassName)}>{actions}</div>
+          ) : null}
         </div>
       ) : null}
       <div className={bodyClassName}>{children}</div>
