@@ -30,20 +30,28 @@ export const calendarOAuthCookieSession = createCookieSession<CalendarOAuthSessi
  * `access_type=offline` is what makes Google return a refresh token, and `prompt=consent` forces it
  * to be re-issued even if the account previously consented — without it a reconnect can come back
  * with no refresh token at all and the connection is unusable for background sync.
+ *
+ * `loginHint` (the account email) is set when reconnecting a known account so Google pre-selects it
+ * instead of making the user hunt through the account picker.
  */
-const connect = protectedProcedure.handler(async ({ context }) => {
-  const google = getGoogleCalendarProvider();
-  const state = arctic.generateState();
-  const codeVerifier = arctic.generateCodeVerifier();
+const connect = protectedProcedure
+  .input(z.object({ loginHint: z.string().optional() }))
+  .handler(async ({ input, context }) => {
+    const google = getGoogleCalendarProvider();
+    const state = arctic.generateState();
+    const codeVerifier = arctic.generateCodeVerifier();
 
-  const url = google.createAuthorizationURL(state, codeVerifier, [...GOOGLE_CALENDAR_SCOPES]);
-  url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", "consent");
+    const url = google.createAuthorizationURL(state, codeVerifier, [...GOOGLE_CALENDAR_SCOPES]);
+    url.searchParams.set("access_type", "offline");
+    url.searchParams.set("prompt", "consent");
+    if (input.loginHint) {
+      url.searchParams.set("login_hint", input.loginHint);
+    }
 
-  await calendarOAuthCookieSession.set(context, { state, codeVerifier });
+    await calendarOAuthCookieSession.set(context, { state, codeVerifier });
 
-  return { url: url.toString() };
-});
+    return { url: url.toString() };
+  });
 
 const connectionInput = z.object({ connectionId: z.string() });
 

@@ -111,14 +111,19 @@ function GoogleCalendarAccountCard({
   connection,
   sources,
   syncStatus,
+  reconnectPending,
+  onReconnect,
   onSyncStatusStale,
 }: {
   connection: CalendarConnectionMetaItem;
   sources: CalendarSourceItem[];
   syncStatus: CalendarSyncStatusReport | undefined;
+  reconnectPending: boolean;
+  onReconnect: () => void;
   onSyncStatusStale: () => void;
 }) {
   const connectionId = connection.providerConnectionId;
+  const needsReconnect = connection.status === "error";
 
   const refreshCalendars = useMutation(
     orpc.integrations.googleCalendar.refreshCalendars.mutationOptions({
@@ -164,10 +169,20 @@ function GoogleCalendarAccountCard({
           </div>
           {syncStatus?.lastError ? (
             <p className="mt-1 text-rose-600 text-xs dark:text-rose-400">{syncStatus.lastError}</p>
+          ) : needsReconnect ? (
+            <p className="mt-1 text-rose-600 text-xs dark:text-rose-400">Reconnect this account to resume syncing.</p>
           ) : null}
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={needsReconnect ? "default" : "outline"}
+            onClick={onReconnect}
+            disabled={reconnectPending}
+          >
+            Reconnect
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -256,6 +271,8 @@ export function GoogleCalendarSection({
     }),
   );
 
+  const errorCount = connections.filter((connection) => connection.status === "error").length;
+
   return (
     <Collapsible asChild>
       <section className="rounded-xl border bg-card">
@@ -264,10 +281,17 @@ export function GoogleCalendarSection({
             <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform [[data-state=closed]_&]:-rotate-90" />
             <div className="min-w-0">
               <h2 className="font-semibold">Google Calendar</h2>
-              <p className="mt-0.5 text-muted-foreground text-xs">
+              <p
+                className={cn(
+                  "mt-0.5 text-xs",
+                  errorCount > 0 ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground",
+                )}
+              >
                 {connections.length === 0
                   ? "Not connected"
-                  : `${connections.length} ${connections.length === 1 ? "account" : "accounts"} connected`}
+                  : errorCount > 0
+                    ? `${errorCount} ${errorCount === 1 ? "account needs" : "accounts need"} reconnection`
+                    : `${connections.length} ${connections.length === 1 ? "account" : "accounts"} connected`}
               </p>
             </div>
           </CollapsibleTrigger>
@@ -297,6 +321,8 @@ export function GoogleCalendarSection({
                 connection={connection}
                 sources={sourcesByConnection.get(connection.providerConnectionId) ?? []}
                 syncStatus={statusByConnectionId.get(connection.providerConnectionId)}
+                reconnectPending={connect.isPending}
+                onReconnect={() => connect.mutate({ loginHint: connection.email || undefined })}
                 onSyncStatusStale={invalidateSyncStatus}
               />
             ))}

@@ -74,6 +74,7 @@ export function SidebarNavLink({
   icon: Icon,
   isActive,
   collapsed,
+  hasError,
   onNavigate,
 }: {
   target: SidebarLinkTarget;
@@ -81,13 +82,31 @@ export function SidebarNavLink({
   icon: LucideIcon;
   isActive: boolean;
   collapsed: boolean;
+  /** Error dot on the row; collapsed tooltip mentions it too. */
+  hasError?: boolean;
   onNavigate?: () => void;
 }) {
+  const tooltipLabel = hasError ? `${label} (error)` : label;
+
   return (
-    <SidebarTooltip label={label} collapsed={collapsed}>
-      <Link {...target} onClick={onNavigate} viewTransition className={sidebarRowClass({ collapsed, isActive })}>
-        <Icon className="size-4 shrink-0" />
-        {!collapsed && label}
+    <SidebarTooltip label={tooltipLabel} collapsed={collapsed}>
+      <Link
+        {...target}
+        onClick={onNavigate}
+        viewTransition
+        aria-label={collapsed || hasError ? tooltipLabel : undefined}
+        className={sidebarRowClass({ collapsed, isActive })}
+      >
+        <span className="relative">
+          <Icon className="size-4 shrink-0" />
+          {hasError && collapsed ? (
+            <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-rose-500" aria-hidden="true" />
+          ) : null}
+        </span>
+        {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
+        {hasError && !collapsed ? (
+          <span className="size-2 shrink-0 rounded-full bg-rose-500" aria-hidden="true" />
+        ) : null}
       </Link>
     </SidebarTooltip>
   );

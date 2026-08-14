@@ -236,13 +236,51 @@ function AgentsNavItem({ collapsed, onNavigate }: NavEntryProps) {
   );
 }
 
+/**
+ * True when a connected integration is in an error state the user can fix on the integrations page.
+ * Uses the synced connection rows so the badge works offline and updates live.
+ */
+export function useIntegrationsHasError() {
+  const { data: calendarConnections } = useDbQuery((q) =>
+    q.selectFrom("calendar_connection").select(["id", "status"]).where("status", "=", "error"),
+  );
+  const { data: monobankConnections } = useDbQuery((q) =>
+    q.selectFrom("monobank_connection").select(["id", "status", "webhookStatus"]),
+  );
+
+  return (
+    calendarConnections.length > 0 ||
+    monobankConnections.some(
+      (connection) =>
+        connection.status !== "disconnected" && (connection.status === "error" || connection.webhookStatus === "error"),
+    )
+  );
+}
+
+function IntegrationsNavItem({ collapsed, onNavigate }: NavEntryProps) {
+  const location = useSidebarLocation();
+  const hasError = useIntegrationsHasError();
+
+  return (
+    <SidebarNavLink
+      target={{ to: "/integrations" }}
+      label="Integrations"
+      icon={Plug}
+      isActive={location.isPath("/integrations")}
+      collapsed={collapsed}
+      hasError={hasError}
+      onNavigate={onNavigate}
+    />
+  );
+}
+
 /** Sidebar order lives here — one list, top to bottom, no interleaved JSX. */
 const NAV_ENTRIES = [
   { kind: "group", key: "finances", component: FinancesNavItem },
   { kind: "group", key: "notes", component: NotesNavItem },
   { kind: "link", key: "habits", to: "/habits", label: "Habits", icon: Repeat },
   { kind: "group", key: "agents", component: AgentsNavItem },
-  { kind: "link", key: "integrations", to: "/integrations", label: "Integrations", icon: Plug },
+  { kind: "group", key: "integrations", component: IntegrationsNavItem },
 ] as const;
 
 export function SidebarNav({ collapsed, onNavigate }: NavEntryProps) {
