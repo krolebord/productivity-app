@@ -37,8 +37,16 @@ function ConvertedAmount({ amount, className }: { amount?: DisplayAmount; classN
   }
 
   return (
-    <span className={cn("block truncate font-mono text-muted-foreground tabular-nums", className)}>
+    <span className={cn("block whitespace-nowrap font-mono text-muted-foreground tabular-nums", className)}>
       ≈ {formatBalance(amount.amount, amount.currency)}
+    </span>
+  );
+}
+
+function AmountValue({ amount, currency, className }: { amount: number; currency: string; className?: string }) {
+  return (
+    <span className={cn("block whitespace-nowrap font-medium font-mono tabular-nums", className)}>
+      {formatBalance(amount, currency)}
     </span>
   );
 }
@@ -63,10 +71,12 @@ function CompactTransactionRow({
           {primaryAccount?.labelText || "Untitled"} · {formatDateTimeDisplay(transaction.effectiveAt)}
         </span>
       </span>
-      <span className="max-w-[45%] shrink-0 text-right">
-        <span className={cn("block truncate font-medium font-mono text-sm tabular-nums", typeStyle.accent)}>
-          {formatBalance(displayAmount.amount, displayAmount.currency)}
-        </span>
+      <span className="shrink-0 text-right">
+        <AmountValue
+          amount={displayAmount.amount}
+          currency={displayAmount.currency}
+          className={cn("text-sm", typeStyle.accent)}
+        />
         <ConvertedAmount amount={convertedAmount} className="text-xs" />
       </span>
     </>
@@ -90,61 +100,61 @@ function DetailedTransactionRow({
       <span className={cn("mt-0.5 shrink-0", typeStyle.accent)}>
         <Icon className="size-4" />
       </span>
-      <span className="flex min-w-0 flex-1 @xl:flex-row flex-col @xl:items-center gap-3">
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="truncate font-medium">{transactionTitle(transaction)}</span>
-            {transaction.category ? (
-              <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
-                {transaction.category}
-              </span>
-            ) : null}
-            {transaction.importance ? (
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 font-medium text-[11px]",
-                  IMPORTANCE_STYLE[transaction.importance].badge,
-                )}
-              >
-                {IMPORTANCE_STYLE[transaction.importance].label}
-              </span>
-            ) : null}
-          </span>
-
-          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-sm">
-            <span>{formatDateTimeDisplay(transaction.effectiveAt)}</span>
-            <span>
-              {primaryAccount?.labelText || "Untitled"}
-              {isTransfer && secondaryAccount ? ` → ${secondaryAccount.labelText || "Untitled"}` : null}
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="min-w-0 max-w-full truncate font-medium">{transactionTitle(transaction)}</span>
+          {transaction.category ? (
+            <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+              {transaction.category}
             </span>
-          </span>
-
-          {transaction.notes ? (
-            <span className="mt-1 line-clamp-2 block text-muted-foreground text-sm">{transaction.notes}</span>
+          ) : null}
+          {transaction.importance ? (
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 font-medium text-[11px]",
+                IMPORTANCE_STYLE[transaction.importance].badge,
+              )}
+            >
+              {IMPORTANCE_STYLE[transaction.importance].label}
+            </span>
           ) : null}
         </span>
 
-        <span className="shrink-0 @xl:self-auto self-end text-right">
-          {isTransfer && showTransferPair ? (
-            <>
-              <span className={cn("block font-medium font-mono tabular-nums", typeStyle.accent)}>
-                {formatBalance(transaction.amount, transaction.accountCurrency)}
-              </span>
-              {transaction.counterpartyAmount !== null ? (
-                <span className="mt-1 block font-mono text-muted-foreground text-sm tabular-nums">
-                  {formatBalance(transaction.counterpartyAmount, transaction.counterpartyCurrency)}
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <span className={cn("block font-medium font-mono tabular-nums", typeStyle.accent)}>
-                {formatBalance(displayAmount.amount, displayAmount.currency)}
-              </span>
-              <ConvertedAmount amount={convertedAmount} className="text-sm" />
-            </>
-          )}
+        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 break-words text-muted-foreground text-sm">
+          <span>{formatDateTimeDisplay(transaction.effectiveAt)}</span>
+          <span>
+            {primaryAccount?.labelText || "Untitled"}
+            {isTransfer && secondaryAccount ? ` → ${secondaryAccount.labelText || "Untitled"}` : null}
+          </span>
         </span>
+
+        {transaction.notes ? (
+          <span className="mt-1 line-clamp-2 block break-words text-muted-foreground text-sm">{transaction.notes}</span>
+        ) : null}
+      </span>
+
+      <span className="shrink-0 text-right">
+        {isTransfer && showTransferPair ? (
+          <>
+            <AmountValue
+              amount={transaction.amount}
+              currency={transaction.accountCurrency}
+              className={typeStyle.accent}
+            />
+            {transaction.counterpartyAmount !== null ? (
+              <AmountValue
+                amount={transaction.counterpartyAmount}
+                currency={transaction.counterpartyCurrency}
+                className="mt-1 font-normal text-muted-foreground text-sm"
+              />
+            ) : null}
+          </>
+        ) : (
+          <>
+            <AmountValue amount={displayAmount.amount} currency={displayAmount.currency} className={typeStyle.accent} />
+            <ConvertedAmount amount={convertedAmount} className="text-sm" />
+          </>
+        )}
       </span>
     </>
   );
