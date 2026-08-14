@@ -219,7 +219,7 @@ function SidebarPanelRow({ collapsed, onNavigate }: { collapsed: boolean; onNavi
   const assistantEnabled = useAssistantEnabled();
 
   return (
-    <div className={cn("flex gap-1 px-2 pb-2", collapsed ? "flex-col items-center" : "flex-row")}>
+    <div className={cn("flex gap-1 p-2", collapsed ? "flex-col items-center" : "flex-row")}>
       {isDesktop ? (
         <SidebarPanel
           icon={CalendarCheck}

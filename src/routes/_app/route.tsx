@@ -124,7 +124,7 @@ function RouteComponent() {
             <SheetContent
               side="right"
               forceMount
-              className="w-full max-w-md gap-0 p-0 data-[state=closed]:pointer-events-none data-[state=closed]:invisible md:hidden"
+              className="inset-0 h-auto w-auto max-w-none gap-0 border-l-0 p-0 shadow-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible md:hidden"
             >
               <SheetHeader className="sr-only">
                 <SheetTitle>Assistant</SheetTitle>
