@@ -9,6 +9,7 @@ export type AssistantModelId =
   | "openai/gpt-5.4-mini"
   | "google/gemini-3-flash-preview"
   | "minimax/minimax-m3"
+  | "stealth/ox-alpha"
   | "x-ai/grok-4.5"
   | "xiaomi/mimo-v2.5"
   | "xiaomi/mimo-v2.5-pro";
@@ -43,6 +44,13 @@ export type AssistantModel = {
 };
 
 export const ASSISTANT_MODELS: AssistantModel[] = [
+  {
+    id: "stealth/ox-alpha",
+    label: "Ox Alpha",
+    inputModalities: ["text", "image", "video"],
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 },
+    reasoningEffort: "max",
+  },
   {
     id: "xiaomi/mimo-v2.5",
     label: "MiMo V2.5",
