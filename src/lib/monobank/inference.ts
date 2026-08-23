@@ -1,6 +1,6 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { ServerSyncDb } from "@sqlite-sync/cloudflare";
-import type { SQLiteTransactionWrapper } from "@sqlite-sync/core";
+import type { SyncedDbSqlExecutor } from "@sqlite-sync/core";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import type { ImportanceTier } from "@/lib/transactions";
@@ -8,7 +8,7 @@ import type { UserDb, UserSyncDbSchema } from "@/user-db/migrations";
 import type { MappedMonobankTransaction } from "./mapping";
 import { MONOBANK_PROVIDER_TYPE } from "./types";
 
-type ClientMonobankDb = Pick<SQLiteTransactionWrapper<UserDb>, "executeKysely">;
+type ClientMonobankDb = Pick<SyncedDbSqlExecutor<UserDb>, "executeKysely">;
 type ServerMonobankDb = Pick<ServerSyncDb<UserSyncDbSchema>, "executeKysely">;
 type MonobankClassificationEnv = Pick<Env, "OPENROUTER_API_KEY">;
 

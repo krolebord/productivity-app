@@ -778,7 +778,6 @@ function ConversationView({
 }) {
   const auth = useAuth();
   const db = useDb();
-  const isDesktop = useIsDesktop();
   const closePanel = useAssistantStore((s) => s.closePanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const preferredModel = useAssistantStore((s) => s.model);
@@ -926,6 +925,7 @@ function ConversationView({
 
 function ConversationChat({ agentId, conversation }: { agentId: string; conversation: ConversationRow }) {
   const db = useDb();
+  const isDesktop = useIsDesktop();
   const input = useAssistantStore((s) => s.inputDraft);
   const setInput = useAssistantStore((s) => s.setInputDraft);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);

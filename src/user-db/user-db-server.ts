@@ -7,7 +7,6 @@ import {
   createAiDbAccess,
 } from "@sqlite-sync/ai";
 import {
-  createKyselyExecutor,
   durableObjectAdapter,
   type RemoteHandler,
   type ServerSyncDb,
@@ -70,14 +69,14 @@ export class UserDbServer extends Server<Env> {
     this.syncDb = syncDb;
 
     this.aiDbAccess = createAiDbAccess({
-      executor: createKyselyExecutor(this.ctx.storage),
+      executor: syncDb.unsafe,
       storage: syncDb,
       syncDbSchema,
       context: userDbSchemaDocContext,
     });
 
     this.codeAiDbAccess = createAiDbAccess({
-      executor: createKyselyExecutor(this.ctx.storage),
+      executor: syncDb.unsafe,
       syncDbSchema,
       context: userDbSchemaDocContext,
       limits: CODEMODE_QUERY_LIMITS,

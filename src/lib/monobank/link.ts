@@ -1,8 +1,8 @@
-import type { SQLiteDbWrapper } from "@sqlite-sync/core";
+import type { SyncedDbDatabase } from "@sqlite-sync/core";
 import type { UserDb } from "@/user-db/migrations";
 import { validateMonobankLink } from "./rules";
 
-type LinkDatabase = Pick<SQLiteDbWrapper<UserDb>, "executeTransaction">;
+type LinkDatabase = Pick<SyncedDbDatabase<UserDb>, "executeTransaction">;
 
 /**
  * Link (or, with an empty `linkedAccountId`, unlink) a Monobank account to an in-app account by

@@ -1,11 +1,11 @@
-import type { SQLiteDbWrapper } from "@sqlite-sync/core";
+import type { SyncedDbDatabase } from "@sqlite-sync/core";
 import { createTransactionInTransaction } from "@/lib/transactions";
 import type { UserDb } from "@/user-db/migrations";
 import { inferClientMonobankClassification } from "./inference";
 import type { MonobankImportEntry } from "./mapping";
 import { MONOBANK_PROVIDER_TYPE } from "./types";
 
-type ImportDatabase = Pick<SQLiteDbWrapper<UserDb>, "executeTransaction">;
+type ImportDatabase = Pick<SyncedDbDatabase<UserDb>, "executeTransaction">;
 
 /**
  * Insert pre-mapped Monobank entries into the synced DB, using the same client path as manual

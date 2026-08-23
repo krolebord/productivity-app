@@ -1,4 +1,4 @@
-import { generateId, type SQLiteDbWrapper, type SQLiteTransactionWrapper } from "@sqlite-sync/core";
+import { generateId, type SyncedDbDatabase, type SyncedDbTransaction } from "@sqlite-sync/core";
 import type { Selectable } from "kysely";
 import type { UserDb } from "@/user-db/migrations";
 
@@ -10,7 +10,8 @@ export type ImportanceTier = (typeof IMPORTANCE_TIERS)[number];
 
 export type TransactionRow = Selectable<UserDb["transaction_entry"]>;
 export type AccountRow = Selectable<UserDb["account"]>;
-type TransactionDatabase = Pick<SQLiteDbWrapper<UserDb>, "executeTransaction">;
+type TransactionDatabase = Pick<SyncedDbDatabase<UserDb>, "executeTransaction">;
+type TransactionTrx = Pick<SyncedDbTransaction<UserDb>, "executeKysely">;
 
 type TransactionBaseInput = {
   accountId: string;
@@ -73,7 +74,7 @@ function trimText(value: string | undefined) {
   return value?.trim() ?? "";
 }
 
-function getAccountById(trx: SQLiteTransactionWrapper<UserDb>, accountId: string) {
+function getAccountById(trx: TransactionTrx, accountId: string) {
   const [account] = trx.executeKysely((q) => q.selectFrom("account").selectAll().where("id", "=", accountId)).rows;
 
   if (!account) {
@@ -83,11 +84,11 @@ function getAccountById(trx: SQLiteTransactionWrapper<UserDb>, accountId: string
   return account;
 }
 
-function updateAccountBalance(trx: SQLiteTransactionWrapper<UserDb>, accountId: string, nextBalance: number) {
+function updateAccountBalance(trx: TransactionTrx, accountId: string, nextBalance: number) {
   trx.executeKysely((q) => q.updateTable("account").set({ balance: nextBalance }).where("id", "=", accountId));
 }
 
-function applyAccountDelta(trx: SQLiteTransactionWrapper<UserDb>, accountId: string, delta: number) {
+function applyAccountDelta(trx: TransactionTrx, accountId: string, delta: number) {
   if (delta === 0) {
     return;
   }
@@ -96,10 +97,7 @@ function applyAccountDelta(trx: SQLiteTransactionWrapper<UserDb>, accountId: str
   updateAccountBalance(trx, accountId, Number(account.balance) + delta);
 }
 
-function materializeTransaction(
-  trx: SQLiteTransactionWrapper<UserDb>,
-  input: TransactionInput,
-): MaterializedTransaction {
+function materializeTransaction(trx: TransactionTrx, input: TransactionInput): MaterializedTransaction {
   const account = getAccountById(trx, input.accountId);
   const title = trimText(input.title);
   const notes = trimText(input.notes);
@@ -186,10 +184,7 @@ function materializeTransaction(
   }
 }
 
-function applyTransactionBalanceEffect(
-  trx: SQLiteTransactionWrapper<UserDb>,
-  transaction: MaterializedTransaction | TransactionRow,
-) {
+function applyTransactionBalanceEffect(trx: TransactionTrx, transaction: MaterializedTransaction | TransactionRow) {
   applyAccountDelta(trx, transaction.accountId, Number(transaction.amount));
 
   if (transaction.counterpartyAccountId && transaction.counterpartyAmount !== null) {
@@ -197,7 +192,7 @@ function applyTransactionBalanceEffect(
   }
 }
 
-function reverseTransactionBalanceEffect(trx: SQLiteTransactionWrapper<UserDb>, transaction: TransactionRow) {
+function reverseTransactionBalanceEffect(trx: TransactionTrx, transaction: TransactionRow) {
   applyAccountDelta(trx, transaction.accountId, -Number(transaction.amount));
 
   if (transaction.counterpartyAccountId && transaction.counterpartyAmount !== null) {
@@ -205,7 +200,7 @@ function reverseTransactionBalanceEffect(trx: SQLiteTransactionWrapper<UserDb>, 
   }
 }
 
-export function createTransactionInTransaction(trx: SQLiteTransactionWrapper<UserDb>, input: TransactionInput) {
+export function createTransactionInTransaction(trx: TransactionTrx, input: TransactionInput) {
   const createdAt = Date.now();
   const transaction = materializeTransaction(trx, input);
   const id = generateId();

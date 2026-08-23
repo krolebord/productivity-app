@@ -1,7 +1,16 @@
 minimumReleaseAge: 10080
 # eslint 10.6.0 is already in the lockfile; it fails the age check on re-resolution until 2026-07-03
+# sqlite-sync 0.9.0 published 2026-08-23; think 0.16 / agents 0.21 / ai-chat 0.10.2 published 2026-08-18
 minimumReleaseAgeExclude:
   - eslint
+  - "@sqlite-sync/ai"
+  - "@sqlite-sync/cloudflare"
+  - "@sqlite-sync/core"
+  - "@sqlite-sync/devtools"
+  - "@sqlite-sync/react"
+  - "@cloudflare/ai-chat"
+  - "@cloudflare/think"
+  - agents
 trustPolicy: no-downgrade
 # workbox-build (via vite-plugin-pwa) pulls these: the off-main-thread fork is
 # referenced by GoogleChrome/workbox itself but published without provenance;
