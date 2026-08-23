@@ -53,6 +53,7 @@ import {
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { useConfirmDialogStore } from "../confirm-dialog";
@@ -777,6 +778,7 @@ function ConversationView({
 }) {
   const auth = useAuth();
   const db = useDb();
+  const isDesktop = useIsDesktop();
   const closePanel = useAssistantStore((s) => s.closePanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const preferredModel = useAssistantStore((s) => s.model);
@@ -1180,7 +1182,7 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
             onChange={(e) => setInput(e.target.value)}
             onPaste={pasteImages}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (isDesktop && e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 submit();
               }
