@@ -1,5 +1,9 @@
 import { generateId, type SyncedDbDatabase, type SyncedDbTransaction } from "@sqlite-sync/core";
 import type { Selectable } from "kysely";
+import {
+  ACCOUNT_BALANCE_RECONCILIATION_SQL,
+  type AccountBalanceReconciliationRow,
+} from "@/lib/account-balance-reconciliation";
 import type { UserDb } from "@/user-db/migrations";
 
 export const TRANSACTION_TYPES = ["expense", "income", "transfer", "adjustment"] as const;
@@ -311,26 +315,7 @@ export function createBalanceAdjustment(
 
 export function refreshAccountBalances(db: TransactionDatabase) {
   return db.executeTransaction((trx) => {
-    const nextBalances = trx.sql<{ id: string; balance: number; nextBalance: number }>`
-      select
-        account.id,
-        account.balance,
-        account.initialBalance
-          + coalesce(source_totals.total, 0)
-          + coalesce(destination_totals.total, 0) as nextBalance
-      from account
-      left join (
-        select accountId, sum(amount) as total
-        from transaction_entry
-        group by accountId
-      ) source_totals on source_totals.accountId = account.id
-      left join (
-        select counterpartyAccountId, sum(counterpartyAmount) as total
-        from transaction_entry
-        where counterpartyAccountId != '' and counterpartyAmount is not null
-        group by counterpartyAccountId
-      ) destination_totals on destination_totals.counterpartyAccountId = account.id
-    `.rows;
+    const nextBalances = trx.sql<AccountBalanceReconciliationRow>(ACCOUNT_BALANCE_RECONCILIATION_SQL).rows;
     let changedCount = 0;
 
     for (const row of nextBalances) {

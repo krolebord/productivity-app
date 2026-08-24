@@ -1,7 +1,7 @@
 import { generateId } from "@sqlite-sync/core";
 import { useStore } from "@tanstack/react-form";
 import { Trash2Icon } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { create } from "zustand";
@@ -79,13 +79,6 @@ function AccountDialogContent() {
   const { mode, accountId } = useAccountDialogStore();
   const closeDialog = useAccountDialogStore((x) => x.close);
   const db = useDb();
-  const [pendingBalanceChoice, setPendingBalanceChoice] = useState<null | {
-    balance: number;
-    description: string;
-    labelColor: string;
-    labelText: string;
-    currency: string;
-  }>(null);
 
   const { data: existingAccounts } = useDbQuery((q) =>
     q
@@ -103,16 +96,13 @@ function AccountDialogContent() {
   const existing = mode === "edit" ? existingAccounts[0] : undefined;
   const hasTransactionHistory = relatedTransactions.length > 0;
 
-  function persistAccount(
-    value: {
-      balance: number;
-      currency: string;
-      description: string;
-      labelColor: string;
-      labelText: string;
-    },
-    balanceChangeMode: "adjustment" | "overwrite" = "overwrite",
-  ) {
+  function persistAccount(value: {
+    balance: number;
+    currency: string;
+    description: string;
+    labelColor: string;
+    labelText: string;
+  }) {
     if (mode === "create") {
       const id = generateId();
       const createdAt = Date.now();
@@ -150,42 +140,27 @@ function AccountDialogContent() {
     }
 
     db.db.executeTransaction((trx) => {
-      if (balanceChangeMode === "adjustment") {
-        trx.executeKysely((q) =>
-          q
-            .updateTable("account")
-            .set({
-              labelText: value.labelText,
-              labelColor: value.labelColor,
-              currency: value.currency,
-              description: value.description,
-            })
-            .where("id", "=", accountId),
-        );
+      trx.executeKysely((q) =>
+        q
+          .updateTable("account")
+          .set({
+            labelText: value.labelText,
+            labelColor: value.labelColor,
+            currency: value.currency,
+            description: value.description,
+          })
+          .where("id", "=", accountId),
+      );
 
-        const delta = value.balance - Number(existing.balance);
-        if (delta !== 0) {
-          createTransactionInTransaction(trx, {
-            type: "adjustment",
-            accountId,
-            amount: delta,
-            effectiveAt: Date.now(),
-            title: "Balance adjustment",
-          });
-        }
-      } else {
-        trx.executeKysely((q) =>
-          q
-            .updateTable("account")
-            .set({
-              labelText: value.labelText,
-              labelColor: value.labelColor,
-              currency: value.currency,
-              balance: value.balance,
-              description: value.description,
-            })
-            .where("id", "=", accountId),
-        );
+      const delta = value.balance - Number(existing.balance);
+      if (delta !== 0) {
+        createTransactionInTransaction(trx, {
+          type: "adjustment",
+          accountId,
+          amount: delta,
+          effectiveAt: Date.now(),
+          title: "Balance adjustment",
+        });
       }
     });
 
@@ -219,23 +194,13 @@ function AccountDialogContent() {
       description: existing?.description ?? "",
     },
     onSubmit: ({ value }) => {
-      const parsedBalance = Number.parseFloat(value.balance);
-      const nextValue = {
-        balance: parsedBalance,
+      persistAccount({
+        balance: Number.parseFloat(value.balance),
         currency: value.currency,
         description: value.description,
         labelColor: value.labelColor,
         labelText: value.labelText,
-      };
-
-      const balanceChanged = mode === "edit" && existing ? parsedBalance !== Number(existing.balance) : false;
-
-      if (balanceChanged && hasTransactionHistory) {
-        setPendingBalanceChoice(nextValue);
-        return;
-      }
-
-      persistAccount(nextValue);
+      });
     },
   });
   const selectedCurrency = useStore(form.store, (state) => state.values.currency);
@@ -345,42 +310,6 @@ function AccountDialogContent() {
           <Button type="submit">{mode === "create" ? "Create" : "Save"}</Button>
         </DialogFooter>
       </form>
-
-      <Dialog open={pendingBalanceChoice !== null} onOpenChange={(open) => !open && setPendingBalanceChoice(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogTitle>Balance change detected</DialogTitle>
-          <DialogDescription>
-            This account already has transaction history. Choose whether to keep an adjustment entry or overwrite the
-            current balance directly.
-          </DialogDescription>
-          <div className="flex flex-col gap-3">
-            <Button
-              type="button"
-              onClick={() => {
-                if (!pendingBalanceChoice) return;
-                persistAccount(pendingBalanceChoice, "adjustment");
-                setPendingBalanceChoice(null);
-              }}
-            >
-              Create adjustment entry
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                if (!pendingBalanceChoice) return;
-                persistAccount(pendingBalanceChoice, "overwrite");
-                setPendingBalanceChoice(null);
-              }}
-            >
-              Overwrite balance only
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setPendingBalanceChoice(null)}>
-              Cancel
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

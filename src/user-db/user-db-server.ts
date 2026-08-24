@@ -30,6 +30,12 @@ import { fetchAndPersistCurrencyRates, fetchCurrencyRatesJob } from "./jobs/fetc
 import { jobs } from "./jobs/jobs";
 import { type MonobankImportInput, monobankImportJob } from "./jobs/monobank-import";
 import { type MonobankMetadataInput, monobankMetadataJob } from "./jobs/monobank-metadata";
+import {
+  ACCOUNT_BALANCE_RECONCILIATION_DEDUPE_KEY,
+  ACCOUNT_BALANCE_RECONCILIATION_DELAY_MS,
+  ACCOUNT_BALANCE_RECONCILIATION_MAX_DELAY_MS,
+  reconcileAccountBalancesJob,
+} from "./jobs/reconcile-account-balances";
 import { type ConversationItem, syncDbSchema, type UserSyncDbSchema } from "./migrations";
 import { userDbSchemaDocContext } from "./schema-doc";
 
@@ -55,6 +61,7 @@ export class UserDbServer extends Server<Env> {
   private codeAiDbAccess: AiDbAccess = null!;
   // biome-ignore lint/style/noNonNullAssertion: initialize in onStart
   private syncDb: ServerSyncDb<UserSyncDbSchema> = null!;
+  private accountBalanceReconciliationQueued = false;
 
   async onStart() {
     const { syncDb, remoteHandler } = await durableObjectAdapter.createCrdtStorage({
@@ -320,7 +327,35 @@ export class UserDbServer extends Server<Env> {
     this.syncDb.executeKysely((q) => q.deleteFrom("conversation_message").where("conversationId", "=", conversationId));
   }
 
+  /** Coalesce synchronously applied transaction events before updating the durable debounce. */
+  private queueAccountBalanceReconciliation(): void {
+    if (this.accountBalanceReconciliationQueued) {
+      return;
+    }
+
+    this.accountBalanceReconciliationQueued = true;
+    this.ctx.waitUntil(
+      Promise.resolve()
+        .then(() => {
+          this.accountBalanceReconciliationQueued = false;
+          return this.jobRuntime.scheduleDebounced(reconcileAccountBalancesJob, {
+            input: {},
+            dedupeKey: ACCOUNT_BALANCE_RECONCILIATION_DEDUPE_KEY,
+            delayMs: ACCOUNT_BALANCE_RECONCILIATION_DELAY_MS,
+            maxDelayMs: ACCOUNT_BALANCE_RECONCILIATION_MAX_DELAY_MS,
+          });
+        })
+        .catch((error) => {
+          console.error("Could not schedule account-balance reconciliation", error);
+        }),
+    );
+  }
+
   private async onEventApplied(event: TypedPersistedCrdtEvent<typeof syncDbSchema>) {
+    if (event.dataset === "_transaction_entry") {
+      this.queueAccountBalanceReconciliation();
+    }
+
     if (event.type === "item-deleted" && event.dataset === "_conversation") {
       this.deleteConversationMessages(event.item_id);
       // Conversation agents are named `${userDbName}:${conversationId}` — wipe the orphaned DO.
