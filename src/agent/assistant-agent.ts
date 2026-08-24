@@ -18,6 +18,7 @@ import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { z } from "zod";
 import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
+import { BUILTIN_SKILLS, type BuiltinSkill } from "./builtin-skills";
 import { ChartSpecSchema } from "./chart-spec";
 import {
   conversationTitleFromTurnText,
@@ -184,7 +185,33 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   }
 
   getSkills(): SkillSource[] {
-    return [this.skillSource()];
+    return [this.skillSource(), this.builtinSkillSource()];
+  }
+
+  // App-shipped skills defined in code (see builtin-skills.ts). Always active,
+  // never stored per-user; the fingerprint is static since the set only changes
+  // when the app is redeployed.
+  private builtinSkillSource(): SkillSource {
+    const describe = (skill: BuiltinSkill) => (skill.whenToUse ? `${skill.name} — ${skill.whenToUse}` : skill.name);
+    return {
+      id: "builtin-skills",
+      fingerprint: BUILTIN_SKILLS.map((skill) => skill.id).join(","),
+      async list() {
+        return BUILTIN_SKILLS.map((skill) => ({ name: skill.id, description: describe(skill) }));
+      },
+      async load(name) {
+        const skill = BUILTIN_SKILLS.find((entry) => entry.id === name);
+        if (!skill) {
+          return null;
+        }
+        const header = skill.whenToUse ? `When to use: ${skill.whenToUse}\n\n` : "";
+        return {
+          name: skill.id,
+          description: describe(skill),
+          body: `# ${skill.name}\n\n${header}${skill.instructions}`,
+        };
+      },
+    };
   }
 
   // The user's active skills, read live from the synced `skill` table. Think renders list()

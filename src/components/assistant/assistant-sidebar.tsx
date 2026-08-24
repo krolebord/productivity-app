@@ -31,6 +31,7 @@ import { type ClipboardEvent, lazy, Suspense, useCallback, useEffect, useRef, us
 import { ErrorBoundary } from "react-error-boundary";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { BUILTIN_SKILLS, findBuiltinSkill, isBuiltinSkillId } from "@/agent/builtin-skills";
 import {
   ASSISTANT_MODELS,
   ASSISTANT_MODELS_BY_PRICE,
@@ -177,7 +178,7 @@ function NewChatSkills() {
   const db = useDb();
   const appendToInput = useAssistantStore((s) => s.appendToInput);
   const requestComposerFocus = useAssistantStore((s) => s.requestComposerFocus);
-  const { data: skills } = useDbQuery((db) =>
+  const { data: userSkills } = useDbQuery((db) =>
     db
       .selectFrom("skill")
       .select(["id", "name", "whenToUse"])
@@ -186,10 +187,19 @@ function NewChatSkills() {
       .orderBy("createdAt", "desc"),
   );
 
+  const builtinSkills = BUILTIN_SKILLS.map((skill) => ({
+    id: skill.id,
+    name: skill.name,
+    whenToUse: skill.whenToUse,
+  }));
+  const skills = [...userSkills, ...builtinSkills];
+
   if (skills.length === 0) return null;
 
   function pick(skill: { id: string; name: string }) {
-    db.db.executeKysely((q) => q.updateTable("skill").set({ lastUsedAt: Date.now() }).where("id", "=", skill.id));
+    if (!isBuiltinSkillId(skill.id)) {
+      db.db.executeKysely((q) => q.updateTable("skill").set({ lastUsedAt: Date.now() }).where("id", "=", skill.id));
+    }
     appendToInput(`Use the "${skill.name || "Untitled"}" skill.`);
     requestComposerFocus();
   }
@@ -388,14 +398,15 @@ function ReadFileChip({ failed, data }: { failed: boolean; data: string }) {
 
 function ActivateSkillChip({ failed, data }: { failed: boolean; data: string }) {
   const { name: skillId } = toolPayload<SkillToolPayload>(data);
+  const builtin = skillId ? findBuiltinSkill(skillId) : undefined;
   const { data: skills } = useDbQuery((db) =>
     db
       .selectFrom("skill")
       .select(["id", "name"])
-      .where("id", "=", skillId ?? "")
+      .where("id", "=", builtin ? "" : (skillId ?? ""))
       .limit(1),
   );
-  const name = skills[0] ? skills[0].name || "Untitled skill" : skillId;
+  const name = builtin ? builtin.name : skills[0] ? skills[0].name || "Untitled skill" : skillId;
 
   return (
     <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">

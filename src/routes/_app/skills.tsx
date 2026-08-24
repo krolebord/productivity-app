@@ -1,9 +1,10 @@
 import { generateId } from "@sqlite-sync/core";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { createFileRoute } from "@tanstack/react-router";
-import { PlusIcon, Trash2, Workflow } from "lucide-react";
+import { ChevronDown, PlusIcon, Trash2, Workflow } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
+import { BUILTIN_SKILLS, type BuiltinSkill } from "@/agent/builtin-skills";
 import { useConfirmDialogStore } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,6 +167,36 @@ function SkillCard({
   );
 }
 
+function BuiltinSkillCard({ skill }: { skill: BuiltinSkill }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{skill.name}</p>
+          <p className="text-muted-foreground text-sm">{skill.whenToUse}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className={cn("rounded-full px-2 py-0.5 font-medium text-xs", STATUS_META.active.className)}>Active</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground text-xs">Built-in</span>
+        </div>
+      </div>
+      <div className="mt-3">
+        <Button type="button" variant="outline" size="sm" onClick={() => setOpen((value) => !value)}>
+          <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+          {open ? "Hide" : "View"}
+        </Button>
+        {open && (
+          <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-mono text-muted-foreground text-xs">
+            {skill.instructions}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SkillsPage() {
   const db = useDb();
   const { selected } = Route.useSearch();
@@ -226,41 +257,52 @@ function SkillsPage() {
         </Button>
       </div>
 
-      {skills.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card px-6 py-14 text-center">
-          <Workflow className="size-8 text-muted-foreground" />
-          <div>
-            <p className="font-medium">No skills yet</p>
-            <p className="text-muted-foreground text-sm">
-              Create one, or ask the assistant to save a multi-step task it just completed as a skill.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {sections.map(
-            (section) =>
-              section.items.length > 0 && (
-                <div key={section.key}>
-                  <h2 className="mb-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                    {section.title}
-                  </h2>
-                  <div className="flex flex-col gap-2">
-                    {section.items.map((skill) => (
-                      <SkillCard
-                        key={skill.id}
-                        skill={skill}
-                        editing={skill.id === selected}
-                        onEdit={() => setSelected(skill.id)}
-                        onClose={() => setSelected(undefined)}
-                      />
-                    ))}
-                  </div>
+      <div className="flex flex-col gap-6">
+        {sections.map(
+          (section) =>
+            section.items.length > 0 && (
+              <div key={section.key}>
+                <h2 className="mb-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                  {section.title}
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {section.items.map((skill) => (
+                    <SkillCard
+                      key={skill.id}
+                      skill={skill}
+                      editing={skill.id === selected}
+                      onEdit={() => setSelected(skill.id)}
+                      onClose={() => setSelected(undefined)}
+                    />
+                  ))}
                 </div>
-              ),
-          )}
-        </div>
-      )}
+              </div>
+            ),
+        )}
+
+        {skills.length === 0 && (
+          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card px-6 py-10 text-center">
+            <Workflow className="size-8 text-muted-foreground" />
+            <div>
+              <p className="font-medium">No skills of your own yet</p>
+              <p className="text-muted-foreground text-sm">
+                Create one, or ask the assistant to save a multi-step task it just completed as a skill.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {BUILTIN_SKILLS.length > 0 && (
+          <div>
+            <h2 className="mb-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">Built-in</h2>
+            <div className="flex flex-col gap-2">
+              {BUILTIN_SKILLS.map((skill) => (
+                <BuiltinSkillCard key={skill.id} skill={skill} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
