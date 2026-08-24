@@ -3,6 +3,7 @@ import type { Selectable } from "kysely";
 import {
   ACCOUNT_BALANCE_RECONCILIATION_SQL,
   type AccountBalanceReconciliationRow,
+  accountBalanceChanged,
 } from "@/lib/account-balance-reconciliation";
 import type { UserDb } from "@/user-db/migrations";
 
@@ -319,7 +320,7 @@ export function refreshAccountBalances(db: TransactionDatabase) {
     let changedCount = 0;
 
     for (const row of nextBalances) {
-      if (Number(row.nextBalance) === Number(row.balance)) {
+      if (!accountBalanceChanged(row.balance, row.nextBalance)) {
         continue;
       }
 

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ACCOUNT_BALANCE_RECONCILIATION_SQL,
   type AccountBalanceReconciliationRow,
+  accountBalanceChanged,
 } from "@/lib/account-balance-reconciliation";
 import { defineJob } from "./jobs-base";
 
@@ -19,7 +20,7 @@ export const reconcileAccountBalancesJob = defineJob({ type: "reconcile-account-
     }).rows;
 
     for (const account of accounts) {
-      if (Number(account.balance) === Number(account.nextBalance)) {
+      if (!accountBalanceChanged(account.balance, account.nextBalance)) {
         continue;
       }
 
