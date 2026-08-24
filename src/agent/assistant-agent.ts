@@ -33,6 +33,7 @@ import {
   resolveAssistantModelId,
   resolveAssistantReasoningEffort,
 } from "./models";
+import { TransactionsSpecSchema } from "./transactions-spec";
 
 type WorkspaceUploadInput = {
   filename: string;
@@ -572,6 +573,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       "Inside execute, state.* is also available for temporary workspace files and multi-step scratch work.",
       "When the user wants a file to download (CSV, JSON, report, etc.), first write it with the execute tool's state.* API, then call saveDownload with that file's path to make it downloadable from the chat.",
       "To visualize data, call the renderChart tool. Aggregate and group the data first (with queryDb or execute) and embed only the final summarized points in the spec — keep the number of points and series small. Never sum or compare amounts across different currencies: group by currency or convert via the currency_rate table before charting. After rendering a chart, briefly describe what it shows in text; do not also paste the full underlying data as a table.",
+      "To show the user individual transactions, call the renderTransactions tool instead of a markdown table. Prefer `ref` items that reference real transaction_entry rows by id (query them first); use `inline` items only for transactions that do not exist in the database. After rendering, keep any accompanying text brief; do not also repeat the same rows as a table.",
       "Use the web_search tool for current events, external facts, prices, or anything outside the user's own data — never for the user's notes/accounts/transactions, which live in the database. Search only when the answer genuinely depends on up-to-date or external information. When you rely on a search result, cite it inline as a markdown link; if the user asks for sources, list the relevant URLs.",
       "Use the web_extract tool to read the full content of specific URLs — for example to go deeper on a promising web_search result or a link the user provides.",
       "You keep durable memories about the user across all conversations. When the user states a lasting preference, rule, or fact worth recalling later (a budget, a recurring categorization rule, how they like answers formatted), call remember with a short note. Do not remember one-off or trivial details, data already in the database, or secrets. Avoid duplicates: if a similar memory already exists in your remembered context, revise it with update_memory instead of adding another. Use forget when the user no longer wants something remembered.",
@@ -703,6 +705,16 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           type: spec.type,
           title: spec.title ?? null,
         }),
+      }),
+      renderTransactions: tool({
+        description: [
+          "Render a list of transactions inline in the chat, using the app's native transaction cards.",
+          "Prefer `ref` items that reference real transaction_entry rows by id (query them first with queryDb): they stay clickable and always reflect the user's real data.",
+          "Use `inline` items only for transactions that do not exist in the database (hypothetical, projected, or computed). Give a positive `amount`; the sign is derived from `type`.",
+          "Prefer this over a markdown table whenever you are showing the user individual transactions.",
+        ].join("\n"),
+        inputSchema: TransactionsSpecSchema,
+        execute: async (spec) => ({ rendered: true, count: spec.items.length }),
       }),
     };
   }

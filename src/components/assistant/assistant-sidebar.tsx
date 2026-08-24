@@ -74,6 +74,7 @@ const MAX_UPLOAD_FILES = 5;
 
 // Recharts is heavy; keep it out of the main bundle until a chart is rendered.
 const ChartCard = lazy(() => import("./chart-card"));
+const TransactionsCard = lazy(() => import("./transactions-card"));
 
 function getExtensionForMediaType(mediaType: string) {
   switch (mediaType) {
@@ -483,6 +484,20 @@ function MessageRow({ message, conversationId }: { message: ConversationMessageI
         <ErrorBoundary fallback={<ChartErrorChip />} onError={logChartError} resetKeys={[data]}>
           <Suspense fallback={<ToolCallChip name={toolName} failed={false} />}>
             <ChartCard spec={spec} />
+          </Suspense>
+        </ErrorBoundary>
+      );
+    }
+    if (toolName === "renderTransactions" && !failed) {
+      const spec = parseJson(data);
+      return (
+        <ErrorBoundary
+          fallback={<ToolCallChip name={toolName} failed={false} />}
+          onError={logChartError}
+          resetKeys={[data]}
+        >
+          <Suspense fallback={<ToolCallChip name={toolName} failed={false} />}>
+            <TransactionsCard spec={spec} />
           </Suspense>
         </ErrorBoundary>
       );
