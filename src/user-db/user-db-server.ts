@@ -14,6 +14,8 @@ import {
 } from "@sqlite-sync/cloudflare";
 import { type JobRuntime, setupJobs } from "do-jobs";
 import { type Connection, Server } from "partyserver";
+import type { ConversationMessageSnapshot } from "@/agent/conversation-projection";
+import type { BaseCurrencyCode } from "@/lib/currency/current-rates";
 import {
   type CalendarSyncStatusReport,
   deleteConnectionSyncStatus,
@@ -24,11 +26,11 @@ import { type CalendarCleanupInput, calendarCleanupJob } from "./jobs/calendar-c
 import { type CalendarMetadataInput, calendarMetadataJob } from "./jobs/calendar-metadata";
 import { type CalendarSyncInput, calendarSyncJob } from "./jobs/calendar-sync";
 import { cleanupConversationAgentJob } from "./jobs/cleanup-conversation-agent";
-import { fetchCurrencyRatesJob } from "./jobs/fetch-currency-rates";
+import { fetchAndPersistCurrencyRates, fetchCurrencyRatesJob } from "./jobs/fetch-currency-rates";
 import { jobs } from "./jobs/jobs";
 import { type MonobankImportInput, monobankImportJob } from "./jobs/monobank-import";
 import { type MonobankMetadataInput, monobankMetadataJob } from "./jobs/monobank-metadata";
-import { syncDbSchema, type UserSyncDbSchema } from "./migrations";
+import { type ConversationItem, syncDbSchema, type UserSyncDbSchema } from "./migrations";
 import { userDbSchemaDocContext } from "./schema-doc";
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
@@ -133,6 +135,13 @@ export class UserDbServer extends Server<Env> {
     return this.codeAiDbAccess.query(input);
   }
 
+  /** Manual refresh: same write path as the interval job, awaited so the client can toast the date. */
+  async refreshCurrencyRates(input: {
+    baseCurrency: BaseCurrencyCode;
+  }): Promise<{ date: string; base: BaseCurrencyCode }> {
+    return fetchAndPersistCurrencyRates(this.syncDb, input.baseCurrency);
+  }
+
   async enqueueMonobankMetadata(input: MonobankMetadataInput): Promise<void> {
     await this.jobRuntime.schedule(monobankMetadataJob, { input, at: Date.now() });
   }
@@ -227,8 +236,93 @@ export class UserDbServer extends Server<Env> {
       .rows.map((row) => row.providerAccountId);
   }
 
+  async getConversation(id: string): Promise<ConversationItem | null> {
+    const [row] = this.syncDb.executeKysely((q) => q.selectFrom("conversation").selectAll().where("id", "=", id)).rows;
+    return row ?? null;
+  }
+
+  async createConversation(input: { id: string; model: string; reasoningEffort: string | null }): Promise<void> {
+    if (await this.getConversation(input.id)) return;
+
+    const now = Date.now();
+    this.syncDb.enqueueEvent(
+      this.syncDb.createEvent({
+        type: "item-created",
+        dataset: "_conversation",
+        item_id: input.id,
+        payload: {
+          id: input.id,
+          title: "",
+          createdAt: now,
+          updatedAt: now,
+          model: input.model,
+          reasoningEffort: input.reasoningEffort,
+          totalCost: 0,
+          totalTokens: 0,
+          turnStatus: "running",
+          turnError: "",
+        },
+      }),
+    );
+  }
+
+  // Raw base table, not the CRDT view: tombstones keep their seq, so a deleted message
+  // cannot hand its number to a new one.
+  async getMaxConversationMessageSeq(conversationId: string): Promise<number> {
+    const [row] = this.syncDb.unsafe.executeKysely((q) =>
+      q
+        .selectFrom("_conversation_message")
+        .select((eb) => eb.fn.max<number | null>("seq").as("maxSeq"))
+        .where("conversationId", "=", conversationId),
+    ).rows;
+    return row?.maxSeq ?? 0;
+  }
+
+  async upsertConversationMessages(messages: ConversationMessageSnapshot[]): Promise<void> {
+    for (const message of messages) {
+      const { id, ...patch } = message;
+      this.syncDb.enqueueSnapshot({
+        dataset: "_conversation_message",
+        id,
+        patch,
+      });
+    }
+  }
+
+  async updateConversation(
+    id: string,
+    payload: Partial<Omit<ConversationItem, "id" | "tombstone">> & { updatedAt?: number },
+  ): Promise<void> {
+    this.syncDb.enqueueEvent(
+      this.syncDb.createEvent({
+        type: "item-updated",
+        dataset: "_conversation",
+        item_id: id,
+        payload: { updatedAt: Date.now(), ...payload },
+      }),
+    );
+  }
+
+  async deleteConversation(id: string): Promise<boolean> {
+    if (!(await this.getConversation(id))) return false;
+    this.syncDb.enqueueEvent(
+      this.syncDb.createEvent({
+        type: "item-deleted",
+        dataset: "_conversation",
+        item_id: id,
+      }),
+    );
+    return true;
+  }
+
+  // Synced schema has no FKs; delete through the CRDT view so each row emits item-deleted.
+  private deleteConversationMessages(conversationId: string): void {
+    this.syncDb.executeKysely((q) => q.deleteFrom("conversation_message").where("conversationId", "=", conversationId));
+  }
+
   private async onEventApplied(event: TypedPersistedCrdtEvent<typeof syncDbSchema>) {
     if (event.type === "item-deleted" && event.dataset === "_conversation") {
+      this.deleteConversationMessages(event.item_id);
       // Conversation agents are named `${userDbName}:${conversationId}` — wipe the orphaned DO.
       await this.jobRuntime.schedule(cleanupConversationAgentJob, {
         input: { agentName: `${this.name}:${event.item_id}` },

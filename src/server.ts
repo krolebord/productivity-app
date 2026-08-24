@@ -1,8 +1,6 @@
-import { routeAgentRequest } from "agents";
 import { routePartykitRequest } from "partyserver";
 import { apiHandler } from "./api/api-handler";
-import { isAssistantAllowed } from "./lib/assistant-access";
-import { getAuthFromRequest, getUserIdFromRequest } from "./lib/auth-server";
+import { getUserIdFromRequest } from "./lib/auth-server";
 import { renewDueMonobankWebhooks } from "./lib/monobank/webhook-renewal";
 import { orpcHandler } from "./orpc/orpc-router";
 
@@ -32,31 +30,6 @@ export default {
 
     if (url.pathname.startsWith("/api")) {
       return apiHandler(request);
-    }
-
-    if (url.pathname.startsWith("/agents")) {
-      // Agent instances are named `user-${userId}:${conversationId}` — only the owning user may
-      // reach theirs, and only allowlisted users may use the (cost-incurring) assistant at all.
-      const guard = async (req: Request, lobby: { name: string }) => {
-        const auth = await getAuthFromRequest(req);
-        if (!auth || !lobby.name.startsWith(`user-${auth.userId}:`)) {
-          return new Response("Unauthorized", { status: 401 });
-        }
-        if (!isAssistantAllowed(auth.userEmail)) {
-          return new Response("Assistant is not enabled for this account.", { status: 403 });
-        }
-      };
-
-      const agentResponse = await routeAgentRequest(request, env, {
-        locationHint: "weur",
-        onBeforeConnect: (req, lobby) => guard(req, lobby),
-        onBeforeRequest: (req, lobby) => guard(req, lobby),
-      });
-      if (agentResponse) {
-        return agentResponse;
-      }
-
-      return new Response("Not found", { status: 404 });
     }
 
     const partykitRequest = await routePartykitRequest(request, env, {

@@ -1,11 +1,6 @@
-import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { generateId } from "@sqlite-sync/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
 import { Link } from "@tanstack/react-router";
-import { useAgent } from "agents/react";
-import type { DynamicToolUIPart, ToolUIPart, UIMessage } from "ai";
-import { getToolName, isToolUIPart } from "ai";
-import { sql } from "kysely";
 import {
   ArrowDown,
   Brain,
@@ -55,6 +50,8 @@ import { useAuth } from "@/lib/auth-client";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
+import { orpc } from "@/orpc/orpc-client";
+import type { ConversationItem, ConversationMessageItem } from "@/user-db/migrations";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { useConfirmDialogStore } from "../confirm-dialog";
 import { Button } from "../ui/button";
@@ -63,16 +60,8 @@ import { useInlineConfirm } from "../ui/inline-confirm";
 import { Textarea } from "../ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
-type ConversationRow = {
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  model: string | null;
-  reasoningEffort: string | null;
-  totalCost: number;
-  totalTokens: number;
-};
+type ConversationRow = ConversationItem;
+type ConversationIdentity = Pick<ConversationRow, "id" | "title">;
 
 type UploadedWorkspaceFile = {
   filename: string;
@@ -137,9 +126,25 @@ function formatModelPricing(model: AssistantModel) {
   return `${formatModelPrice(model.pricing.inputPerMillion)} in / ${formatModelPrice(model.pricing.outputPerMillion)} out per 1M`;
 }
 
-function preferredConversationReasoningEffort(modelId: AssistantModelId, preferred: unknown): string | null {
+function preferredConversationReasoningEffort(
+  modelId: AssistantModelId,
+  preferred: unknown,
+): AssistantReasoningEffort | null {
   if (!modelSupportsSelectableReasoning(modelId)) return null;
   return resolveAssistantReasoningEffort(modelId, preferred) ?? null;
+}
+
+function rpcErrorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : "Something went wrong. Try again.";
+}
+
+function shouldReleaseAwaitingTurn(input: {
+  turnStatus: ConversationRow["turnStatus"];
+  updatedAt: number;
+  submittedUpdatedAt: number;
+}): boolean {
+  if (input.turnStatus !== "idle") return true;
+  return input.updatedAt !== input.submittedUpdatedAt;
 }
 
 function DownloadFileChip({ conversationId, file }: { conversationId: string; file: UploadedWorkspaceFile }) {
@@ -158,252 +163,11 @@ function DownloadFileChip({ conversationId, file }: { conversationId: string; fi
   );
 }
 
-function ToolCallChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
-  const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
-  const failed = part.state === "output-error" || part.state === "output-denied";
-  const done = part.state === "output-available";
-
+function ToolCallChip({ name, failed }: { name: string; failed: boolean }) {
   return (
     <div className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      {failed ? (
-        <CircleAlert className="size-3 text-destructive" />
-      ) : done ? (
-        <Check className="size-3" />
-      ) : (
-        <Loader2 className="size-3 animate-spin" />
-      )}
+      {failed ? <CircleAlert className="size-3 text-destructive" /> : <Check className="size-3" />}
       <span className="font-mono">{name}</span>
-    </div>
-  );
-}
-
-type SearchToolOutput = {
-  query?: string;
-  answer?: string;
-  results?: { title?: string | null; url: string }[];
-};
-
-type ExtractToolOutput = {
-  results?: { title?: string | null; url: string }[];
-  failedResults?: { url: string }[];
-};
-
-function hostname(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
-function SourceLink({ url, title }: { url: string; title?: string | null }) {
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-start gap-1.5 rounded-sm px-1 py-0.5 hover:bg-accent"
-    >
-      <ExternalLink className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
-      <span className="min-w-0">
-        <span className="block truncate text-foreground">{title || hostname(url)}</span>
-        <span className="block truncate text-muted-foreground/70">{hostname(url)}</span>
-      </span>
-    </a>
-  );
-}
-
-function WebToolDetails({ name, output }: { name: string; output: unknown }) {
-  if (name === "web_search") {
-    const { answer, results = [] } = (output ?? {}) as SearchToolOutput;
-    return (
-      <div className="flex max-w-sm flex-col gap-1">
-        {answer && <p className="line-clamp-6 px-1 text-muted-foreground">{answer}</p>}
-        {results.map((result) => (
-          <SourceLink key={result.url} url={result.url} title={result.title} />
-        ))}
-        {results.length === 0 && !answer && <p className="px-1 text-muted-foreground">No results.</p>}
-      </div>
-    );
-  }
-
-  const { results = [], failedResults = [] } = (output ?? {}) as ExtractToolOutput;
-  return (
-    <div className="flex max-w-sm flex-col gap-1">
-      {results.map((result) => (
-        <SourceLink key={result.url} url={result.url} title={result.title} />
-      ))}
-      {failedResults.map((result) => (
-        <span key={result.url} className="flex items-center gap-1.5 px-1 text-destructive">
-          <CircleAlert className="size-3 shrink-0" />
-          <span className="truncate">{hostname(result.url)}</span>
-        </span>
-      ))}
-      {results.length === 0 && failedResults.length === 0 && <p className="px-1 text-muted-foreground">No content.</p>}
-    </div>
-  );
-}
-
-function WebToolChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
-  const [open, setOpen] = useState(false);
-  const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
-  const failed = part.state === "output-error" || part.state === "output-denied";
-  const done = part.state === "output-available";
-  const Icon = name === "web_search" ? Search : FileText;
-
-  const input = part.input as { query?: string; urls?: string[] } | undefined;
-  const summary =
-    name === "web_search"
-      ? input?.query
-      : input?.urls?.length
-        ? `${input.urls.length} ${input.urls.length === 1 ? "page" : "pages"}`
-        : undefined;
-
-  const canExpand = done && !failed;
-
-  return (
-    <div className="w-fit max-w-full overflow-hidden rounded-md border bg-muted/50 text-xs">
-      <button
-        type="button"
-        disabled={!canExpand}
-        onClick={() => setOpen((value) => !value)}
-        className={cn(
-          "flex w-full items-center gap-1.5 px-2 py-1 text-muted-foreground",
-          canExpand && "hover:text-foreground",
-        )}
-      >
-        {failed ? (
-          <CircleAlert className="size-3 shrink-0 text-destructive" />
-        ) : done ? (
-          <Icon className="size-3 shrink-0" />
-        ) : (
-          <Loader2 className="size-3 shrink-0 animate-spin" />
-        )}
-        <span className="font-mono">{name}</span>
-        {summary && <span className="min-w-0 truncate text-muted-foreground/80">{summary}</span>}
-        {canExpand && <ChevronDown className={cn("size-3 shrink-0 transition-transform", open && "rotate-180")} />}
-      </button>
-      {open && canExpand && (
-        <div className="border-t px-2 py-1.5">
-          <WebToolDetails name={name} output={part.output} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MemoryChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
-  const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
-  const failed = part.state === "output-error" || part.state === "output-denied";
-  const done = part.state === "output-available";
-  const input = part.input as { content?: string } | undefined;
-  const label = name === "forget" ? "Forgot a memory" : name === "update_memory" ? "Updated a memory" : "Remembered";
-
-  return (
-    <Link
-      to="/memories"
-      className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-    >
-      {failed ? (
-        <CircleAlert className="size-3 shrink-0 text-destructive" />
-      ) : done ? (
-        <Brain className="size-3 shrink-0" />
-      ) : (
-        <Loader2 className="size-3 shrink-0 animate-spin" />
-      )}
-      <span className="shrink-0">{label}</span>
-      {name !== "forget" && input?.content && (
-        <span className="min-w-0 truncate text-muted-foreground/80">{input.content}</span>
-      )}
-    </Link>
-  );
-}
-
-function resourceFilename(path: string) {
-  const normalized = path.replaceAll("\\", "/");
-  return normalized.split("/").at(-1) || path;
-}
-
-function ReadFileChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
-  const failed = part.state === "output-error" || part.state === "output-denied";
-  const done = part.state === "output-available";
-  const input = part.input as { path?: string } | undefined;
-  const filename = input?.path ? resourceFilename(input.path) : undefined;
-
-  return (
-    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      {failed ? (
-        <CircleAlert className="size-3 shrink-0 text-destructive" />
-      ) : done ? (
-        <FileText className="size-3 shrink-0" />
-      ) : (
-        <Loader2 className="size-3 shrink-0 animate-spin" />
-      )}
-      <span className="shrink-0">{done ? "Read file" : failed ? "Read failed" : "Reading file"}</span>
-      {filename && <span className="min-w-0 truncate text-muted-foreground/80">{filename}</span>}
-    </div>
-  );
-}
-
-function ActivateSkillChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
-  const failed = part.state === "output-error" || part.state === "output-denied";
-  const done = part.state === "output-available";
-  const input = part.input as { name?: string } | undefined;
-  const skillId = input?.name;
-  const { data: skills } = useDbQuery((db) =>
-    db
-      .selectFrom("skill")
-      .select(["id", "name"])
-      .where("id", "=", skillId ?? "")
-      .limit(1),
-  );
-  const name = skills[0] ? skills[0].name || "Untitled skill" : skillId;
-
-  return (
-    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      {failed ? (
-        <CircleAlert className="size-3 shrink-0 text-destructive" />
-      ) : done ? (
-        <Workflow className="size-3 shrink-0" />
-      ) : (
-        <Loader2 className="size-3 shrink-0 animate-spin" />
-      )}
-      <span className="shrink-0">
-        {done ? "Activated skill" : failed ? "Skill activation failed" : "Activating skill"}
-      </span>
-      {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
-    </div>
-  );
-}
-
-function SkillChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
-  const failed = part.state === "output-error" || part.state === "output-denied";
-  const done = part.state === "output-available";
-  const input = part.input as { name?: string } | undefined;
-  const output = part.output as { id?: string | null; name?: string } | undefined;
-  const name = output?.name ?? input?.name;
-  const id = output?.id ?? null;
-
-  return (
-    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      {failed ? (
-        <CircleAlert className="size-3 shrink-0 text-destructive" />
-      ) : done ? (
-        <Workflow className="size-3 shrink-0" />
-      ) : (
-        <Loader2 className="size-3 shrink-0 animate-spin" />
-      )}
-      <span className="shrink-0">Drafted skill</span>
-      {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
-      {done && id && (
-        <Link
-          to="/skills"
-          search={{ selected: id }}
-          className="shrink-0 rounded-sm border px-1.5 py-0.5 font-medium transition-colors hover:bg-accent hover:text-foreground"
-        >
-          Review
-        </Link>
-      )}
     </div>
   );
 }
@@ -463,52 +227,276 @@ function logChartError(error: unknown) {
   console.error("Failed to render assistant chart", error);
 }
 
-function MessageParts({ message, conversationId }: { message: UIMessage; conversationId: string }) {
-  return message.parts.map((part, i) => {
-    if (part.type === "dynamic-tool" || isToolUIPart(part)) {
-      const name = part.type === "dynamic-tool" ? part.toolName : getToolName(part);
-      if (name === "saveDownload" && part.state === "output-available" && part.output) {
-        return <DownloadFileChip key={i} conversationId={conversationId} file={part.output as UploadedWorkspaceFile} />;
-      }
-      if (name === "web_search" || name === "web_extract") {
-        return <WebToolChip key={i} part={part} />;
-      }
-      if (name === "remember" || name === "update_memory" || name === "forget") {
-        return <MemoryChip key={i} part={part} />;
-      }
-      if (name === "read" || name === "read_skill_resource") {
-        return <ReadFileChip key={i} part={part} />;
-      }
-      if (name === "activate_skill") {
-        return <ActivateSkillChip key={i} part={part} />;
-      }
-      if (name === "create_skill") {
-        return <SkillChip key={i} part={part} />;
-      }
-      if (name === "renderChart" && part.state === "output-available") {
-        return (
-          <ErrorBoundary key={i} fallback={<ChartErrorChip />} onError={logChartError} resetKeys={[part.input]}>
-            <Suspense fallback={<ToolCallChip part={part} />}>
-              <ChartCard spec={part.input} />
-            </Suspense>
-          </ErrorBoundary>
-        );
-      }
-      return <ToolCallChip key={i} part={part} />;
-    }
+function parseJson(data: string): unknown {
+  if (!data) return null;
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
 
-    if (part.type !== "text" || !part.text) return null;
+type ToolLink = { title?: string | null; url: string };
+type WebToolPayload = {
+  query?: string;
+  answer?: string;
+  urlCount?: number;
+  results?: ToolLink[];
+  failedResults?: ToolLink[];
+};
+type MemoryToolPayload = { content?: string };
+type ReadToolPayload = { path?: string };
+type SkillToolPayload = { id?: string | null; name?: string };
 
-    if (message.role === "user") {
-      return (
-        <div key={i} className="whitespace-pre-wrap break-words">
-          {part.text}
+function toolPayload<T>(data: string): T {
+  return (parseJson(data) ?? {}) as T;
+}
+
+function toolLinks(value: ToolLink[] | undefined): ToolLink[] {
+  return Array.isArray(value) ? value.filter((link) => typeof link?.url === "string") : [];
+}
+
+function hostname(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function SourceLink({ url, title }: ToolLink) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-start gap-1.5 rounded-sm px-1 py-0.5 hover:bg-accent"
+    >
+      <ExternalLink className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
+      <span className="min-w-0">
+        <span className="block truncate text-foreground">{title || hostname(url)}</span>
+        <span className="block truncate text-muted-foreground/70">{hostname(url)}</span>
+      </span>
+    </a>
+  );
+}
+
+function WebToolDetails({ name, payload }: { name: string; payload: WebToolPayload }) {
+  const results = toolLinks(payload.results);
+
+  if (name === "web_search") {
+    return (
+      <div className="flex max-w-sm flex-col gap-1">
+        {payload.answer && <p className="line-clamp-6 px-1 text-muted-foreground">{payload.answer}</p>}
+        {results.map((result) => (
+          <SourceLink key={result.url} url={result.url} title={result.title} />
+        ))}
+        {results.length === 0 && !payload.answer && <p className="px-1 text-muted-foreground">No results.</p>}
+      </div>
+    );
+  }
+
+  const failedResults = toolLinks(payload.failedResults);
+  return (
+    <div className="flex max-w-sm flex-col gap-1">
+      {results.map((result) => (
+        <SourceLink key={result.url} url={result.url} title={result.title} />
+      ))}
+      {failedResults.map((result) => (
+        <span key={result.url} className="flex items-center gap-1.5 px-1 text-destructive">
+          <CircleAlert className="size-3 shrink-0" />
+          <span className="truncate">{hostname(result.url)}</span>
+        </span>
+      ))}
+      {results.length === 0 && failedResults.length === 0 && <p className="px-1 text-muted-foreground">No content.</p>}
+    </div>
+  );
+}
+
+function WebToolChip({ name, failed, data }: { name: string; failed: boolean; data: string }) {
+  const [open, setOpen] = useState(false);
+  const payload = toolPayload<WebToolPayload>(data);
+  const Icon = name === "web_search" ? Search : FileText;
+  const summary =
+    name === "web_search"
+      ? payload.query
+      : payload.urlCount
+        ? `${payload.urlCount} ${payload.urlCount === 1 ? "page" : "pages"}`
+        : undefined;
+
+  return (
+    <div className="w-fit max-w-full overflow-hidden rounded-md border bg-muted/50 text-xs">
+      <button
+        type="button"
+        disabled={failed}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex w-full items-center gap-1.5 px-2 py-1 text-muted-foreground",
+          !failed && "hover:text-foreground",
+        )}
+      >
+        {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <Icon className="size-3 shrink-0" />}
+        <span className="font-mono">{name}</span>
+        {summary && <span className="min-w-0 truncate text-muted-foreground/80">{summary}</span>}
+        {!failed && <ChevronDown className={cn("size-3 shrink-0 transition-transform", open && "rotate-180")} />}
+      </button>
+      {open && !failed && (
+        <div className="border-t px-2 py-1.5">
+          <WebToolDetails name={name} payload={payload} />
         </div>
+      )}
+    </div>
+  );
+}
+
+function MemoryChip({ name, failed, data }: { name: string; failed: boolean; data: string }) {
+  const payload = toolPayload<MemoryToolPayload>(data);
+  const label = name === "forget" ? "Forgot a memory" : name === "update_memory" ? "Updated a memory" : "Remembered";
+
+  return (
+    <Link
+      to="/memories"
+      className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+    >
+      {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <Brain className="size-3 shrink-0" />}
+      <span className="shrink-0">{label}</span>
+      {name !== "forget" && payload.content && (
+        <span className="min-w-0 truncate text-muted-foreground/80">{payload.content}</span>
+      )}
+    </Link>
+  );
+}
+
+function resourceFilename(path: string) {
+  const normalized = path.replaceAll("\\", "/");
+  return normalized.split("/").at(-1) || path;
+}
+
+function ReadFileChip({ failed, data }: { failed: boolean; data: string }) {
+  const { path } = toolPayload<ReadToolPayload>(data);
+  const filename = path ? resourceFilename(path) : undefined;
+
+  return (
+    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
+      {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <FileText className="size-3 shrink-0" />}
+      <span className="shrink-0">{failed ? "Read failed" : "Read file"}</span>
+      {filename && <span className="min-w-0 truncate text-muted-foreground/80">{filename}</span>}
+    </div>
+  );
+}
+
+function ActivateSkillChip({ failed, data }: { failed: boolean; data: string }) {
+  const { name: skillId } = toolPayload<SkillToolPayload>(data);
+  const { data: skills } = useDbQuery((db) =>
+    db
+      .selectFrom("skill")
+      .select(["id", "name"])
+      .where("id", "=", skillId ?? "")
+      .limit(1),
+  );
+  const name = skills[0] ? skills[0].name || "Untitled skill" : skillId;
+
+  return (
+    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
+      {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <Workflow className="size-3 shrink-0" />}
+      <span className="shrink-0">{failed ? "Skill activation failed" : "Activated skill"}</span>
+      {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
+    </div>
+  );
+}
+
+function SkillChip({ failed, data }: { failed: boolean; data: string }) {
+  const { id, name } = toolPayload<SkillToolPayload>(data);
+
+  return (
+    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
+      {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <Workflow className="size-3 shrink-0" />}
+      <span className="shrink-0">Drafted skill</span>
+      {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
+      {!failed && id && (
+        <Link
+          to="/skills"
+          search={{ selected: id }}
+          className="shrink-0 rounded-sm border px-1.5 py-0.5 font-medium transition-colors hover:bg-accent hover:text-foreground"
+        >
+          Review
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function downloadFileFromData(data: string): UploadedWorkspaceFile | null {
+  const parsed = parseJson(data);
+  if (!parsed || typeof parsed !== "object") return null;
+  const file = parsed as Partial<UploadedWorkspaceFile>;
+  if (typeof file.filename !== "string" || typeof file.path !== "string") return null;
+  return {
+    filename: file.filename,
+    mediaType: typeof file.mediaType === "string" ? file.mediaType : "application/octet-stream",
+    size: typeof file.size === "number" ? file.size : 0,
+    path: file.path,
+  };
+}
+
+type MessageGroup = { role: ConversationMessageItem["role"]; messages: ConversationMessageItem[] };
+
+function groupMessageRows(messages: ConversationMessageItem[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  for (const message of messages) {
+    const open = groups.at(-1);
+    if (message.role === "assistant" && open?.role === "assistant") {
+      open.messages.push(message);
+    } else {
+      groups.push({ role: message.role, messages: [message] });
+    }
+  }
+  return groups;
+}
+
+function MessageRow({ message, conversationId }: { message: ConversationMessageItem; conversationId: string }) {
+  if (message.kind === "tool") {
+    const { toolName, data } = message;
+    const failed = message.toolState === "error";
+    if (toolName === "saveDownload" && !failed) {
+      const file = downloadFileFromData(data);
+      if (file) return <DownloadFileChip conversationId={conversationId} file={file} />;
+    }
+    if (toolName === "web_search" || toolName === "web_extract") {
+      return <WebToolChip name={toolName} failed={failed} data={data} />;
+    }
+    if (toolName === "remember" || toolName === "update_memory" || toolName === "forget") {
+      return <MemoryChip name={toolName} failed={failed} data={data} />;
+    }
+    if (toolName === "read" || toolName === "read_skill_resource") {
+      return <ReadFileChip failed={failed} data={data} />;
+    }
+    if (toolName === "activate_skill") {
+      return <ActivateSkillChip failed={failed} data={data} />;
+    }
+    if (toolName === "create_skill") {
+      return <SkillChip failed={failed} data={data} />;
+    }
+    if (toolName === "renderChart" && !failed) {
+      const spec = parseJson(data);
+      return (
+        <ErrorBoundary fallback={<ChartErrorChip />} onError={logChartError} resetKeys={[data]}>
+          <Suspense fallback={<ToolCallChip name={toolName} failed={false} />}>
+            <ChartCard spec={spec} />
+          </Suspense>
+        </ErrorBoundary>
       );
     }
+    return <ToolCallChip name={toolName || "tool"} failed={failed} />;
+  }
 
-    return <Streamdown key={i}>{part.text}</Streamdown>;
-  });
+  if (!message.text) return null;
+
+  if (message.role === "user") {
+    return <div className="whitespace-pre-wrap break-words">{message.text}</div>;
+  }
+
+  return <Streamdown>{message.text}</Streamdown>;
 }
 
 function ScrollToBottomButton() {
@@ -529,7 +517,7 @@ function ScrollToBottomButton() {
   );
 }
 
-function conversationLabel(conversation: ConversationRow) {
+function conversationLabel(conversation: ConversationIdentity) {
   return conversation.title || "New conversation";
 }
 
@@ -569,8 +557,8 @@ function ConversationSwitcher({
   onDeleteConversation,
 }: {
   conversations: ConversationRow[];
-  active: ConversationRow;
-  onDeleteConversation: (conversation: ConversationRow) => void;
+  active: ConversationIdentity;
+  onDeleteConversation: (conversation: ConversationRow) => Promise<void> | void;
 }) {
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
 
@@ -769,22 +757,20 @@ function ConversationCost({ conversation }: { conversation: ConversationRow }) {
   );
 }
 
-function ConversationView({
-  conversation,
-  conversations,
-}: {
-  conversation: ConversationRow;
-  conversations: ConversationRow[];
-}) {
+type ConversationTarget =
+  | { kind: "draft"; conversationId: string }
+  | { kind: "persisted"; conversation: ConversationRow };
+
+function ConversationView({ target, conversations }: { target: ConversationTarget; conversations: ConversationRow[] }) {
   const auth = useAuth();
-  const db = useDb();
   const closePanel = useAssistantStore((s) => s.closePanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
-  const preferredModel = useAssistantStore((s) => s.model);
-  const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
   const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agentIdCopied, setAgentIdCopied] = useState(false);
-  const agentId = `user-${auth.userId}:${conversation.id}`;
+  const conversation = target.kind === "persisted" ? target.conversation : null;
+  const conversationId = target.kind === "persisted" ? target.conversation.id : target.conversationId;
+  const active = conversation ?? ({ id: conversationId, title: "" } satisfies ConversationIdentity);
+  const agentId = `user-${auth.userId}:${conversationId}`;
 
   useEffect(() => {
     return () => {
@@ -794,15 +780,17 @@ function ConversationView({
     };
   }, []);
 
-  function deleteConversation(target: ConversationRow) {
-    db.db.executeKysely((q) => q.deleteFrom("conversation").where("id", "=", target.id));
-    if (target.id === conversation.id) {
+  async function deleteConversation(target: ConversationRow) {
+    await orpc.assistant.deleteConversation.call({ conversationId: target.id });
+    if (target.id === conversation?.id) {
       const next = conversations.find((c) => c.id !== target.id);
-      setActiveConversation(next ? next.id : null);
+      setActiveConversation(next?.id ?? generateId());
     }
   }
 
-  const deleteActive = useInlineConfirm({ onConfirm: () => deleteConversation(conversation) });
+  const deleteActive = useInlineConfirm({
+    onConfirm: () => (conversation ? deleteConversation(conversation) : undefined),
+  });
 
   async function copyAgentId() {
     await navigator.clipboard.writeText(agentId);
@@ -813,34 +801,10 @@ function ConversationView({
     copyAgentIdResetRef.current = setTimeout(() => setAgentIdCopied(false), 1500);
   }
 
-  function newConversation() {
-    if (!conversation.title && conversation.totalTokens === 0) return;
-    const id = generateId();
-    const now = Date.now();
-    db.db.executeKysely((q) =>
-      q.insertInto("conversation").values({
-        id,
-        title: "",
-        createdAt: now,
-        updatedAt: now,
-        model: preferredModel,
-        reasoningEffort: preferredConversationReasoningEffort(preferredModel, preferredReasoningEffort),
-        tombstone: false,
-        totalCost: 0,
-        totalTokens: 0,
-      }),
-    );
-    setActiveConversation(id);
-  }
-
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center gap-1 border-b px-2">
-        <ConversationSwitcher
-          conversations={conversations}
-          active={conversation}
-          onDeleteConversation={deleteConversation}
-        />
+        <ConversationSwitcher conversations={conversations} active={active} onDeleteConversation={deleteConversation} />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -849,14 +813,14 @@ function ConversationView({
               size="icon"
               className="size-8 text-muted-foreground"
               aria-label="New conversation"
-              onClick={newConversation}
+              onClick={() => setActiveConversation(generateId())}
             >
               <PlusIcon className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">New conversation</TooltipContent>
         </Tooltip>
-        {auth.userRole === "admin" && (
+        {conversation && auth.userRole === "admin" && (
           <Tooltip open={agentIdCopied || undefined}>
             <TooltipTrigger asChild>
               <Button
@@ -873,23 +837,25 @@ function ConversationView({
             <TooltipContent side="bottom">{agentIdCopied ? "Copied agent id" : "Copy agent id"}</TooltipContent>
           </Tooltip>
         )}
-        <Tooltip open={deleteActive.armed || undefined}>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant={deleteActive.armed ? "destructive" : "ghost"}
-              size="icon"
-              className={cn("size-8", !deleteActive.armed && "text-muted-foreground")}
-              aria-label={deleteActive.armed ? "Confirm delete conversation" : "Delete conversation"}
-              {...deleteActive.getButtonProps()}
-            >
-              {deleteActive.pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {deleteActive.armed ? "Click again to delete" : "Delete conversation"}
-          </TooltipContent>
-        </Tooltip>
+        {conversation && (
+          <Tooltip open={deleteActive.armed || undefined}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={deleteActive.armed ? "destructive" : "ghost"}
+                size="icon"
+                className={cn("size-8", !deleteActive.armed && "text-muted-foreground")}
+                aria-label={deleteActive.armed ? "Confirm delete conversation" : "Delete conversation"}
+                {...deleteActive.getButtonProps()}
+              >
+                {deleteActive.pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {deleteActive.armed ? "Click again to delete" : "Delete conversation"}
+            </TooltipContent>
+          </Tooltip>
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -917,22 +883,29 @@ function ConversationView({
           </div>
         }
       >
-        <ConversationChat agentId={agentId} conversation={conversation} />
+        <ConversationChat target={target} />
       </Suspense>
     </div>
   );
 }
 
-function ConversationChat({ agentId, conversation }: { agentId: string; conversation: ConversationRow }) {
-  const db = useDb();
+function ConversationChat({ target }: { target: ConversationTarget }) {
+  const conversation = target.kind === "persisted" ? target.conversation : null;
+  const conversationId = target.kind === "persisted" ? target.conversation.id : target.conversationId;
   const isDesktop = useIsDesktop();
   const input = useAssistantStore((s) => s.inputDraft);
   const setInput = useAssistantStore((s) => s.setInputDraft);
+  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [awaitingConversation, setAwaitingConversation] = useState(false);
+  const [pendingSubmittedUpdatedAt, setPendingSubmittedUpdatedAt] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [rpcError, setRpcError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const ensuredRef = useRef(false);
   const composerFocusNonce = useAssistantStore((s) => s.composerFocusNonce);
 
   // Pull focus back to the composer when something requests it (e.g. attaching
@@ -949,57 +922,74 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
     return () => cancelAnimationFrame(frame);
   }, [composerFocusNonce]);
 
+  const { data: messages } = useDbQuery((db) =>
+    db
+      .selectFrom("conversation_message")
+      .selectAll()
+      .where("conversationId", "=", conversationId)
+      .orderBy("seq", "asc")
+      .orderBy("id", "asc"),
+  );
+
+  // Once the conversation row syncs down, isRunning drives the working state; drop the
+  // optimistic bridge flag so the composer doesn't stay locked after the first turn.
+  useEffect(() => {
+    if (conversation) setAwaitingConversation(false);
+  }, [conversation]);
+
+  // Opening the sidebar does not wake the agent. Ping it so onStart can copy a
+  // pre-sqlite transcript into conversation_message. Skip brand-new empty chats.
+  useEffect(() => {
+    if (!conversation) return;
+    if (ensuredRef.current || messages.length > 0) return;
+    if (!conversation.title && conversation.totalTokens === 0) return;
+    ensuredRef.current = true;
+    orpc.assistant.ensureProjection.call({ conversationId: conversation.id }).catch((error: unknown) => {
+      console.error("Failed to backfill conversation", error);
+      ensuredRef.current = false;
+    });
+  }, [conversation, messages.length]);
+
+  const preferredModel = useAssistantStore((s) => s.model);
   const setPreferredModel = useAssistantStore((s) => s.setModel);
   const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
   const setPreferredReasoningEffort = useAssistantStore((s) => s.setReasoningEffort);
-  const model = resolveAssistantModelId(conversation.model);
+  const model = conversation ? resolveAssistantModelId(conversation.model) : preferredModel;
   const reasoningEffort =
-    resolveAssistantReasoningEffort(model, conversation.reasoningEffort ?? preferredReasoningEffort) ??
+    resolveAssistantReasoningEffort(model, conversation?.reasoningEffort ?? preferredReasoningEffort) ??
     getAssistantModel(model)?.reasoningEffort ??
     "medium";
-  const modelRef = useRef(model);
-  const reasoningEffortRef = useRef(reasoningEffort);
-  modelRef.current = model;
-  reasoningEffortRef.current = reasoningEffort;
-
-  const agent = useAgent({ agent: "assistant-agent", name: agentId });
-  const { messages, sendMessage, status, stop, error, isServerStreaming } = useAgentChat({
-    agent,
-    body: () => ({
-      model: modelRef.current,
-      ...(modelSupportsSelectableReasoning(modelRef.current) ? { reasoningEffort: reasoningEffortRef.current } : {}),
-    }),
-  });
 
   function selectModel(next: AssistantModelId) {
     setPreferredModel(next);
-    db.db.executeKysely((q) =>
-      q
-        .updateTable("conversation")
-        .set({
-          model: next,
-          reasoningEffort: preferredConversationReasoningEffort(
-            next,
-            conversation.reasoningEffort ?? preferredReasoningEffort,
-          ),
-        })
-        .where("id", "=", conversation.id),
-    );
   }
 
   function selectReasoningEffort(next: AssistantReasoningEffort) {
     setPreferredReasoningEffort(next);
-    db.db.executeKysely((q) =>
-      q.updateTable("conversation").set({ reasoningEffort: next }).where("id", "=", conversation.id),
-    );
   }
-  const isWorking = uploading || status === "submitted" || status === "streaming" || isServerStreaming;
+
+  const isRunning = conversation?.turnStatus === "running";
+  // Follow-up `submitTurn` returns before the `turnStatus: "running"` write arrives
+  // on the client websocket. Hold the composer until that write, or a later
+  // idle/error with a newer `updatedAt`, is visible.
+  const awaitingTurn =
+    pendingSubmittedUpdatedAt != null &&
+    (conversation == null ||
+      !shouldReleaseAwaitingTurn({
+        turnStatus: conversation.turnStatus,
+        updatedAt: conversation.updatedAt,
+        submittedUpdatedAt: pendingSubmittedUpdatedAt,
+      }));
+  const isWorking = uploading || submitting || awaitingConversation || awaitingTurn || isRunning;
+  const canStop = isRunning || awaitingTurn;
+  const locked = conversation !== null || awaitingConversation;
+  const turnError = conversation?.turnStatus === "error" ? conversation.turnError : "";
 
   async function uploadSelectedFiles() {
     if (selectedFiles.length === 0) return [];
 
     const formData = new FormData();
-    formData.set("conversationId", conversation.id);
+    formData.set("conversationId", conversationId);
     for (const file of selectedFiles) {
       formData.append("files", file);
     }
@@ -1024,6 +1014,7 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
     if ((!text && selectedFiles.length === 0) || isWorking) return;
 
     setUploadError(null);
+    setRpcError(null);
     let uploadedFiles: UploadedWorkspaceFile[] = [];
     if (selectedFiles.length > 0) {
       setUploading(true);
@@ -1046,19 +1037,45 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
         : "";
     const messageText = [text, workspaceContext].filter(Boolean).join("\n\n");
 
-    sendMessage({ text: messageText });
-    if (messages.length === 0) {
-      db.db.executeKysely((q) =>
-        q
-          .updateTable("conversation")
-          .set({
-            title: (text || selectedFiles.map((file) => file.name).join(", ")).slice(0, 80),
-          })
-          .where("id", "=", conversation.id),
-      );
+    setSubmitting(true);
+    try {
+      if (conversation) {
+        const submittedUpdatedAt = conversation.updatedAt;
+        await orpc.assistant.submitTurn.call({
+          conversationId,
+          turnId: generateId(),
+          text: messageText,
+        });
+        setPendingSubmittedUpdatedAt(submittedUpdatedAt);
+      } else {
+        const result = await orpc.assistant.startConversation.call({
+          conversationId,
+          text: messageText,
+          model,
+          reasoningEffort: preferredConversationReasoningEffort(model, preferredReasoningEffort),
+        });
+        setAwaitingConversation(true);
+        setActiveConversation(result.conversationId);
+      }
+      setInput("");
+      setSelectedFiles([]);
+    } catch (error) {
+      setPendingSubmittedUpdatedAt(null);
+      setAwaitingConversation(false);
+      setRpcError(rpcErrorMessage(error));
+    } finally {
+      setSubmitting(false);
     }
-    setInput("");
-    setSelectedFiles([]);
+  }
+
+  async function cancel() {
+    if (!canStop) return;
+    try {
+      await orpc.assistant.cancelTurn.call({ conversationId });
+      setPendingSubmittedUpdatedAt(null);
+    } catch (error) {
+      setRpcError(rpcErrorMessage(error));
+    }
   }
 
   function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
@@ -1083,16 +1100,18 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
               <NewChatSkills />
             </div>
           )}
-          {messages.map((message) => (
+          {groupMessageRows(messages).map((group) => (
             <div
-              key={message.id}
+              key={group.messages[0].id}
               className={cn(
                 "min-w-0 space-y-2 text-sm",
-                message.role === "user" &&
+                group.role === "user" &&
                   "ml-8 self-end rounded-lg bg-primary px-3 py-2 text-primary-foreground selection:bg-primary-foreground/30 selection:text-primary",
               )}
             >
-              <MessageParts message={message} conversationId={conversation.id} />
+              {group.messages.map((message) => (
+                <MessageRow key={message.id} message={message} conversationId={conversationId} />
+              ))}
             </div>
           ))}
           {isWorking && (
@@ -1105,9 +1124,9 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
         <ScrollToBottomButton />
       </StickToBottom>
 
-      {(error || uploadError) && (
+      {(rpcError || uploadError || turnError) && (
         <div className="mx-3 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-xs">
-          {uploadError ?? error?.message ?? "Something went wrong. Try again."}
+          {uploadError ?? rpcError ?? turnError}
         </div>
       )}
 
@@ -1152,16 +1171,12 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
         )}
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1">
-            <ModelSelect model={model} locked={messages.length > 0} onSelect={selectModel} />
+            <ModelSelect model={model} locked={locked} onSelect={selectModel} />
             {modelSupportsSelectableReasoning(model) && (
-              <ReasoningEffortSelect
-                effort={reasoningEffort}
-                locked={messages.length > 0}
-                onSelect={selectReasoningEffort}
-              />
+              <ReasoningEffortSelect effort={reasoningEffort} locked={locked} onSelect={selectReasoningEffort} />
             )}
           </div>
-          <ConversationCost conversation={conversation} />
+          {conversation && <ConversationCost conversation={conversation} />}
         </div>
         <div className="flex min-w-0 items-end gap-2">
           <Button
@@ -1191,9 +1206,9 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
             rows={2}
             className="max-h-40 min-h-0 flex-1 resize-none"
           />
-          {isWorking ? (
-            <Button type="button" variant="secondary" size="icon" aria-label="Stop generating" onClick={() => stop()}>
-              {uploading ? <Loader2 className="size-4 animate-spin" /> : <CircleStop className="size-4" />}
+          {canStop ? (
+            <Button type="button" variant="secondary" size="icon" aria-label="Stop generating" onClick={() => cancel()}>
+              <CircleStop className="size-4" />
             </Button>
           ) : (
             <Button
@@ -1201,9 +1216,13 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
               size="icon"
               className="shrink-0"
               aria-label="Send message"
-              disabled={!input.trim() && selectedFiles.length === 0}
+              disabled={isWorking || (!input.trim() && selectedFiles.length === 0)}
             >
-              <SendHorizontal className="size-4" />
+              {uploading || submitting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <SendHorizontal className="size-4" />
+              )}
             </Button>
           )}
         </div>
@@ -1212,105 +1231,30 @@ function ConversationChat({ agentId, conversation }: { agentId: string; conversa
   );
 }
 
-/**
- * Opens the assistant on a fresh conversation. Reuses an existing blank
- * conversation rather than piling up empty stubs (mirrors the guard in
- * ConversationView.newConversation). Used by the command palette.
- */
+/** Opens the assistant with an unpersisted conversation draft. */
 export function useNewConversation() {
-  const db = useDb();
   const openPanel = useAssistantStore((s) => s.openPanel);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
-  const preferredModel = useAssistantStore((s) => s.model);
-  const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
 
   return useCallback(() => {
     openPanel("assistant");
-
-    const [empty] = db.db.executeKysely((q) =>
-      q
-        .selectFrom("conversation")
-        .select("id")
-        .where("tombstone", "=", false)
-        .where("title", "=", "")
-        .where("totalTokens", "=", 0)
-        .orderBy("updatedAt", "desc")
-        .limit(1),
-    ).rows;
-    if (empty) {
-      setActiveConversation(empty.id);
-      return;
-    }
-
-    const id = generateId();
-    const now = Date.now();
-    db.db.executeKysely((q) =>
-      q.insertInto("conversation").values({
-        id,
-        title: "",
-        createdAt: now,
-        updatedAt: now,
-        model: preferredModel,
-        reasoningEffort: preferredConversationReasoningEffort(preferredModel, preferredReasoningEffort),
-        tombstone: false,
-        totalCost: 0,
-        totalTokens: 0,
-      }),
-    );
-    setActiveConversation(id);
-  }, [db, openPanel, setActiveConversation, preferredModel, preferredReasoningEffort]);
+    setActiveConversation(generateId());
+  }, [openPanel, setActiveConversation]);
 }
 
 export function AssistantSidebar() {
-  const db = useDb();
   const activeConversationId = useAssistantStore((s) => s.activeConversationId);
-  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
-  const preferredModel = useAssistantStore((s) => s.model);
-  const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
+  const [fallbackDraftId] = useState(generateId);
 
   const { data: conversations } = useDbQuery((db) =>
-    db
-      .selectFrom("conversation")
-      .selectAll()
-      .where(sql<boolean>`${activeConversationId ?? ""} is not null`)
-      .orderBy("updatedAt", "desc"),
+    db.selectFrom("conversation").selectAll().orderBy("updatedAt", "desc"),
   );
 
-  const active = conversations.find((c) => c.id === activeConversationId) ?? conversations[0];
+  const selectedConversationId = activeConversationId ?? conversations[0]?.id ?? fallbackDraftId;
+  const active = conversations.find((conversation) => conversation.id === selectedConversationId);
+  const target: ConversationTarget = active
+    ? { kind: "persisted", conversation: active }
+    : { kind: "draft", conversationId: selectedConversationId };
 
-  const creatingRef = useRef(false);
-  useEffect(() => {
-    if (conversations.length > 0) {
-      creatingRef.current = false;
-      return;
-    }
-    if (creatingRef.current) return;
-    creatingRef.current = true;
-    const id = generateId();
-    const now = Date.now();
-    db.db.executeKysely((q) =>
-      q.insertInto("conversation").values({
-        id,
-        title: "",
-        createdAt: now,
-        updatedAt: now,
-        model: preferredModel,
-        reasoningEffort: preferredConversationReasoningEffort(preferredModel, preferredReasoningEffort),
-        tombstone: false,
-        totalCost: 0,
-        totalTokens: 0,
-      }),
-    );
-    setActiveConversation(id);
-  }, [conversations, db, setActiveConversation, preferredModel, preferredReasoningEffort]);
-
-  if (!active) {
-    return (
-      <div className="flex h-full items-center justify-center bg-background">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  return <ConversationView key={active.id} conversation={active} conversations={conversations} />;
+  return <ConversationView key={selectedConversationId} target={target} conversations={conversations} />;
 }

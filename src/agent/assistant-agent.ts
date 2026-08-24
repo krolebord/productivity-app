@@ -1,10 +1,12 @@
 import { createWorkspaceStateBackend, type WorkspaceFsLike } from "@cloudflare/shell";
 import {
+  type ChatErrorContext,
   type ChatResponseResult,
   type Session,
   type SkillSource,
   type StepContext,
   Think,
+  type ThinkSubmissionInspection,
   type TurnConfig,
   type TurnContext,
 } from "@cloudflare/think";
@@ -18,7 +20,15 @@ import { z } from "zod";
 import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
 import { ChartSpecSchema } from "./chart-spec";
 import {
+  conversationTitleFromTurnText,
+  projectionRowsFromStep,
+  projectionRowsFromUiMessages,
+  stepToolsFromContext,
+  uiMessageStepParts,
+} from "./conversation-projection";
+import {
   type AssistantModelId,
+  type AssistantReasoningEffort,
   DEFAULT_ASSISTANT_MODEL,
   resolveAssistantModelId,
   resolveAssistantReasoningEffort,
@@ -51,6 +61,10 @@ type WorkspaceDownloadFile = {
 };
 
 export const DOWNLOAD_DIR = "/outputs";
+
+function firstTurnId(conversationId: string): string {
+  return `${conversationId}:first-turn`;
+}
 
 const MEDIA_TYPE_BY_EXTENSION: Record<string, string> = {
   csv: "text/csv",
@@ -101,7 +115,13 @@ type AssistantUsageState = {
   totalCostUsd: number;
   totalTokens: number;
   fileCounter: number;
+  nextSeq: number;
+  // Absent on legacy DO state. Skip backfill only when this is exactly true —
+  // never default it in initialState, which would mark old chats as done.
+  projectionReady?: boolean;
 };
+
+export type AssistantTurnError = { code: "NOT_FOUND" | "BAD_REQUEST"; message: string };
 
 type SkillCatalogRow = {
   id: string;
@@ -117,7 +137,10 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     totalCostUsd: 0,
     totalTokens: 0,
     fileCounter: 0,
+    nextSeq: 0,
   };
+
+  private turnNextSeq = 0;
 
   private reserveFileIndices(count: number): number {
     const current = this.state.fileCounter ?? 0;
@@ -142,8 +165,10 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   }
 
   async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
-    const modelId = resolveAssistantModelId(ctx.body?.model);
-    const model = this.getModel(modelId, ctx.body?.reasoningEffort);
+    const stub = await this.getUserDbStub();
+    const conversation = await stub.getConversation(this.getConversationId());
+    const modelId = resolveAssistantModelId(conversation?.model);
+    const model = this.getModel(modelId, conversation?.reasoningEffort);
     const memories = await this.getMemoriesBlock();
     return memories ? { model, system: `${ctx.system}\n\n${memories}` } : { model };
   }
@@ -247,41 +272,215 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     ].join("\n");
   }
 
-  onStepFinish(ctx: StepContext): void {
+  async onStepEnd(ctx: StepContext): Promise<void> {
     const usage = (
       ctx.providerMetadata as { openrouter?: { usage?: { cost?: number; totalTokens?: number } } } | undefined
     )?.openrouter?.usage;
     const cost = usage?.cost ?? 0;
     const tokens = usage?.totalTokens ?? ctx.usage?.totalTokens ?? 0;
-    if (cost === 0 && tokens === 0) {
-      return;
+    const rows = this.stepProjectionRows(ctx);
+    if (rows.length > 0) {
+      const stub = await this.getUserDbStub();
+      await stub.upsertConversationMessages(rows);
+      this.turnNextSeq = rows[rows.length - 1].seq + 1;
     }
     this.setState({
       ...this.state,
+      nextSeq: this.nextProjectionSeq(),
       totalCostUsd: this.state.totalCostUsd + cost,
       totalTokens: this.state.totalTokens + tokens,
     });
   }
 
-  async onChatResponse(_result: ChatResponseResult): Promise<void> {
-    await this.syncUsageToConversation();
+  async onChatResponse(result: ChatResponseResult): Promise<void> {
+    const turnStatus = result.status === "error" ? "error" : "idle";
+    const turnError = result.status === "error" ? (result.error ?? "Something went wrong.") : "";
+    await this.syncConversationTurn({ turnStatus, turnError });
   }
 
-  private async syncUsageToConversation(): Promise<void> {
+  protected override async onSubmissionStatus(submission: ThinkSubmissionInspection): Promise<void> {
+    const status = submission.status;
+    switch (status) {
+      case "pending":
+      case "running":
+        return;
+      case "error":
+        await this.syncConversationTurn({
+          turnStatus: "error",
+          turnError: submission.error ?? "Something went wrong.",
+        });
+        return;
+      case "completed":
+      case "aborted":
+      case "skipped":
+        await this.syncConversationTurn({ turnStatus: "idle", turnError: "" });
+        return;
+      default: {
+        const exhaustiveStatus: never = status;
+        return exhaustiveStatus;
+      }
+    }
+  }
+
+  onChatError(error: unknown, _ctx?: ChatErrorContext): unknown {
+    const message = error instanceof Error ? error.message : String(error);
+    this.ctx.waitUntil(this.syncConversationTurn({ turnStatus: "error", turnError: message }));
+    return error;
+  }
+
+  // Think hydrates `this.messages` before this runs. Swallow errors so a UserDb
+  // hiccup cannot brick isolate init (throwing from onStart retries forever).
+  async onStart(): Promise<void> {
+    try {
+      await this.ensureProjectionReady();
+    } catch (error) {
+      console.error("Failed to backfill conversation projection", error);
+    }
+  }
+
+  async startConversation(input: {
+    text: string;
+    model: AssistantModelId;
+    reasoningEffort: AssistantReasoningEffort | null;
+  }): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
+    const conversationId = this.getConversationId();
     const stub = await this.getUserDbStub();
-    await stub.mutate({
-      events: [
-        {
-          type: "item-updated",
-          dataset: "_conversation",
-          item_id: this.getConversationId(),
-          payload: {
-            updatedAt: Date.now(),
-            totalCost: this.state.totalCostUsd,
-            totalTokens: this.state.totalTokens,
-          },
-        },
-      ],
+    await stub.createConversation({
+      id: conversationId,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
+    });
+
+    try {
+      return await this.enqueueTurn({ turnId: firstTurnId(conversationId), text: input.text }, true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await stub.updateConversation(conversationId, { turnStatus: "error", turnError: message });
+      throw error;
+    }
+  }
+
+  async submitTurn(input: {
+    turnId: string;
+    text: string;
+  }): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
+    return this.enqueueTurn(input, false);
+  }
+
+  private async enqueueTurn(
+    input: { turnId: string; text: string },
+    allowRunning: boolean,
+  ): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
+    const conversationId = this.getConversationId();
+    const stub = await this.getUserDbStub();
+    const conversation = await stub.getConversation(conversationId);
+    if (!conversation) {
+      return { error: { code: "NOT_FOUND", message: "Conversation not found." } };
+    }
+    if (await this.inspectSubmission(input.turnId)) {
+      return { accepted: false };
+    }
+    if (conversation.turnStatus === "running" && !allowRunning) {
+      return { error: { code: "BAD_REQUEST", message: "A turn is already running." } };
+    }
+
+    await this.ensureProjectionReady();
+
+    const seq = (await stub.getMaxConversationMessageSeq(conversationId)) + 1;
+    this.turnNextSeq = seq + 1;
+    this.setState({ ...this.state, nextSeq: this.turnNextSeq });
+
+    // Persist the user row and turnStatus before submitMessages. That call commits the
+    // submission and may drain it from a schedule(0) alarm that interleaves with these
+    // cross-DO writes. Re-submitting the same turnId upserts the row.
+    await stub.upsertConversationMessages([
+      {
+        id: input.turnId,
+        conversationId,
+        seq,
+        role: "user",
+        kind: "text",
+        text: input.text,
+        toolName: "",
+        toolCallId: "",
+        toolState: "",
+        data: "",
+        createdAt: Date.now(),
+      },
+    ]);
+
+    const title = conversation.title.trim() ? "" : conversationTitleFromTurnText(input.text);
+    await stub.updateConversation(conversationId, {
+      turnStatus: "running",
+      turnError: "",
+      ...(title ? { title } : {}),
+    });
+
+    try {
+      const submission = await this.submitMessages(
+        [{ id: input.turnId, role: "user", parts: [{ type: "text", text: input.text }] }],
+        { submissionId: input.turnId, idempotencyKey: input.turnId },
+      );
+      return { accepted: submission.accepted };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await stub.updateConversation(conversationId, { turnStatus: "error", turnError: message });
+      throw error;
+    }
+  }
+
+  async cancelTurn(): Promise<{ ok: true; error?: undefined } | { ok?: undefined; error: AssistantTurnError }> {
+    const conversationId = this.getConversationId();
+    const stub = await this.getUserDbStub();
+    const conversation = await stub.getConversation(conversationId);
+    if (!conversation) {
+      return { error: { code: "NOT_FOUND", message: "Conversation not found." } };
+    }
+
+    const activeSubmissions = await this.listSubmissions({ status: ["pending", "running"] });
+    this.cancelAllChats();
+    await Promise.all(
+      activeSubmissions.map((submission) => this.cancelSubmission(submission.submissionId, "Cancelled by user.")),
+    );
+
+    // onSubmissionStatus already clears a live cancel. Also reset a stuck `running` row
+    // so Stop recovers when status didn't catch up. Leave recorded errors visible.
+    if (conversation.turnStatus === "running") {
+      await stub.updateConversation(conversationId, { turnStatus: "idle", turnError: "" });
+    }
+    return { ok: true };
+  }
+
+  async ensureProjection(): Promise<{ ok: true; error?: undefined } | { ok?: undefined; error: AssistantTurnError }> {
+    try {
+      await this.ensureProjectionReady();
+      return { ok: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { error: { code: "BAD_REQUEST", message } };
+    }
+  }
+
+  private async ensureProjectionReady(): Promise<void> {
+    if (this.state.projectionReady === true) return;
+
+    const messages = await this.getMessages();
+    if (messages.length === 0) {
+      this.setState({ ...this.state, projectionReady: true });
+      return;
+    }
+
+    const conversationId = this.getConversationId();
+    const stub = await this.getUserDbStub();
+    const rows = projectionRowsFromUiMessages({ conversationId, messages });
+    if (rows.length > 0) {
+      await stub.upsertConversationMessages(rows);
+    }
+    const lastSeq = rows[rows.length - 1]?.seq ?? 0;
+    this.setState({
+      ...this.state,
+      projectionReady: true,
+      ...(lastSeq > 0 ? { nextSeq: Math.max(this.nextProjectionSeq(), lastSeq + 1) } : {}),
     });
   }
 
@@ -525,6 +724,45 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       throw new Error(`Unexpected agent name without a conversation suffix: ${this.name}`);
     }
     return this.name.slice(separatorIndex + 1);
+  }
+
+  private async syncConversationTurn(input: {
+    turnStatus: "idle" | "running" | "error";
+    turnError: string;
+  }): Promise<void> {
+    const stub = await this.getUserDbStub();
+    await stub.updateConversation(this.getConversationId(), {
+      updatedAt: Date.now(),
+      totalCost: this.state.totalCostUsd,
+      totalTokens: this.state.totalTokens,
+      turnStatus: input.turnStatus,
+      turnError: input.turnError,
+    });
+  }
+
+  // Live counter, or the last persisted one after a mid-turn restart. Non-integers
+  // (missing/legacy state) must not flow into seq — a NaN row poisons later max(seq).
+  private nextProjectionSeq(): number {
+    const seq = this.turnNextSeq || this.state.nextSeq;
+    return Number.isInteger(seq) && seq > 0 ? seq : 0;
+  }
+
+  private stepProjectionRows(ctx: StepContext) {
+    const assistant = this.getStreamingAssistantMessage();
+    if (!assistant) return [];
+    const startSeq = this.nextProjectionSeq();
+    if (startSeq <= 0) return [];
+    const orderedParts = uiMessageStepParts({ message: assistant, stepNumber: ctx.stepNumber });
+    return projectionRowsFromStep({
+      conversationId: this.getConversationId(),
+      sessionMessageId: assistant.id,
+      stepNumber: ctx.stepNumber,
+      startSeq,
+      createdAt: Date.now(),
+      text: ctx.text,
+      tools: stepToolsFromContext(ctx),
+      ...(orderedParts.length > 0 ? { orderedParts } : {}),
+    });
   }
 
   private async getCodeDbAccess(): Promise<DbToolsAccess> {

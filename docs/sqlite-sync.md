@@ -169,7 +169,10 @@ and `t.enum(["a", "b"])` (TEXT, validated against the values at runtime — no S
 constraint). JSON values are stored as serialized TEXT via `t.text()` — parse at the call site.
 Each column builder chains `.nullable()`, `.default(value)`,
 `.$type<Narrowed>()` (type-only narrowing, e.g. `t.text().$type<"a" | (string & {})>()`), and
-`.describe(text)` for generated schema docs. Table builders also chain `.describe(text)`.
+`.describe(text)` for generated schema docs. Table options cover `baseName`, `description`, `ai`,
+`writes`, and `exportImport`. Their defaults are `ai: "read-write"`, `writes: "any"`, and
+`exportImport: "include"`. See [AI access control](#limiting-what-an-agent-may-touch) and
+[Server-only tables](#server-only-tables). `.describe()` is equivalent to `{ description }`.
 
 The table builders also expose runtime metadata: `syncDbSchema.tables.todo.columns` (per-column
 kind, nullability, defaults) and `validatePayload(payload, { event })` for checking CRDT event
@@ -576,6 +579,20 @@ keeps its `id` and drops the internal `tombstone` column. Pass `{ tables: ["todo
 to export a subset — the filter accepts either the public or the base table
 name. The data is read from the local in-memory database — the state the current
 tab sees.
+
+Pass `{ exportImport: "ignore" }` as a table option for data that should stay out of backups and
+restores. Ignored tables remain excluded when selected explicitly, and imports skip their matching
+rows.
+
+```ts
+const syncDbSchema = defineSyncSchema({
+  tables: {
+    todo: t.table({ title: t.text() }),
+    session: t.table({ token: t.text() }, { exportImport: "ignore" }),
+  },
+  migrations,
+});
+```
 
 `importData(data, opts?)` replays each row as an `item-created` CRDT event,
 seeding it through the worker and propagating to the server like any other write.
@@ -1010,6 +1027,31 @@ syncDb.enqueueEvent({
 
 Events enqueued on the server are applied immediately and broadcast to all connected clients.
 
+### Server-only tables
+
+By default any replica can author events for a table. Set `writes: "server"` when only the Durable
+Object should originate those events:
+
+```ts
+const syncDbSchema = defineSyncSchema({
+  tables: {
+    todo: t.table({ title: t.text() }),
+    job: t.table({ status: t.text() }, { writes: "server" }),
+  },
+  migrations,
+});
+```
+
+Clients still receive and query the table. On push, the Durable Object drops events for
+server-only datasets, accepts the rest of the batch, and still returns `ok: true`. Server
+`enqueueEvent`, `applyOwnEvents`, and SQL writes are not filtered.
+
+This is independent of the `ai` option. A server-side agent can still mutate a server-only table
+unless you also set `ai: "read-only"`.
+
+A client that already applied the event locally keeps that row. Other replicas never see it.
+Client types and write triggers are not restricted yet.
+
 ### Listening to Events
 
 ```ts
@@ -1060,6 +1102,44 @@ const tools = createDbTools({ access: () => aiDbAccess, mutations: true });
 ```
 
 This adds `mutateDb`, which accepts `item-created`, `item-updated`, and `item-deleted` CRDT events. It applies them through sqlite-sync's own-event path, not arbitrary write SQL, so writes are validated, persisted to the event log, applied locally, and synced normally. For `item-created` events, omit `item_id` and `payload.id`; the tool generates ids, injects them into the CRDT events, and returns them as `createdIds`.
+
+### Limiting what an agent may touch
+
+By default the agent can read every table in the database file and mutate every table in the sync
+schema. Narrow that with the table's `ai` option:
+
+```ts
+const syncDbSchema = defineSyncSchema({
+  tables: {
+    todo: t.table({ title: t.text() }),
+    audit: t.table({ note: t.text() }, { ai: "read-only" }), // documented, queryable, AI writes rejected
+    billing: t.table({ card_last4: t.text() }, { ai: "hidden" }), // undocumented, AI reads rejected
+  },
+  migrations,
+});
+```
+
+What is enforced:
+
+| Level | Effect |
+| --- | --- |
+| `"read-only"` | documented and queryable; `mutateDb` rejects events for the table |
+| `"hidden"` | left out of the schema doc; `queryDb` rejects any statement that reads the table |
+
+Hiding is enforced against the root pages a compiled statement opens, so views, aliases, CTEs,
+subqueries and quoting variants all resolve to the same check.
+
+Access is table-level, with no per-column setting. Columns could not be hidden from reads anyway
+(SQLite bytecode identifies tables, not columns), and blocking writes to a column that is required
+on insert would leave the agent unable to create rows at all. Keep data the agent must not touch in
+its own table.
+
+Hiding a table also changes two things globally:
+
+- Reads become an allow-list of the remaining base tables, so every other table in the same
+  database file (internal sync tables, and any non-synced table of your own) becomes unreadable.
+- `change_history` is dropped from the doc and denied, because it reads the raw event log where
+  every dataset's payloads live and so cannot be filtered per table.
 
 ---
 
@@ -1156,6 +1236,19 @@ Defines versioned DDL migrations.
 function createMigrations(
   builder: (steps: MigrationSteps) => Record<number, MigrationStep[]>
 ): Migrations
+```
+
+#### `admitClientEvents(options)`
+
+Splits a client push into events the hub should persist and events for tables with
+`writes: "server"`. The Durable Object adapter calls this on `push-events`. Unknown datasets stay
+admitted.
+
+```ts
+function admitClientEvents<T extends { dataset: string }>(options: {
+  syncDbSchema: Pick<SyncDbSchema, "tables" | "tablesConfig">;
+  events: readonly T[];
+}): { admitted: T[]; skipped: T[] }
 ```
 
 #### `generateId()`
@@ -1306,6 +1399,7 @@ function createAiDbAccess(options: {
   storage?: Pick<CrdtStorage, "applyOwnEvents">; // enables mutate(input)
   syncDbSchema: SyncDbSchema;
   context?: SchemaDocContext; // overview/app-level notes
+  limits?: { maxRows?: number; maxCellChars?: number };
 }): AiDbAccess // { getSchemaDoc(): string; query(input): AiQueryResult; mutate?(input): AiMutationResult }
 ```
 
@@ -1323,6 +1417,15 @@ function createDbTools(options: {
 #### `createSchemaDoc(options)`
 
 Lower-level helper that generates the markdown schema doc directly from a `syncDbSchema` (and optional `context`) — used internally by `createAiDbAccess`.
+
+#### `resolveAiPolicy(options)`
+
+Flattens the `ai` options declared on the schema's table builders into the effective access per table. Exposed for inspection and testing; `createAiDbAccess` calls it for you.
+
+```ts
+function resolveAiPolicy(options: { syncDbSchema: SyncDbSchema }): ResolvedAiPolicy
+// { tables, hasHiddenTables, readableBaseTableNames, tableAccess(dataset) }
+```
 
 ### WebSocket Protocol
 

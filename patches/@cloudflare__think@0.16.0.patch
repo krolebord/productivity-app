@@ -1,0 +1,38 @@
+diff --git a/dist/index-BZKPlFcA.d.ts b/dist/index-BZKPlFcA.d.ts
+index ded116e13a185d990bc84d1ba07ee20ae6902a0c..fce9f7f7a8ab980f19675d7e44a97525c78edc05 100644
+--- a/dist/index-BZKPlFcA.d.ts
++++ b/dist/index-BZKPlFcA.d.ts
+@@ -1712,6 +1712,13 @@ declare class Think<
+   private _pendingInteractionPromise;
+   private _interactionApplyTail;
+   private _streamingAssistant;
++  /**
++   * Return a snapshot of the assistant message currently being streamed.
++   *
++   * The accumulator remains private so subclasses cannot mutate Think's
++   * in-flight state. Returns `null` when no assistant message is streaming.
++   */
++  protected getStreamingAssistantMessage(): UIMessage | null;
+   private _submitConcurrency;
+   private static MESSAGE_DEBOUNCE_MS;
+   private _agentToolForwarders;
+diff --git a/dist/think.js b/dist/think.js
+index 76b792c60bf0f1f198e5516ab5ab1bec0e5c6437..d4d91cdacb4e27ff921e06bee6658d7db6e4bf5c 100644
+--- a/dist/think.js
++++ b/dist/think.js
+@@ -1057,6 +1057,15 @@ var Think = class Think extends Agent {
+ 		this.onStart = (props) => withAgentSpan(this, "think_start", "startup", { "cloudflare.agents.component": "think" }, (update) => startThink(props, update));
+ 	}
+ 	/**
++	* Return a snapshot of the assistant message currently being streamed.
++	*
++	* The accumulator remains private so subclasses cannot mutate Think's
++	* in-flight state. Returns `null` when no assistant message is streaming.
++	*/
++	getStreamingAssistantMessage() {
++		return this._streamingAssistant?.toMessage() ?? null;
++	}
++	/**
+ 	* Conversation history as Think's live in-memory view.
+ 	*
+ 	* Storage remains the durable source of truth, but runtime logic should read

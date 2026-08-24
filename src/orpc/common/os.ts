@@ -7,6 +7,7 @@ export const orpcErrors = {
   UNAUTHORIZED: {},
   NOT_FOUND: {},
   BAD_REQUEST: {},
+  FORBIDDEN: {},
 } as const;
 
 export const osBase = os.$context<ORPCContext>().errors(orpcErrors);

@@ -409,6 +409,40 @@ const migrations = createMigrations((b) => ({
       build: (col) => col.notNull(),
     }),
   ],
+  24: [
+    b.addColumn({
+      table: "_conversation",
+      column: "turnStatus",
+      type: "text",
+      defaultValue: "idle",
+      build: (col) => col.notNull(),
+    }),
+    b.addColumn({
+      table: "_conversation",
+      column: "turnError",
+      type: "text",
+      defaultValue: "",
+      build: (col) => col.notNull(),
+    }),
+    b.createTable("_conversation_message", (table) =>
+      table
+        .addColumn("id", "text", (col) => col.primaryKey().notNull())
+        .addColumn("tombstone", "boolean", (col) => col.notNull().defaultTo(false))
+        .addColumn("conversationId", "text", (col) => col.notNull())
+        .addColumn("seq", "integer", (col) => col.notNull())
+        .addColumn("role", "text", (col) => col.notNull())
+        .addColumn("kind", "text", (col) => col.notNull())
+        .addColumn("text", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("toolName", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("toolCallId", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("toolState", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("data", "text", (col) => col.notNull().defaultTo(""))
+        .addColumn("createdAt", "integer", (col) => col.notNull()),
+    ),
+    b.createIndex("conversation_message_conversation", (idx) =>
+      idx.on("_conversation_message").columns(["conversationId", "seq"]).where(sql.ref("tombstone"), "=", 0),
+    ),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -420,21 +454,18 @@ export const syncDbSchema = defineSyncSchema({
   tables: {
     item: t
       .table({
-        type: t
-          .enum(["note", "task"])
-          .default("note")
-          .describe('Item kind: "note" for reference material, "task" for an actionable item.'),
+        type: t.enum(["note", "task"]).default("note"),
         title: t.text(),
         createdAt: t.integer(),
         content: t.text().nullable().default("").describe("Markdown body; may be large."),
         order: t.real().nullable().default(0),
-        tags: t.text().default("[]").describe('JSON array of normalized tags; default "[]".'),
+        tags: t.text().default("[]").describe("JSON array of normalized tags."),
         dueAt: t
           .integer()
           .nullable()
           .default(null)
           .describe("Task schedule time; null means Inbox. Always null for notes."),
-        hasDueTime: t.boolean().default(false).describe("Whether dueAt has a time; false means all-day."),
+        hasDueTime: t.boolean().default(false).describe("false means all-day."),
         completedAt: t
           .integer()
           .nullable()
@@ -456,80 +487,76 @@ export const syncDbSchema = defineSyncSchema({
           .default(null)
           .describe("External record update time; used to skip unchanged rows."),
       })
-      .describe(
-        ["Notes are reference material; tasks are actionable. Use `dueAt` and `completedAt` for task state."].join(" "),
-      ),
+      .describe("Notes are reference material; tasks are actionable. Use `dueAt` and `completedAt` for task state."),
     currency_rate: t
-      .table({
-        date: t.text().describe('Rate date, "YYYY-MM-DD".'),
-        baseCurrency: t.text(),
-        AUD: currencyColumn(),
-        BRL: currencyColumn(),
-        CAD: currencyColumn(),
-        CHF: currencyColumn(),
-        CNY: currencyColumn(),
-        CZK: currencyColumn(),
-        DKK: currencyColumn(),
-        EUR: currencyColumn(),
-        GBP: currencyColumn(),
-        HKD: currencyColumn(),
-        HUF: currencyColumn(),
-        IDR: currencyColumn(),
-        ILS: currencyColumn(),
-        INR: currencyColumn(),
-        ISK: currencyColumn(),
-        JPY: currencyColumn(),
-        KRW: currencyColumn(),
-        MXN: currencyColumn(),
-        MYR: currencyColumn(),
-        NOK: currencyColumn(),
-        NZD: currencyColumn(),
-        PHP: currencyColumn(),
-        PLN: currencyColumn(),
-        RON: currencyColumn(),
-        SEK: currencyColumn(),
-        SGD: currencyColumn(),
-        THB: currencyColumn(),
-        TRY: currencyColumn(),
-        UAH: currencyColumn(),
-        USD: currencyColumn(),
-        ZAR: currencyColumn(),
-      })
+      .table(
+        {
+          date: t.text().describe('Rate date, "YYYY-MM-DD".'),
+          baseCurrency: t.text(),
+          AUD: currencyColumn(),
+          BRL: currencyColumn(),
+          CAD: currencyColumn(),
+          CHF: currencyColumn(),
+          CNY: currencyColumn(),
+          CZK: currencyColumn(),
+          DKK: currencyColumn(),
+          EUR: currencyColumn(),
+          GBP: currencyColumn(),
+          HKD: currencyColumn(),
+          HUF: currencyColumn(),
+          IDR: currencyColumn(),
+          ILS: currencyColumn(),
+          INR: currencyColumn(),
+          ISK: currencyColumn(),
+          JPY: currencyColumn(),
+          KRW: currencyColumn(),
+          MXN: currencyColumn(),
+          MYR: currencyColumn(),
+          NOK: currencyColumn(),
+          NZD: currencyColumn(),
+          PHP: currencyColumn(),
+          PLN: currencyColumn(),
+          RON: currencyColumn(),
+          SEK: currencyColumn(),
+          SGD: currencyColumn(),
+          THB: currencyColumn(),
+          TRY: currencyColumn(),
+          UAH: currencyColumn(),
+          USD: currencyColumn(),
+          ZAR: currencyColumn(),
+        },
+        { ai: "read-only", writes: "server", exportImport: "ignore" },
+      )
       .describe(
-        [
-          "Daily rates, one row per (date, baseCurrency). Each code is units per base unit (null if unavailable).",
-          "Use the latest date for current rates; A→B: amount / rateA * rateB.",
-        ].join(" "),
+        "Daily rates, one row per (date, baseCurrency). Each code is units per base unit (null if unavailable). Use the latest date for current rates; A→B: amount / rateA * rateB.",
       ),
-    account: t
-      .table({
-        currency: t.text().describe('ISO 4217 currency code, e.g. "USD".'),
-        initialBalance: t.real().default(0),
-        balance: t.real().default(0).describe("App-maintained current balance."),
-        description: t.text().default(""),
-        labelColor: t.text().default("#8b5cf6"),
-        labelText: t.text().default(""),
-        order: t.real().default(0),
-        excludeFromDashboard: t.boolean().default(false).describe("Exclude from dashboard metrics."),
-        createdAt: t.integer(),
-      })
-      .describe("Financial accounts."),
+    account: t.table({
+      currency: t.text().describe('ISO 4217 currency code, e.g. "USD".'),
+      initialBalance: t.real().default(0),
+      balance: t.real().default(0).describe("App-maintained current balance."),
+      description: t.text().default(""),
+      labelColor: t.text().default("#8b5cf6"),
+      labelText: t.text().default(""),
+      order: t.real().default(0),
+      excludeFromDashboard: t.boolean().default(false).describe("Exclude from dashboard metrics."),
+      createdAt: t.integer(),
+    }),
     transaction_entry: t
       .table({
         type: t.text().default("expense").describe("expense | income | transfer | adjustment."),
         accountId: t.text().describe("References account.id."),
         accountCurrency: t.text().describe("Currency of `amount`, copied from the account."),
-        amount: t.real().describe("Signed amount — see table description for sign conventions."),
+        amount: t.real().describe("Signed; see table description."),
         counterpartyAccountId: t.text().default("").describe("Destination account.id for transfers; empty otherwise."),
         counterpartyCurrency: t.text().default(""),
         counterpartyAmount: t.real().nullable().describe("Positive destination amount for transfers."),
         title: t.text().default(""),
-        category: t.text().default("").describe("Category; empty for transfers."),
+        category: t.text().default("").describe("Empty for transfers."),
         importance: t
           .enum(["fixed", "flexible", "optional", "investment"])
           .nullable()
           .default(null)
-          .describe("Expense tier; null for other types or unset."),
+          .describe("Expense tier; null for non-expenses."),
         notes: t.text().default(""),
         effectiveAt: t.integer().describe("Transaction time; use for date filtering."),
         createdAt: t.integer(),
@@ -539,130 +566,141 @@ export const syncDbSchema = defineSyncSchema({
           .nullable()
           .default(null)
           .describe('External provider (e.g. "monobank"); null for manual entries.'),
-        providerId: t.text().nullable().default(null).describe("Provider-side transaction id; null otherwise."),
+        providerId: t.text().nullable().default(null).describe("Provider-side transaction id."),
       })
       .describe(
-        [
-          "Financial transactions. Amount is in the account currency: negative for expenses and transfer sources,",
-          "positive for income, either sign for adjustments. Transfers set counterparty fields; otherwise",
-          "counterpartyAccountId is empty and counterpartyAmount is null.",
-        ].join(" "),
+        "Amount is in the account currency: negative for expenses and transfer sources, positive for income, either sign for adjustments. Transfers set counterparty fields; otherwise counterpartyAccountId is empty and counterpartyAmount is null.",
       ),
-    conversation: t
-      .table({
+    conversation: t.table(
+      {
         title: t.text().default(""),
         createdAt: t.integer(),
         updatedAt: t.integer(),
-        model: t.text().nullable().default(null).describe("Model id, fixed after the first message."),
-        reasoningEffort: t.text().nullable().default(null).describe("Optional reasoning effort override."),
+        model: t.text().nullable().default(null).describe("Fixed after the first message."),
+        reasoningEffort: t.text().nullable().default(null).describe("Fixed after the first message."),
         totalCost: t.real().default(0).describe("Cumulative cost in USD."),
-        totalTokens: t.integer().default(0).describe("Cumulative tokens."),
-      })
-      .describe("Assistant conversations and usage."),
+        totalTokens: t.integer().default(0),
+        turnStatus: t.enum(["idle", "running", "error"]).default("idle"),
+        turnError: t.text().default(""),
+      },
+      { writes: "server", exportImport: "ignore" },
+    ),
+    conversation_message: t
+      .table(
+        {
+          conversationId: t.text(),
+          seq: t.integer(),
+          role: t.enum(["user", "assistant"]),
+          kind: t.enum(["text", "tool"]),
+          text: t.text().default(""),
+          toolName: t.text().default(""),
+          toolCallId: t.text().default(""),
+          toolState: t.text().default(""),
+          data: t.text().default(""),
+          createdAt: t.integer(),
+        },
+        { ai: "read-only", writes: "server", exportImport: "ignore" },
+      )
+      .describe("UI projection of the assistant transcript."),
     memory: t
       .table({
         content: t.text().describe("Short, durable user fact or preference."),
-        source: t.enum(["user", "assistant"]).default("user").describe("Who created it."),
-        enabled: t.boolean().default(true).describe("False keeps it but omits it from assistant context."),
+        source: t.enum(["user", "assistant"]).default("user"),
+        enabled: t.boolean().default(true).describe("False keeps the row but omits it from assistant context."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
-      .describe(
-        [
-          "Durable user facts and preferences. Enabled rows enter every assistant turn; use memory tools, not mutateDb.",
-        ].join(" "),
-      ),
+      .describe("Enabled rows enter every assistant turn; use memory tools, not mutateDb."),
     skill: t
       .table({
         name: t.text().default(""),
-        whenToUse: t.text().default("").describe("When this skill applies."),
+        whenToUse: t.text().default(""),
         instructions: t.text().default("").describe("Markdown playbook."),
         source: t.enum(["user", "assistant"]).default("user"),
         status: t
           .enum(["pending", "active", "disabled"])
           .default("pending")
-          .describe("active is loadable; pending awaits review; disabled is muted."),
+          .describe("Only active is loadable; pending awaits review."),
         lastUsedAt: t.integer().nullable().default(null),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
-      .describe(
-        [
-          "Reusable assistant playbooks. New assistant-created skills start pending; only active skills are loadable.",
-        ].join(" "),
-      ),
+      .describe("Assistant-created skills start pending; use skill tools, not mutateDb."),
     monobank_connection: t
-      .table({
-        providerConnectionId: t.text().describe("Mirrors the central-D1 Monobank connection id."),
-        status: t.text().default("connected").describe("connected | disconnected | error."),
-        webhookStatus: t.text().default("pending").describe("pending | active | error."),
-        displayName: t.text().default(""),
-        lastError: t.text().default("").describe("Latest error; empty when healthy."),
-        connectedAt: t.integer().default(0),
-        createdAt: t.integer(),
-        updatedAt: t.integer(),
-      })
-      .describe(
-        ["Monobank connection metadata. Tokens are only in central D1; at most one is active per user."].join(" "),
-      ),
+      .table(
+        {
+          providerConnectionId: t.text().describe("Mirrors the central-D1 Monobank connection id."),
+          status: t.text().default("connected").describe("connected | disconnected | error."),
+          webhookStatus: t.text().default("pending").describe("pending | active | error."),
+          displayName: t.text().default(""),
+          lastError: t.text().default("").describe("Empty when healthy."),
+          connectedAt: t.integer().default(0),
+          createdAt: t.integer(),
+          updatedAt: t.integer(),
+        },
+        { ai: "read-only", writes: "server", exportImport: "ignore" },
+      )
+      .describe("Tokens live in central D1; at most one active connection per user."),
     monobank_account: t
-      .table({
-        providerConnectionId: t.text().describe("References monobank_connection.providerConnectionId."),
-        providerAccountId: t.text().describe("Monobank account id."),
-        displayName: t.text().default(""),
-        accountType: t.text().default(""),
-        currency: t.text().default("").describe('ISO 4217 code, or "" when unsupported.'),
-        maskedPan: t.text().default(""),
-        linkedAccountId: t.text().default("").describe("In-app account.id to import into; empty when unlinked."),
-        enabled: t.boolean().default(true).describe("Whether imports are enabled."),
-        lastWebhookAt: t.integer().nullable().default(null),
-        lastImportAt: t.integer().nullable().default(null).describe("Last transaction import time."),
-        lastError: t.text().default("").describe("Latest import/link error; empty when healthy."),
-        createdAt: t.integer(),
-        updatedAt: t.integer(),
-      })
-      .describe(
-        [
-          "Monobank account metadata. Each remote account links to one in-app account; no balances are stored here.",
-        ].join(" "),
-      ),
+      .table(
+        {
+          providerConnectionId: t.text().describe("References monobank_connection.providerConnectionId."),
+          providerAccountId: t.text(),
+          displayName: t.text().default(""),
+          accountType: t.text().default(""),
+          currency: t.text().default("").describe('ISO 4217 code, or "" when unsupported.'),
+          maskedPan: t.text().default(""),
+          linkedAccountId: t.text().default("").describe("In-app account.id to import into; empty when unlinked."),
+          enabled: t.boolean().default(true),
+          lastWebhookAt: t.integer().nullable().default(null),
+          lastImportAt: t.integer().nullable().default(null),
+          lastError: t.text().default("").describe("Empty when healthy."),
+          createdAt: t.integer(),
+          updatedAt: t.integer(),
+        },
+        { ai: "read-only", exportImport: "ignore" },
+      )
+      .describe("Each remote account links to one in-app account; balances are not stored here."),
     calendar_connection: t
-      .table({
-        providerConnectionId: t.text().describe("Mirrors the central-D1 Google Calendar connection id."),
-        status: t.text().default("connected").describe("connected | disconnected | error."),
-        email: t.text().default(""),
-        connectedAt: t.integer().default(0),
-        createdAt: t.integer(),
-        updatedAt: t.integer(),
-      })
+      .table(
+        {
+          providerConnectionId: t.text().describe("Mirrors the central-D1 Google Calendar connection id."),
+          status: t.text().default("connected").describe("connected | disconnected | error."),
+          email: t.text().default(""),
+          connectedAt: t.integer().default(0),
+          createdAt: t.integer(),
+          updatedAt: t.integer(),
+        },
+        { ai: "read-only", writes: "server", exportImport: "ignore" },
+      )
       .describe("One row per Google account. OAuth tokens are in D1; sync diagnostics are in DO storage."),
     calendar_source: t
-      .table({
-        providerConnectionId: t.text().describe("References calendar_connection.providerConnectionId."),
-        providerCalendarId: t.text().describe("Google calendar id."),
-        displayName: t.text().default(""),
-        color: t.text().default(""),
-        isPrimary: t.boolean().default(false),
-        timeZone: t.text().default("").describe("IANA zone for all-day dates."),
-        enabled: t.boolean().default(false).describe("Mirror events into tasks."),
-        createdAt: t.integer(),
-        updatedAt: t.integer(),
-      })
-      .describe(
-        [
-          "Calendars visible to a Google account. Enabled rows mirror events one-way into item tasks; events are not stored here.",
-        ].join(" "),
-      ),
-    dashboard_settings: t
-      .table({
+      .table(
+        {
+          providerConnectionId: t.text().describe("References calendar_connection.providerConnectionId."),
+          providerCalendarId: t.text(),
+          displayName: t.text().default(""),
+          color: t.text().default(""),
+          isPrimary: t.boolean().default(false),
+          timeZone: t.text().default("").describe("IANA zone for all-day dates."),
+          enabled: t.boolean().default(false).describe("Mirror events into tasks."),
+          createdAt: t.integer(),
+          updatedAt: t.integer(),
+        },
+        { ai: "read-only", writes: "server", exportImport: "ignore" },
+      )
+      .describe("Enabled rows mirror events one-way into item tasks; events are not stored here."),
+    dashboard_settings: t.table(
+      {
         rangeMode: t.enum(["days", "cycle"]).default("days"),
         rangeDays: t.integer().default(30).describe('Trailing length when rangeMode is "days".'),
         cycleDay: t.integer().default(25).describe("Cycle start day of month."),
         baseCurrency: t.text().default("USD").describe("Dashboard totals currency."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
-      })
-      .describe("Synced singleton dashboard preferences."),
+      },
+      { ai: "read-only" },
+    ),
     habit: t
       .table({
         name: t.text().default(""),
@@ -670,53 +708,38 @@ export const syncDbSchema = defineSyncSchema({
           .enum(["daily", "weekly", "monthly", "everyNDays", "weekdays", "monthDays"])
           .default("daily")
           .describe(
-            [
-              'Due cadence; "weekdays" uses scheduleWeekdays, "monthDays" uses scheduleMonthDays,',
-              'and "everyNDays" uses scheduleInterval.',
-            ].join(" "),
+            '"weekdays" uses scheduleWeekdays, "monthDays" uses scheduleMonthDays, "everyNDays" uses scheduleInterval.',
           ),
         scheduleInterval: t.integer().default(1).describe('Days between completions for "everyNDays".'),
         scheduleWeekdays: t.text().default("[]").describe('ISO weekday numbers (1=Mon … 7=Sun) for "weekdays".'),
         scheduleMonthDays: t
           .text()
           .default("[]")
-          .describe(
-            [
-              'Day-of-month numbers (1–31) for "monthDays". Days past the end of a short month',
-              "clamp to that month's last day.",
-            ].join(" "),
-          ),
+          .describe('Day-of-month numbers (1–31) for "monthDays"; short months clamp to the last day.'),
         timeOfDay: t
           .enum(["morning", "afternoon", "evening", "night"])
           .nullable()
           .default(null)
-          .describe("Preferred time; null means anytime."),
+          .describe("null means anytime."),
         target: t
           .real()
           .default(1)
-          .describe("Goal: per day except weekly/monthly, which sum the calendar period. 1 is a check-off."),
-        unit: t.text().default("").describe("Optional target unit."),
+          .describe("Per day except weekly/monthly, which sum the calendar period. 1 is a check-off."),
+        unit: t.text().default(""),
         order: t.real().default(0),
-        archivedAt: t
-          .integer()
-          .nullable()
-          .default(null)
-          .describe("Archive time; null if active. Habits are never hard-deleted."),
+        archivedAt: t.integer().nullable().default(null).describe("null if active. Habits are never hard-deleted."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
       .describe(
-        [
-          "Recurring habits. habit_entry values count toward target per day, except weekly/monthly habits, which",
-          "accumulate over their calendar period. Archive with archivedAt.",
-        ].join(" "),
+        "habit_entry values count toward target per day, except weekly/monthly habits which accumulate over their calendar period.",
       ),
     note_view: t
       .table({
         name: t.text().default(""),
         include: t.text().default("[]").describe('Required tags. Pseudo-tag ":untagged" matches notes without tags.'),
         exclude: t.text().default("[]").describe("Tags that always hide a note."),
-        match: t.enum(["all", "any"]).default("all").describe("Whether include requires all tags or any tag."),
+        match: t.enum(["all", "any"]).default("all"),
         status: t
           .enum(["pending", "completed", "overdue"])
           .nullable()
@@ -726,16 +749,16 @@ export const syncDbSchema = defineSyncSchema({
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
-      .describe(["Saved named tag filters for notes; stores no notes."].join(" ")),
+      .describe("Saved named tag filters; stores no notes."),
     habit_entry: t
       .table({
         habitId: t.text().describe("References habit.id."),
         date: t.text().describe('Local calendar day as "YYYY-MM-DD".'),
-        value: t.real().default(0).describe("Amount logged on this date."),
+        value: t.real().default(0),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       })
-      .describe(["Per-day habit progress; one logical entry per (habitId, date)."].join(" ")),
+      .describe("One logical entry per (habitId, date)."),
   },
   migrations,
 });
@@ -746,6 +769,8 @@ export type CurrencyRateItem = typeof syncDbSchema.tables.currency_rate.$row;
 export type AccountItem = typeof syncDbSchema.tables.account.$row;
 export type TransactionEntryItem = typeof syncDbSchema.tables.transaction_entry.$row;
 export type ConversationItem = typeof syncDbSchema.tables.conversation.$row;
+export type ConversationMessageItem = typeof syncDbSchema.tables.conversation_message.$row;
+export type ConversationTurnStatus = ConversationItem["turnStatus"];
 export type MemoryItem = typeof syncDbSchema.tables.memory.$row;
 export type SkillItem = typeof syncDbSchema.tables.skill.$row;
 export type MonobankConnectionMetaItem = typeof syncDbSchema.tables.monobank_connection.$row;

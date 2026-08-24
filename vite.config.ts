@@ -44,8 +44,8 @@ const config = defineConfig(({ mode }) => {
           globPatterns: ["**/*.{js,css,html,wasm,svg,png,ico,woff2}"],
           maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
           // Mirrors run_worker_first in wrangler.jsonc — never serve the SPA
-          // shell for API, RPC, sync, or agent traffic.
-          navigateFallbackDenylist: [/^\/rpc\//, /^\/api\//, /^\/user-db\//, /^\/agents\//],
+          // shell for API, RPC, or sync traffic.
+          navigateFallbackDenylist: [/^\/rpc\//, /^\/api\//, /^\/user-db\//],
         },
       }),
     ],

@@ -103,9 +103,7 @@ export function SectionCard({
             {icon}
             <span className="truncate">{title}</span>
           </h2>
-          {actions ? (
-            <div className={cn("flex shrink-0 items-center gap-1.5", actionsClassName)}>{actions}</div>
-          ) : null}
+          {actions ? <div className={cn("flex shrink-0 items-center gap-1.5", actionsClassName)}>{actions}</div> : null}
         </div>
       ) : null}
       <div className={bodyClassName}>{children}</div>

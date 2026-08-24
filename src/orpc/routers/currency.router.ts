@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { baseCurrencySchema, fetchCurrentRatesAgainstBase } from "@/lib/currency/current-rates";
+import { baseCurrencySchema } from "@/lib/currency/current-rates";
+import { getUserDbStub } from "@/lib/user-db-stub";
 import { protectedProcedure } from "../common/procedure";
 
 export const currencyRouter = {
@@ -9,15 +10,8 @@ export const currencyRouter = {
         baseCurrency: baseCurrencySchema.default("USD"),
       }),
     )
-    .handler(async ({ input }) => {
-      const { base, rates } = await fetchCurrentRatesAgainstBase({
-        base: input.baseCurrency,
-      });
-
-      return {
-        date: new Date().toISOString().slice(0, 10),
-        base,
-        rates,
-      };
+    .handler(async ({ input, context }) => {
+      const stub = await getUserDbStub(context.auth.userId);
+      return stub.refreshCurrencyRates({ baseCurrency: input.baseCurrency });
     }),
 };
