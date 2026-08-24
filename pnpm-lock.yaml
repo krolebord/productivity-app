@@ -179,8 +179,8 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       do-jobs:
-        specifier: ^0.1.2
-        version: 0.1.2
+        specifier: ^0.2.0
+        version: 0.2.0
       kysely:
         specifier: ^0.28.10
         version: 0.28.17
@@ -4841,8 +4841,8 @@ packages:
     resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
     engines: {node: '>=0.3.1'}
 
-  do-jobs@0.1.2:
-    resolution: {integrity: sha512-RY02IUDpmw8M3FxXAJNua2LBoZYIvCKVK7AoMM4dEdC/J69txPwlBIaGP0ZcfYT9PEiUl72LveQkOiZQlxSlcg==}
+  do-jobs@0.2.0:
+    resolution: {integrity: sha512-NChXbXNfD8y6snyvde44uG5R28U/oyJuuVkJjTtmU7za+lMmt7I/H4eNYpNhu42GwJdfhasFBbKABtDz+fOUuA==}
     peerDependencies:
       '@cloudflare/workers-types': ^4.0.0
 
@@ -11922,7 +11922,7 @@ snapshots:
 
   diff@8.0.4: {}
 
-  do-jobs@0.1.2:
+  do-jobs@0.2.0:
     dependencies:
       '@standard-schema/spec': 1.1.0
 
