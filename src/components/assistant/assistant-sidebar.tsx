@@ -13,6 +13,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Gauge,
   ImageIcon,
   Loader2,
   Mic,
@@ -40,8 +41,8 @@ import {
   type AssistantModelInputModality,
   type AssistantReasoningEffort,
   formatReasoningEffortLabel,
-  GPT_5_6_REASONING_EFFORTS,
   getAssistantModel,
+  getModelReasoningEfforts,
   modelSupportsSelectableReasoning,
   resolveAssistantModelId,
   resolveAssistantReasoningEffort,
@@ -126,6 +127,22 @@ function formatModelPrice(price: number) {
 
 function formatModelPricing(model: AssistantModel) {
   return `${formatModelPrice(model.pricing.inputPerMillion)} in / ${formatModelPrice(model.pricing.outputPerMillion)} out per 1M`;
+}
+
+/** Artificial Analysis intelligence index, when the model reports one. */
+function ModelIntelligenceScore({ score }: { score: number | undefined }) {
+  if (score == null) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="flex shrink-0 items-center gap-0.5 tabular-nums">
+          <Gauge className="size-3 shrink-0" />
+          {score}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Artificial Analysis intelligence index</TooltipContent>
+    </Tooltip>
+  );
 }
 
 function preferredConversationReasoningEffort(
@@ -703,7 +720,10 @@ function ModelSelect({
                 <span className="truncate font-medium">{m.label}</span>
                 <ModelModalityIcons modalities={m.inputModalities} />
               </span>
-              <span className="truncate text-muted-foreground text-xs">{formatModelPricing(m)}</span>
+              <span className="flex min-w-0 items-center justify-between gap-2 text-muted-foreground text-xs">
+                <span className="truncate">{formatModelPricing(m)}</span>
+                <ModelIntelligenceScore score={m.intelligenceScore} />
+              </span>
             </span>
             {m.id === active.id && <Check className="mt-0.5 size-3.5 shrink-0" />}
           </DropdownMenuItem>
@@ -715,10 +735,12 @@ function ModelSelect({
 
 function ReasoningEffortSelect({
   effort,
+  efforts,
   locked,
   onSelect,
 }: {
   effort: AssistantReasoningEffort;
+  efforts: readonly AssistantReasoningEffort[];
   locked: boolean;
   onSelect: (effort: AssistantReasoningEffort) => void;
 }) {
@@ -755,7 +777,7 @@ function ReasoningEffortSelect({
         <TooltipContent side="bottom">Reasoning effort</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="w-40">
-        {GPT_5_6_REASONING_EFFORTS.map((level) => (
+        {efforts.map((level) => (
           <DropdownMenuItem key={level} className="gap-2" onClick={() => onSelect(level)}>
             <span className="flex-1">{formatReasoningEffortLabel(level)}</span>
             {level === effort && <Check className="size-3.5 shrink-0" />}
@@ -1199,7 +1221,12 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
           <div className="flex min-w-0 items-center gap-1">
             <ModelSelect model={model} locked={locked} onSelect={selectModel} />
             {modelSupportsSelectableReasoning(model) && (
-              <ReasoningEffortSelect effort={reasoningEffort} locked={locked} onSelect={selectReasoningEffort} />
+              <ReasoningEffortSelect
+                effort={reasoningEffort}
+                efforts={getModelReasoningEfforts(model)}
+                locked={locked}
+                onSelect={selectReasoningEffort}
+              />
             )}
           </div>
           {conversation && <ConversationCost conversation={conversation} />}

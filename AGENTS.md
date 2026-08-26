@@ -47,6 +47,7 @@ pnpm deploy               # Build + wrangler deploy
 pnpm db:local:migrate     # Apply D1 migrations locally
 pnpm db:new-migration     # Create a new D1 migration
 pnpm generate:types:env   # Regenerate worker-configuration.d.ts (wrangler types)
+pnpm sync:models          # Regenerate src/agent/models.gen.ts from OpenRouter
 ```
 
 Two env vars tune the dev server (read from `.env` or the shell): `DEV_PORT` overrides
@@ -56,6 +57,9 @@ reaching it through a proxy. The `Dev server (Tailnet)` preset in
 port because Vite reconnects to whatever origin served the page.
 
 Note: the central D1 database uses SQL migrations in `migrations/`; the per-user synced database defines its schema/migrations in code at `src/user-db/migrations.ts`.
+
+The assistant model catalog is generated: edit the seed `src/agent/supported-models.ts`,
+run `pnpm sync:models` to scrape the rest from OpenRouter into `src/agent/models.gen.ts`
 
 When you add a migration under `migrations/`, hand-update the matching Kysely types in
 `src/lib/db-types.ts` in the same change — they are no longer generated. Enum columns are

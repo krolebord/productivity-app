@@ -14,6 +14,7 @@
     "db:new-migration": "echo 'Enter migration name: ' && read MIGRATION_NAME && wrangler d1 migrations create productivity-db $MIGRATION_NAME",
     "docs:sync:sqlite-sync": "curl -fsSL https://raw.githubusercontent.com/krolebord-dev/sqlite-sync/refs/heads/main/docs.md -o docs/sqlite-sync.md",
     "generate:types:env": "wrangler types",
+    "sync:models": "tsx scripts/sync-models.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "format": "biome check --write",
