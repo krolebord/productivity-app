@@ -4,16 +4,17 @@ import type { AssistantModel, AssistantModelId } from "./models";
 
 export const ASSISTANT_MODELS = [
   {
-    id: "stealth/ox-alpha",
-    label: "Ox Alpha",
+    id: "z-ai/glm-5.3-flash",
+    label: "GLM 5.3 Flash",
     inputModalities: [
       "text",
       "image",
       "video"
     ],
     pricing: {
-      inputPerMillion: 0,
-      outputPerMillion: 0
+      inputPerMillion: 0.075,
+      outputPerMillion: 0.25,
+      cacheReadPerMillion: 0.015
     },
     supportedReasoningEfforts: [
       "low",
@@ -21,22 +22,6 @@ export const ASSISTANT_MODELS = [
       "max"
     ],
     reasoningEffort: "max"
-  },
-  {
-    id: "xiaomi/mimo-v2.5",
-    label: "MiMo V2.5",
-    inputModalities: [
-      "text",
-      "image",
-      "audio",
-      "video"
-    ],
-    pricing: {
-      inputPerMillion: 0.14,
-      outputPerMillion: 0.28,
-      cacheReadPerMillion: 0.0028
-    },
-    intelligenceScore: 38
   },
   {
     id: "deepseek/deepseek-v4-flash-0731",
@@ -82,20 +67,21 @@ export const ASSISTANT_MODELS = [
     reasoningEffort: "high"
   },
   {
-    id: "deepseek/deepseek-v4-pro",
+    id: "deepseek/deepseek-v4-pro-0813",
     label: "DeepSeek V4 Pro",
     inputModalities: [
       "text"
     ],
     pricing: {
-      inputPerMillion: 0.87,
-      outputPerMillion: 1.74,
-      cacheReadPerMillion: 0.0725
+      inputPerMillion: 1.32,
+      outputPerMillion: 3.96,
+      cacheReadPerMillion: 0.044
     },
-    intelligenceScore: 45.3,
+    intelligenceScore: 53.2,
     supportedReasoningEfforts: [
+      "low",
       "high",
-      "xhigh"
+      "max"
     ],
     reasoningEffort: "high"
   },
@@ -236,6 +222,62 @@ export const ASSISTANT_MODELS = [
     reasoningEffort: "medium"
   },
   {
+    id: "stealth/ox-alpha",
+    label: "Ox Alpha",
+    inputModalities: [
+      "text",
+      "image",
+      "video"
+    ],
+    pricing: {
+      inputPerMillion: 0,
+      outputPerMillion: 0
+    },
+    supportedReasoningEfforts: [
+      "low",
+      "high",
+      "max"
+    ],
+    reasoningEffort: "max",
+    selectable: false
+  },
+  {
+    id: "xiaomi/mimo-v2.5",
+    label: "MiMo V2.5",
+    inputModalities: [
+      "text",
+      "image",
+      "audio",
+      "video"
+    ],
+    pricing: {
+      inputPerMillion: 0.14,
+      outputPerMillion: 0.28,
+      cacheReadPerMillion: 0.0028
+    },
+    intelligenceScore: 38,
+    selectable: false
+  },
+  {
+    id: "deepseek/deepseek-v4-pro",
+    label: "DeepSeek V4 Pro (preview)",
+    inputModalities: [
+      "text"
+    ],
+    pricing: {
+      inputPerMillion: 0.87,
+      outputPerMillion: 1.74,
+      cacheReadPerMillion: 0.0725
+    },
+    intelligenceScore: 45.3,
+    supportedReasoningEfforts: [
+      "high",
+      "xhigh"
+    ],
+    reasoningEffort: "high",
+    selectable: false
+  },
+  {
     id: "deepseek/deepseek-v4-flash",
     label: "DeepSeek V4 Flash (preview)",
     inputModalities: [
@@ -357,4 +399,4 @@ export const ASSISTANT_MODELS = [
   }
 ] satisfies AssistantModel[];
 
-export const DEFAULT_ASSISTANT_MODEL: AssistantModelId = "xiaomi/mimo-v2.5";
+export const DEFAULT_ASSISTANT_MODEL: AssistantModelId = "deepseek/deepseek-v4-flash-0731";
