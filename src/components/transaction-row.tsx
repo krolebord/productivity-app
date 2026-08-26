@@ -60,6 +60,13 @@ function CompactTransactionRow({
 }: Omit<Extract<TransactionRowProps, { variant: "compact" }>, "onClick" | "variant">) {
   const typeStyle = TRANSACTION_TYPE_STYLE[resolveTransactionType(transaction.type)];
   const Icon = typeStyle.icon;
+  const subtitle = [
+    transaction.category,
+    primaryAccount?.labelText || "Untitled",
+    formatDateTimeDisplay(transaction.effectiveAt),
+  ]
+    .filter((part) => part.length > 0)
+    .join(" · ");
 
   return (
     <>
@@ -68,9 +75,7 @@ function CompactTransactionRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium text-sm">{transactionTitle(transaction)}</span>
-        <span className="block truncate text-muted-foreground text-xs">
-          {primaryAccount?.labelText || "Untitled"} · {formatDateTimeDisplay(transaction.effectiveAt)}
-        </span>
+        <span className="block truncate text-muted-foreground text-xs">{subtitle}</span>
       </span>
       <span className="shrink-0 text-right">
         <AmountValue
