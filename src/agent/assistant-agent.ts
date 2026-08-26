@@ -19,7 +19,7 @@ import { getServerByName } from "partyserver";
 import { z } from "zod";
 import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
 import { BUILTIN_SKILLS, type BuiltinSkill } from "./builtin-skills";
-import { ChartSpecSchema } from "./chart-spec";
+import { RenderChartInputSchema } from "./chart-spec";
 import {
   conversationTitleFromTurnText,
   projectionRowsFromStep,
@@ -726,11 +726,11 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           "Use sankey to show how amounts flow between categories (e.g. income sources into spending categories, or transfers between accounts); its links reference nodes by name and must form an acyclic flow.",
           "Keep the data compact: aggregate, group, and limit with queryDb/execute before calling this.",
         ].join("\n"),
-        inputSchema: ChartSpecSchema,
-        execute: async (spec) => ({
+        inputSchema: RenderChartInputSchema,
+        execute: async ({ chart }) => ({
           rendered: true,
-          type: spec.type,
-          title: spec.title ?? null,
+          type: chart.type,
+          title: chart.title ?? null,
         }),
       }),
       renderTransactions: tool({

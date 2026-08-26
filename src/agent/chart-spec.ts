@@ -94,6 +94,10 @@ export const ChartSpecSchema = z.discriminatedUnion("type", [
   SankeyChartSpec,
 ]);
 
+export const RenderChartInputSchema = z.object({
+  chart: ChartSpecSchema.describe("The chart to render."),
+});
+
 export type ChartSpec = z.infer<typeof ChartSpecSchema>;
 export type CartesianChartSpec = Extract<ChartSpec, { type: "line" | "area" | "bar" }>;
 export type PieChartSpecType = Extract<ChartSpec, { type: "pie" }>;

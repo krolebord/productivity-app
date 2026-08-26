@@ -144,7 +144,7 @@ function toolPayloadData(toolName: string, input: unknown, output: unknown): str
 
   switch (toolName) {
     case "renderChart":
-      return jsonData(input);
+      return jsonData(inputRecord?.chart ?? input);
     case "renderTransactions":
       return jsonData(input);
     case "saveDownload":
