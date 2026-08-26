@@ -15,11 +15,13 @@ import {
   getWeekDays,
   type HabitEntryValuesByDate,
   isHabitPeriodSchedule,
+  parseDateKey,
   startOfLocalDay,
   toAgendaHabit,
   toDateKey,
 } from "@/lib/agenda";
 import { combineLocalDateAndTime, localMidnightMs } from "@/lib/date-time";
+import { useCurrentDayKey } from "@/lib/use-current-day";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 
 export type CalendarDayInfo = {
@@ -31,13 +33,16 @@ export type CalendarDayInfo = {
 
 export function useAgenda() {
   const db = useDb();
-  const [selectedDate, setSelectedDate] = useState(() => startOfLocalDay(new Date()));
+  const todayKey = useCurrentDayKey();
+  const today = useMemo(() => parseDateKey(todayKey), [todayKey]);
+
+  // Null means follow `todayKey`, so an overnight tick advances the view
+  // instead of pinning the day the tab was opened.
+  const [pinnedDate, setPinnedDate] = useState<Date | null>(null);
+  const selectedDate = pinnedDate ?? today;
+  const selectedKey = pinnedDate ? toDateKey(pinnedDate) : todayKey;
 
   const [calendarExpanded, setCalendarExpanded] = useState(false);
-
-  const today = startOfLocalDay(new Date());
-  const todayKey = toDateKey(today);
-  const selectedKey = toDateKey(selectedDate);
   const visibleDays = useMemo(
     () => (calendarExpanded ? getMonthGridDays(selectedDate) : getWeekDays(selectedDate)),
     [calendarExpanded, selectedDate],
@@ -144,23 +149,27 @@ export function useAgenda() {
     [selectedKey, todayKey, agendaTasks, habits, entriesByHabit],
   );
 
-  const selectDateKey = useCallback((dateKey: string) => {
-    const [y, m, d] = dateKey.split("-").map(Number);
-    setSelectedDate(new Date(y, m - 1, d));
-  }, []);
+  const selectDateKey = useCallback(
+    (dateKey: string) => {
+      setPinnedDate(dateKey === todayKey ? null : parseDateKey(dateKey));
+    },
+    [todayKey],
+  );
 
   const goToToday = useCallback(() => {
-    setSelectedDate(startOfLocalDay(new Date()));
+    setPinnedDate(null);
   }, []);
 
   // Shifts by week when collapsed, by month when expanded.
   const shiftCalendar = useCallback(
     (delta: number) => {
-      setSelectedDate((prev) =>
-        startOfLocalDay(calendarExpanded ? addMonths(prev, delta) : addLocalDays(prev, delta * 7)),
-      );
+      setPinnedDate((prev) => {
+        const from = prev ?? today;
+        const next = startOfLocalDay(calendarExpanded ? addMonths(from, delta) : addLocalDays(from, delta * 7));
+        return toDateKey(next) === todayKey ? null : next;
+      });
     },
-    [calendarExpanded],
+    [calendarExpanded, today, todayKey],
   );
 
   const toggleCalendarExpanded = useCallback(() => {
@@ -182,23 +191,22 @@ export function useAgenda() {
   const moveTaskToToday = useCallback(
     (task: AgendaTask) => {
       if (task.dueAt == null) return;
-      const todayDate = startOfLocalDay(new Date());
       let nextDueAt: number;
       if (task.hasDueTime) {
         const hours = new Date(task.dueAt).getHours();
         const minutes = new Date(task.dueAt).getMinutes();
         nextDueAt = combineLocalDateAndTime(
-          todayDate,
+          today,
           `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
         );
       } else {
-        nextDueAt = localMidnightMs(todayDate);
+        nextDueAt = localMidnightMs(today);
       }
       db.db.executeKysely((q) =>
         q.updateTable("item").set({ dueAt: nextDueAt, completedAt: null }).where("id", "=", task.id),
       );
     },
-    [db],
+    [db, today],
   );
 
   const createTask = useCallback(
