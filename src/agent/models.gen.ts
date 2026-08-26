@@ -214,7 +214,7 @@ export const ASSISTANT_MODELS = [
   },
   {
     id: "meta/muse-spark-1.2-contributor",
-    label: "Muse Spark 1.2 Contributor",
+    label: "Muse Spark 1.2",
     inputModalities: [
       "text",
       "image",

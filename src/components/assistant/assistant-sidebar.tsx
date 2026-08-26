@@ -719,13 +719,13 @@ function ModelSelect({
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate font-medium">{m.label}</span>
                 <ModelModalityIcons modalities={m.inputModalities} />
+                {m.id === active.id && <Check className="ml-auto size-3.5 shrink-0" />}
               </span>
               <span className="flex min-w-0 items-center justify-between gap-2 text-muted-foreground text-xs">
                 <span className="truncate">{formatModelPricing(m)}</span>
                 <ModelIntelligenceScore score={m.intelligenceScore} />
               </span>
             </span>
-            {m.id === active.id && <Check className="mt-0.5 size-3.5 shrink-0" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
