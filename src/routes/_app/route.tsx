@@ -6,6 +6,7 @@ import { AccountDialog } from "@/components/account-dialog";
 import { AppDndProvider } from "@/components/app-dnd";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
+import { ConversationActivityWatcher, SubmitLockWatcher } from "@/components/assistant/conversation-activity-watcher";
 import { CategoryImportanceDialog } from "@/components/category-importance-dialog";
 import { CommandPalette } from "@/components/command-palette";
 import { Devtools } from "@/components/devtools";
@@ -89,6 +90,12 @@ function RouteComponent() {
 
   return (
     <DbProvider db={db}>
+      {auth.assistantEnabled ? (
+        <>
+          <ConversationActivityWatcher />
+          <SubmitLockWatcher />
+        </>
+      ) : null}
       <AppDndProvider>
         <SyncStatusMonitor />
         <div className="flex h-dvh overflow-hidden">

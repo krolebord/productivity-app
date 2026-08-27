@@ -1,4 +1,4 @@
-import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { closestCenter, DndContext, KeyboardSensor, MouseSensor, useSensor, useSensors } from "@dnd-kit/core";
 import {
   SortableContext,
   sortableKeyboardCoordinates,
@@ -20,6 +20,7 @@ import { formatCompactBalance } from "@/lib/currency/format";
 import { useReorderableAccounts } from "@/lib/finance/accounts";
 import { type NoteViewSearch, noteViewSearch, viewMatchesSearch } from "@/lib/note-views";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
 
@@ -60,16 +61,17 @@ type SidebarAccount = {
   order: number;
 };
 
-function SortableAccountRow({
+function AccountNavRow({
   account,
   isActive,
   onNavigate,
+  sortable,
 }: {
   account: SidebarAccount;
   isActive: boolean;
   onNavigate?: () => void;
+  sortable?: ReturnType<typeof useSortable>;
 }) {
-  const sortable = useSortable({ id: account.id, data: { order: account.order } });
   const navigate = useNavigate();
   const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
   const attachRef = { table: "account", id: account.id } as const;
@@ -77,18 +79,22 @@ function SortableAccountRow({
   return (
     <button
       type="button"
-      ref={sortable.setNodeRef}
-      style={{
-        transform: CSS.Translate.toString(sortable.transform),
-        transition: sortable.transition,
-      }}
-      {...sortable.attributes}
-      {...sortable.listeners}
+      ref={sortable?.setNodeRef}
+      style={
+        sortable
+          ? {
+              transform: CSS.Translate.toString(sortable.transform),
+              transition: sortable.transition,
+            }
+          : undefined
+      }
+      {...sortable?.attributes}
+      {...sortable?.listeners}
       onClick={
         isContextKeyHeld
           ? getAttachClickHandler(attachRef)
           : () => {
-              if (!sortable.isDragging) {
+              if (!sortable?.isDragging) {
                 navigate({ to: "/finances/transactions", search: { accountId: account.id }, viewTransition: true });
                 onNavigate?.();
               }
@@ -96,7 +102,7 @@ function SortableAccountRow({
       }
       className={cn(
         sidebarSubRowClass({ isActive }),
-        sortable.isDragging && "opacity-50",
+        sortable?.isDragging && "opacity-50",
         isContextKeyHeld && "cursor-copy",
       )}
     >
@@ -111,15 +117,56 @@ function SortableAccountRow({
   );
 }
 
+function SortableAccountRow({
+  account,
+  isActive,
+  onNavigate,
+}: {
+  account: SidebarAccount;
+  isActive: boolean;
+  onNavigate?: () => void;
+}) {
+  const sortable = useSortable({ id: account.id, data: { order: account.order } });
+  return <AccountNavRow account={account} isActive={isActive} onNavigate={onNavigate} sortable={sortable} />;
+}
+
+function ReorderableAccountList({
+  accounts,
+  activeAccountId,
+  onNavigate,
+  onDragEnd,
+}: {
+  accounts: SidebarAccount[];
+  activeAccountId: string | undefined;
+  onNavigate?: () => void;
+  onDragEnd: ReturnType<typeof useReorderableAccounts>["handleDragEnd"];
+}) {
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <SortableContext items={accounts.map((account) => account.id)} strategy={verticalListSortingStrategy}>
+        {accounts.map((account) => (
+          <SortableAccountRow
+            key={account.id}
+            account={account}
+            isActive={activeAccountId === account.id}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 /** Finances owns the accounts list: accounts are part of this section, not a sibling of it. */
 function FinancesNavItem({ collapsed, onNavigate }: NavEntryProps) {
   const location = useSidebarLocation();
+  const isDesktop = useIsDesktop();
   const { accounts, handleDragEnd } = useReorderableAccounts();
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
 
   return (
     <SidebarNavGroup
@@ -139,18 +186,23 @@ function FinancesNavItem({ collapsed, onNavigate }: NavEntryProps) {
         marker={<ArrowLeftRight className="size-3.5" />}
         onNavigate={onNavigate}
       />
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={accounts.map((a) => a.id)} strategy={verticalListSortingStrategy}>
-          {accounts.map((account) => (
-            <SortableAccountRow
-              key={account.id}
-              account={account}
-              isActive={location.accountId === account.id}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
+      {isDesktop ? (
+        <ReorderableAccountList
+          accounts={accounts}
+          activeAccountId={location.accountId}
+          onNavigate={onNavigate}
+          onDragEnd={handleDragEnd}
+        />
+      ) : (
+        accounts.map((account) => (
+          <AccountNavRow
+            key={account.id}
+            account={account}
+            isActive={location.accountId === account.id}
+            onNavigate={onNavigate}
+          />
+        ))
+      )}
     </SidebarNavGroup>
   );
 }

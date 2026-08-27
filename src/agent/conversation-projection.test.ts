@@ -3,6 +3,8 @@ import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import {
   conversationTitleFromTurnText,
+  conversationTurnFilesData,
+  conversationTurnFilesFromData,
   projectionRowsFromStep,
   projectionRowsFromUiMessages,
   type StepToolSnapshot,
@@ -11,6 +13,7 @@ import {
   textProjectionId,
   toolProjectionId,
   uiMessageStepParts,
+  userTurnModelText,
 } from "./conversation-projection";
 
 describe("conversationTitleFromTurnText", () => {
@@ -41,6 +44,50 @@ describe("conversationTitleFromTurnText", () => {
         ].join("\n"),
       ),
     ).toBe("Please chart this");
+  });
+
+  it("uses provided filenames when the prompt is empty", () => {
+    expect(conversationTitleFromTurnText("", ["report.csv", "notes.md"])).toBe("report.csv, notes.md");
+  });
+});
+
+describe("userTurnModelText", () => {
+  it("keeps the prompt and appends workspace paths for the model", () => {
+    expect(
+      userTurnModelText("Chart this", [
+        { filename: "data.csv", mediaType: "text/csv", size: 4, path: "/uploads/t1/00-data.csv" },
+      ]),
+    ).toBe(
+      [
+        "Chart this",
+        "",
+        "Uploaded files are available in the agent workspace:",
+        "- data.csv: /uploads/t1/00-data.csv (text/csv, 4 bytes)",
+      ].join("\n"),
+    );
+  });
+
+  it("is only the workspace listing when the prompt is empty", () => {
+    expect(
+      userTurnModelText("  ", [
+        { filename: "report.csv", mediaType: "text/csv", size: 12, path: "/uploads/t1/00-report.csv" },
+      ]),
+    ).toBe(
+      [
+        "Uploaded files are available in the agent workspace:",
+        "- report.csv: /uploads/t1/00-report.csv (text/csv, 12 bytes)",
+      ].join("\n"),
+    );
+  });
+});
+
+describe("conversationTurnFilesFromData", () => {
+  const file = { filename: "data.csv", mediaType: "text/csv", size: 4, path: "/uploads/t1/00-data.csv" };
+
+  it("round-trips stored attachment metadata", () => {
+    expect(conversationTurnFilesFromData(conversationTurnFilesData([file]))).toEqual([file]);
+    expect(conversationTurnFilesFromData("")).toEqual([]);
+    expect(conversationTurnFilesFromData("{")).toEqual([]);
   });
 });
 

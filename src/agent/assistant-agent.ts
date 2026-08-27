@@ -17,15 +17,18 @@ import { tavilyExtract, tavilySearch } from "@tavily/ai-sdk";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { z } from "zod";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from "../lib/assistant-files";
 import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
 import { BUILTIN_SKILLS, type BuiltinSkill } from "./builtin-skills";
 import { RenderChartInputSchema } from "./chart-spec";
 import {
   conversationTitleFromTurnText,
+  conversationTurnFilesData,
   projectionRowsFromStep,
   projectionRowsFromUiMessages,
   stepToolsFromContext,
   uiMessageStepParts,
+  userTurnModelText,
 } from "./conversation-projection";
 import {
   type AssistantModelId,
@@ -36,7 +39,7 @@ import {
 } from "./models";
 import { TransactionsSpecSchema } from "./transactions-spec";
 
-type WorkspaceUploadInput = {
+export type WorkspaceUploadInput = {
   filename: string;
   mediaType: string;
   bytes: ArrayBuffer;
@@ -63,10 +66,6 @@ type WorkspaceDownloadFile = {
 };
 
 export const DOWNLOAD_DIR = "/outputs";
-
-function firstTurnId(conversationId: string): string {
-  return `${conversationId}:first-turn`;
-}
 
 const MEDIA_TYPE_BY_EXTENSION: Record<string, string> = {
   csv: "text/csv",
@@ -111,6 +110,18 @@ function sanitizeWorkspaceFilename(filename: string) {
     return "upload";
   }
   return clean;
+}
+
+function uploadLimitError(files: readonly WorkspaceUploadInput[]): string | null {
+  if (files.length > MAX_UPLOAD_FILES) {
+    return `Upload at most ${MAX_UPLOAD_FILES} files.`;
+  }
+  let totalBytes = 0;
+  for (const file of files) totalBytes += file.bytes.byteLength;
+  if (totalBytes > MAX_UPLOAD_BYTES) {
+    return "Combined upload is too large.";
+  }
+  return null;
 }
 
 type AssistantUsageState = {
@@ -367,9 +378,11 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   }
 
   async startConversation(input: {
+    turnId: string;
     text: string;
     model: AssistantModelId;
     reasoningEffort: AssistantReasoningEffort | null;
+    files?: WorkspaceUploadInput[];
   }): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
     const conversationId = this.getConversationId();
     const stub = await this.getUserDbStub();
@@ -380,7 +393,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     });
 
     try {
-      return await this.enqueueTurn({ turnId: firstTurnId(conversationId), text: input.text }, true);
+      return await this.enqueueTurn({ turnId: input.turnId, text: input.text, files: input.files ?? [] }, true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await stub.updateConversation(conversationId, { turnStatus: "error", turnError: message });
@@ -391,12 +404,13 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   async submitTurn(input: {
     turnId: string;
     text: string;
+    files?: WorkspaceUploadInput[];
   }): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
-    return this.enqueueTurn(input, false);
+    return this.enqueueTurn({ ...input, files: input.files ?? [] }, false);
   }
 
   private async enqueueTurn(
-    input: { turnId: string; text: string },
+    input: { turnId: string; text: string; files: WorkspaceUploadInput[] },
     allowRunning: boolean,
   ): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
     const conversationId = this.getConversationId();
@@ -412,7 +426,20 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       return { error: { code: "BAD_REQUEST", message: "A turn is already running." } };
     }
 
+    const fileError = uploadLimitError(input.files);
+    if (fileError) {
+      return { error: { code: "BAD_REQUEST", message: fileError } };
+    }
+    if (!input.text.trim() && input.files.length === 0) {
+      return { error: { code: "BAD_REQUEST", message: "Message is empty." } };
+    }
+
     await this.ensureProjectionReady();
+
+    const uploaded = await this.writeTurnUploads(input.turnId, input.files);
+    const prompt = input.text.trim();
+    const storedText = prompt;
+    const modelText = userTurnModelText(prompt, uploaded);
 
     const seq = (await stub.getMaxConversationMessageSeq(conversationId)) + 1;
     this.turnNextSeq = seq + 1;
@@ -428,16 +455,21 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
         seq,
         role: "user",
         kind: "text",
-        text: input.text,
+        text: storedText,
         toolName: "",
         toolCallId: "",
         toolState: "",
-        data: "",
+        data: conversationTurnFilesData(uploaded),
         createdAt: Date.now(),
       },
     ]);
 
-    const title = conversation.title.trim() ? "" : conversationTitleFromTurnText(input.text);
+    const title = conversation.title.trim()
+      ? ""
+      : conversationTitleFromTurnText(
+          storedText,
+          uploaded.map((file) => file.filename),
+        );
     await stub.updateConversation(conversationId, {
       turnStatus: "running",
       turnError: "",
@@ -446,7 +478,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
 
     try {
       const submission = await this.submitMessages(
-        [{ id: input.turnId, role: "user", parts: [{ type: "text", text: input.text }] }],
+        [{ id: input.turnId, role: "user", parts: [{ type: "text", text: modelText }] }],
         { submissionId: input.turnId, idempotencyKey: input.turnId },
       );
       return { accepted: submission.accepted };
@@ -813,13 +845,15 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     };
   }
 
-  async uploadWorkspaceFiles(files: WorkspaceUploadInput[]): Promise<WorkspaceUploadResult[]> {
+  private async writeTurnUploads(turnId: string, files: WorkspaceUploadInput[]): Promise<WorkspaceUploadResult[]> {
+    if (files.length === 0) return [];
+
     const workspace = this.workspace as WorkspaceFsLike;
-    const uploadDir = "/uploads";
+    const uploadDir = `/uploads/${sanitizeWorkspaceFilename(turnId)}`;
     await workspace.mkdir(uploadDir, { recursive: true });
-    let index = this.reserveFileIndices(files.length);
 
     const uploaded: WorkspaceUploadResult[] = [];
+    let index = 0;
     for (const file of files) {
       const filename = `${String(index++).padStart(2, "0")}-${sanitizeWorkspaceFilename(file.filename)}`;
       const path = `${uploadDir}/${filename}`;

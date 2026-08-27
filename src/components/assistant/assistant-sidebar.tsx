@@ -1,5 +1,6 @@
 import { generateId } from "@sqlite-sync/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
+import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowDown,
@@ -33,6 +34,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { BUILTIN_SKILLS, findBuiltinSkill, isBuiltinSkillId } from "@/agent/builtin-skills";
+import { conversationTurnFilesFromData } from "@/agent/conversation-projection";
 import {
   ASSISTANT_MODELS,
   ASSISTANT_MODELS_BY_PRICE,
@@ -47,15 +49,23 @@ import {
   resolveAssistantModelId,
   resolveAssistantReasoningEffort,
 } from "@/agent/models";
+import { ChatsBackButton, ConversationList } from "@/components/assistant/conversation-list";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@/lib/assistant-files";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
+import { conversationTitle } from "@/lib/conversation-list";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
+import {
+  isSubmitLockHolding,
+  type SubmitLock,
+  shouldClearComposerAfterSubmit,
+  shouldClearSubmitLockOnError,
+} from "@/lib/submit-lock";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { orpc } from "@/orpc/orpc-client";
 import type { ConversationItem, ConversationMessageItem } from "@/user-db/migrations";
 import { useDb, useDbQuery } from "@/user-db/user-db";
-import { useConfirmDialogStore } from "../confirm-dialog";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { useInlineConfirm } from "../ui/inline-confirm";
@@ -71,8 +81,6 @@ type UploadedWorkspaceFile = {
   size: number;
   path: string;
 };
-
-const MAX_UPLOAD_FILES = 5;
 
 // Recharts is heavy; keep it out of the main bundle until a chart is rendered.
 const ChartCard = lazy(() => import("./chart-card"));
@@ -155,15 +163,6 @@ function preferredConversationReasoningEffort(
 
 function rpcErrorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : "Something went wrong. Try again.";
-}
-
-function shouldReleaseAwaitingTurn(input: {
-  turnStatus: ConversationRow["turnStatus"];
-  updatedAt: number;
-  submittedUpdatedAt: number;
-}): boolean {
-  if (input.turnStatus !== "idle") return true;
-  return input.updatedAt !== input.submittedUpdatedAt;
 }
 
 function DownloadFileChip({ conversationId, file }: { conversationId: string; file: UploadedWorkspaceFile }) {
@@ -533,11 +532,30 @@ function MessageRow({ message, conversationId }: { message: ConversationMessageI
     return <ToolCallChip name={toolName || "tool"} failed={failed} />;
   }
 
-  if (!message.text) return null;
-
   if (message.role === "user") {
-    return <div className="whitespace-pre-wrap break-words">{message.text}</div>;
+    const files = conversationTurnFilesFromData(message.data);
+    if (!message.text && files.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        {message.text ? <div className="whitespace-pre-wrap break-words">{message.text}</div> : null}
+        {files.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {files.map((file) => (
+              <span
+                key={file.path}
+                className="flex max-w-full items-center gap-1.5 rounded-md border border-primary-foreground/25 bg-primary-foreground/10 px-2 py-1 text-xs"
+              >
+                <FileText className="size-3.5 shrink-0" />
+                <span className="max-w-40 truncate">{file.filename}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   }
+
+  if (!message.text) return null;
 
   return <Streamdown>{message.text}</Streamdown>;
 }
@@ -557,84 +575,6 @@ function ScrollToBottomButton() {
     >
       <ArrowDown className="size-4" />
     </Button>
-  );
-}
-
-function conversationLabel(conversation: ConversationIdentity) {
-  return conversation.title || "New conversation";
-}
-
-function ConversationDeleteButton({
-  label,
-  onDelete,
-  className,
-}: {
-  label: string;
-  onDelete: () => void;
-  className?: string;
-}) {
-  const confirm = useConfirmDialogStore((s) => s.confirm);
-  return (
-    <button
-      type="button"
-      className={cn("rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-destructive", className)}
-      aria-label={`Delete ${label}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        confirm({
-          title: "Delete conversation",
-          description: `"${label}" will be permanently deleted. This cannot be undone.`,
-          confirmLabel: "Delete",
-          onConfirm: onDelete,
-        });
-      }}
-    >
-      <Trash2 className="size-3.5" />
-    </button>
-  );
-}
-
-function ConversationSwitcher({
-  conversations,
-  active,
-  onDeleteConversation,
-}: {
-  conversations: ConversationRow[];
-  active: ConversationIdentity;
-  onDeleteConversation: (conversation: ConversationRow) => Promise<void> | void;
-}) {
-  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left font-semibold text-sm transition-colors hover:bg-accent"
-          aria-label="Switch conversation"
-        >
-          <Sparkles className="size-4 shrink-0 text-primary" />
-          <span className="truncate">{conversationLabel(active)}</span>
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-80">
-        {conversations.map((conversation) => (
-          <DropdownMenuItem
-            key={conversation.id}
-            className={cn("group gap-2", conversation.id === active.id && "bg-accent")}
-            onClick={() => setActiveConversation(conversation.id)}
-          >
-            <span className="flex-1 truncate">{conversationLabel(conversation)}</span>
-            <ConversationDeleteButton
-              label={conversationLabel(conversation)}
-              onDelete={() => onDeleteConversation(conversation)}
-              className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
-            />
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
@@ -809,10 +749,18 @@ type ConversationTarget =
   | { kind: "draft"; conversationId: string }
   | { kind: "persisted"; conversation: ConversationRow };
 
-function ConversationView({ target, conversations }: { target: ConversationTarget; conversations: ConversationRow[] }) {
+function ConversationView({
+  target,
+  conversations,
+  onDeleteConversation,
+}: {
+  target: ConversationTarget;
+  conversations: ConversationRow[];
+  onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
+}) {
   const auth = useAuth();
   const closePanel = useAssistantStore((s) => s.closePanel);
-  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+  const openConversation = useAssistantStore((s) => s.openConversation);
   const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agentIdCopied, setAgentIdCopied] = useState(false);
   const conversation = target.kind === "persisted" ? target.conversation : null;
@@ -828,16 +776,8 @@ function ConversationView({ target, conversations }: { target: ConversationTarge
     };
   }, []);
 
-  async function deleteConversation(target: ConversationRow) {
-    await orpc.assistant.deleteConversation.call({ conversationId: target.id });
-    if (target.id === conversation?.id) {
-      const next = conversations.find((c) => c.id !== target.id);
-      setActiveConversation(next?.id ?? generateId());
-    }
-  }
-
   const deleteActive = useInlineConfirm({
-    onConfirm: () => (conversation ? deleteConversation(conversation) : undefined),
+    onConfirm: () => (conversation ? onDeleteConversation(conversation) : undefined),
   });
 
   async function copyAgentId() {
@@ -852,7 +792,11 @@ function ConversationView({ target, conversations }: { target: ConversationTarge
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center gap-1 border-b px-2">
-        <ConversationSwitcher conversations={conversations} active={active} onDeleteConversation={deleteConversation} />
+        <ChatsBackButton conversations={conversations} activeConversationId={conversationId} />
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5">
+          <Sparkles className="size-4 shrink-0 text-primary" />
+          <span className="truncate font-semibold text-sm">{conversationTitle(active)}</span>
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -861,7 +805,7 @@ function ConversationView({ target, conversations }: { target: ConversationTarge
               size="icon"
               className="size-8 text-muted-foreground"
               aria-label="New conversation"
-              onClick={() => setActiveConversation(generateId())}
+              onClick={() => openConversation(generateId())}
             >
               <PlusIcon className="size-4" />
             </Button>
@@ -943,12 +887,19 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   const isDesktop = useIsDesktop();
   const input = useAssistantStore((s) => s.inputDraft);
   const setInput = useAssistantStore((s) => s.setInputDraft);
-  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+  const submitLock = useAssistantStore((s) => s.submitLocks[conversationId]);
+  const setSubmitLock = useAssistantStore((s) => s.setSubmitLock);
+  const clearSubmitLock = useAssistantStore((s) => s.clearSubmitLock);
+  const submitTurn = useMutation({
+    ...orpc.assistant.submitTurn.mutationOptions(),
+    scope: { id: conversationId },
+  });
+  const startConversation = useMutation({
+    ...orpc.assistant.startConversation.mutationOptions(),
+    scope: { id: conversationId },
+  });
+  const cancelTurn = useMutation(orpc.assistant.cancelTurn.mutationOptions());
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [awaitingConversation, setAwaitingConversation] = useState(false);
-  const [pendingSubmittedUpdatedAt, setPendingSubmittedUpdatedAt] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [rpcError, setRpcError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -978,12 +929,6 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
       .orderBy("seq", "asc")
       .orderBy("id", "asc"),
   );
-
-  // Once the conversation row syncs down, isRunning drives the working state; drop the
-  // optimistic bridge flag so the composer doesn't stay locked after the first turn.
-  useEffect(() => {
-    if (conversation) setAwaitingConversation(false);
-  }, [conversation]);
 
   // Opening the sidebar does not wake the agent. Ping it so onStart can copy a
   // pre-sqlite transcript into conversation_message. Skip brand-new empty chats.
@@ -1017,113 +962,92 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   }
 
   const isRunning = conversation?.turnStatus === "running";
-  // Follow-up `submitTurn` returns before the `turnStatus: "running"` write arrives
-  // on the client websocket. Hold the composer until that write, or a later
-  // idle/error with a newer `updatedAt`, is visible.
-  const awaitingTurn =
-    pendingSubmittedUpdatedAt != null &&
-    (conversation == null ||
-      !shouldReleaseAwaitingTurn({
-        turnStatus: conversation.turnStatus,
-        updatedAt: conversation.updatedAt,
-        submittedUpdatedAt: pendingSubmittedUpdatedAt,
-      }));
-  const isWorking = uploading || submitting || awaitingConversation || awaitingTurn || isRunning;
-  const canStop = isRunning || awaitingTurn;
-  const locked = conversation !== null || awaitingConversation;
+  const hasMessage = submitLock != null && messages.some((message) => message.id === submitLock.messageId);
+  // Hold until this submit's user row is visible, then until turnStatus catches up
+  // (running/error, or idle with a newer updatedAt). First sends have no baseline.
+  const lockHolding = isSubmitLockHolding({ lock: submitLock, conversation, hasMessage });
+  const isWorking = lockHolding || isRunning;
+  const canStop = isRunning || (lockHolding && conversation !== null);
+  const locked = conversation !== null || submitLock != null;
   const turnError = conversation?.turnStatus === "error" ? conversation.turnError : "";
 
-  async function uploadSelectedFiles() {
-    if (selectedFiles.length === 0) return [];
-
-    const formData = new FormData();
-    formData.set("conversationId", conversationId);
-    for (const file of selectedFiles) {
-      formData.append("files", file);
+  function releaseOwnedLock(owned: SubmitLock) {
+    if (
+      shouldClearSubmitLockOnError({
+        current: useAssistantStore.getState().submitLocks[conversationId],
+        owned,
+      })
+    ) {
+      clearSubmitLock(conversationId);
     }
-
-    const response = await fetch("/api/assistant/upload", {
-      method: "POST",
-      body: formData,
-    });
-    const body = (await response.json().catch(() => null)) as {
-      files?: UploadedWorkspaceFile[];
-      error?: string;
-    } | null;
-
-    if (!response.ok) {
-      throw new Error(body?.error ?? "Upload failed.");
-    }
-    return body?.files ?? [];
   }
 
-  async function submit() {
+  function submit() {
     const text = input.trim();
     if ((!text && selectedFiles.length === 0) || isWorking) return;
+    if (useAssistantStore.getState().submitLocks[conversationId]) return;
 
     setUploadError(null);
     setRpcError(null);
-    let uploadedFiles: UploadedWorkspaceFile[] = [];
-    if (selectedFiles.length > 0) {
-      setUploading(true);
-      try {
-        uploadedFiles = await uploadSelectedFiles();
-      } catch (error) {
-        setUploadError(error instanceof Error ? error.message : "Upload failed.");
-        return;
-      } finally {
-        setUploading(false);
-      }
+    if (uploadTotalBytes(selectedFiles) > MAX_UPLOAD_BYTES) {
+      setUploadError("Combined upload is too large.");
+      return;
     }
 
-    const workspaceContext =
-      uploadedFiles.length > 0
-        ? [
-            "Uploaded files are available in the agent workspace:",
-            ...uploadedFiles.map((file) => `- ${file.filename}: ${file.path} (${file.mediaType}, ${file.size} bytes)`),
-          ].join("\n")
-        : "";
-    const messageText = [text, workspaceContext].filter(Boolean).join("\n\n");
+    const files = selectedFiles;
+    const lock: SubmitLock = {
+      kind: "sync",
+      messageId: generateId(),
+      submittedUpdatedAt: conversation?.updatedAt ?? null,
+    };
+    setSubmitLock(conversationId, lock);
 
-    setSubmitting(true);
-    try {
-      if (conversation) {
-        const submittedUpdatedAt = conversation.updatedAt;
-        await orpc.assistant.submitTurn.call({
+    const onSuccess = (result: { accepted: boolean }) => {
+      if (!result.accepted) {
+        releaseOwnedLock(lock);
+        return;
+      }
+      const { activeConversationId } = useAssistantStore.getState();
+      if (shouldClearComposerAfterSubmit({ submittedConversationId: conversationId, activeConversationId })) {
+        setInput("");
+        setSelectedFiles([]);
+      }
+    };
+    const onError = (error: unknown) => {
+      releaseOwnedLock(lock);
+      setRpcError(rpcErrorMessage(error));
+    };
+
+    if (conversation) {
+      submitTurn.mutate({ conversationId, turnId: lock.messageId, text, files }, { onSuccess, onError });
+    } else {
+      startConversation.mutate(
+        {
           conversationId,
-          turnId: generateId(),
-          text: messageText,
-        });
-        setPendingSubmittedUpdatedAt(submittedUpdatedAt);
-      } else {
-        const result = await orpc.assistant.startConversation.call({
-          conversationId,
-          text: messageText,
+          turnId: lock.messageId,
+          text,
           model,
           reasoningEffort: preferredConversationReasoningEffort(model, preferredReasoningEffort),
-        });
-        setAwaitingConversation(true);
-        setActiveConversation(result.conversationId);
-      }
-      setInput("");
-      setSelectedFiles([]);
-    } catch (error) {
-      setPendingSubmittedUpdatedAt(null);
-      setAwaitingConversation(false);
-      setRpcError(rpcErrorMessage(error));
-    } finally {
-      setSubmitting(false);
+          files,
+        },
+        { onSuccess, onError },
+      );
     }
   }
 
-  async function cancel() {
+  function cancel() {
     if (!canStop) return;
-    try {
-      await orpc.assistant.cancelTurn.call({ conversationId });
-      setPendingSubmittedUpdatedAt(null);
-    } catch (error) {
-      setRpcError(rpcErrorMessage(error));
-    }
+    cancelTurn.mutate(
+      { conversationId },
+      {
+        onSuccess: () => {
+          clearSubmitLock(conversationId);
+        },
+        onError: (error) => {
+          setRpcError(rpcErrorMessage(error));
+        },
+      },
+    );
   }
 
   function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
@@ -1271,11 +1195,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
               aria-label="Send message"
               disabled={isWorking || (!input.trim() && selectedFiles.length === 0)}
             >
-              {uploading || submitting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <SendHorizontal className="size-4" />
-              )}
+              {isWorking ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
             </Button>
           )}
         </div>
@@ -1287,27 +1207,59 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
 /** Opens the assistant with an unpersisted conversation draft. */
 export function useNewConversation() {
   const openPanel = useAssistantStore((s) => s.openPanel);
-  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+  const openConversation = useAssistantStore((s) => s.openConversation);
 
   return useCallback(() => {
     openPanel("assistant");
-    setActiveConversation(generateId());
-  }, [openPanel, setActiveConversation]);
+    openConversation(generateId());
+  }, [openPanel, openConversation]);
 }
 
 export function AssistantSidebar() {
   const activeConversationId = useAssistantStore((s) => s.activeConversationId);
-  const [fallbackDraftId] = useState(generateId);
+  const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
+  const showConversationList = useAssistantStore((s) => s.showConversationList);
+  const [draftConversationId] = useState(generateId);
+
+  useEffect(() => {
+    if (activeConversationId == null) setActiveConversation(draftConversationId);
+  }, [activeConversationId, draftConversationId, setActiveConversation]);
 
   const { data: conversations } = useDbQuery((db) =>
     db.selectFrom("conversation").selectAll().orderBy("updatedAt", "desc"),
   );
 
-  const selectedConversationId = activeConversationId ?? conversations[0]?.id ?? fallbackDraftId;
+  const selectedConversationId = activeConversationId ?? draftConversationId;
   const active = conversations.find((conversation) => conversation.id === selectedConversationId);
   const target: ConversationTarget = active
     ? { kind: "persisted", conversation: active }
     : { kind: "draft", conversationId: selectedConversationId };
 
-  return <ConversationView key={selectedConversationId} target={target} conversations={conversations} />;
+  async function deleteConversation(conversation: { id: string }) {
+    await orpc.assistant.deleteConversation.call({ conversationId: conversation.id });
+    useAssistantStore.getState().clearSubmitLock(conversation.id);
+    if (conversation.id === selectedConversationId) {
+      const next = conversations.find((row) => row.id !== conversation.id);
+      setActiveConversation(next?.id ?? generateId());
+    }
+  }
+
+  if (showConversationList) {
+    return (
+      <ConversationList
+        conversations={conversations}
+        activeId={selectedConversationId}
+        onDeleteConversation={deleteConversation}
+      />
+    );
+  }
+
+  return (
+    <ConversationView
+      key={selectedConversationId}
+      target={target}
+      conversations={conversations}
+      onDeleteConversation={deleteConversation}
+    />
+  );
 }

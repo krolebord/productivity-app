@@ -7,12 +7,37 @@ import {
   isAssistantReasoningEffort,
   resolveAssistantModelId,
 } from "@/agent/models";
+import type { UnseenCompletionStatus } from "@/lib/conversation-list";
+import { omitSubmitLock, type SubmitLock } from "@/lib/submit-lock";
 
 export type RightPanel = "assistant" | "today";
+
+function omitUnseenCompletion(
+  unseenCompletions: Record<string, UnseenCompletionStatus>,
+  id: string | null,
+): Record<string, UnseenCompletionStatus> {
+  if (id == null || !(id in unseenCompletions)) return unseenCompletions;
+  const next = { ...unseenCompletions };
+  delete next[id];
+  return next;
+}
 
 interface AssistantStore {
   activePanel: RightPanel | null;
   activeConversationId: string | null;
+  /**
+   * Assistant panel layer: the conversation list vs the open chat. Not persisted —
+   * opening the panel always resumes the last chat.
+   */
+  showConversationList: boolean;
+  /** Completions/failures on chats the user was not looking at. Cleared on list visit. */
+  unseenCompletions: Record<string, UnseenCompletionStatus>;
+  /**
+   * In-flight sends keyed by conversation id so switching chats or opening the
+   * list does not unlock the composer before the user message and turn status
+   * have synced. Not persisted.
+   */
+  submitLocks: Record<string, SubmitLock>;
   model: AssistantModelId;
   /** Preferred reasoning effort for GPT-5.6; null means use the model catalog default. */
   reasoningEffort: AssistantReasoningEffort | null;
@@ -31,7 +56,13 @@ interface AssistantStore {
   openPanel: (panel: RightPanel) => void;
   closePanel: () => void;
   togglePanel: (panel: RightPanel) => void;
+  openConversationList: () => void;
   setActiveConversation: (id: string | null) => void;
+  /** Open a chat and leave the list. Used by the list, new-chat, and command palette. */
+  openConversation: (id: string) => void;
+  markUnseenCompletion: (id: string, status: UnseenCompletionStatus) => void;
+  setSubmitLock: (id: string, lock: SubmitLock) => void;
+  clearSubmitLock: (id: string) => void;
   setModel: (model: AssistantModelId) => void;
   setReasoningEffort: (effort: AssistantReasoningEffort | null) => void;
   setInputDraft: (value: string) => void;
@@ -48,14 +79,43 @@ export const useAssistantStore = create<AssistantStore>()(
     (set) => ({
       activePanel: null,
       activeConversationId: null,
+      showConversationList: false,
+      unseenCompletions: {},
+      submitLocks: {},
       model: DEFAULT_ASSISTANT_MODEL,
       reasoningEffort: null,
       inputDraft: "",
       composerFocusNonce: 0,
-      openPanel: (panel) => set({ activePanel: panel }),
+      openPanel: (panel) =>
+        set({
+          activePanel: panel,
+          ...(panel === "assistant" ? { showConversationList: false } : {}),
+        }),
       closePanel: () => set({ activePanel: null }),
-      togglePanel: (panel) => set((s) => ({ activePanel: s.activePanel === panel ? null : panel })),
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+      togglePanel: (panel) =>
+        set((s) => {
+          const closing = s.activePanel === panel;
+          return {
+            activePanel: closing ? null : panel,
+            ...(panel === "assistant" && !closing ? { showConversationList: false } : {}),
+          };
+        }),
+      openConversationList: () => set({ showConversationList: true, unseenCompletions: {} }),
+      setActiveConversation: (id) =>
+        set((s) => ({
+          activeConversationId: id,
+          unseenCompletions: omitUnseenCompletion(s.unseenCompletions, id),
+        })),
+      openConversation: (id) =>
+        set((s) => ({
+          activeConversationId: id,
+          showConversationList: false,
+          unseenCompletions: omitUnseenCompletion(s.unseenCompletions, id),
+        })),
+      markUnseenCompletion: (id, status) =>
+        set((s) => ({ unseenCompletions: { ...s.unseenCompletions, [id]: status } })),
+      setSubmitLock: (id, lock) => set((s) => ({ submitLocks: { ...s.submitLocks, [id]: lock } })),
+      clearSubmitLock: (id) => set((s) => ({ submitLocks: omitSubmitLock(s.submitLocks, id) })),
       setModel: (model) => set({ model }),
       setReasoningEffort: (reasoningEffort) => set({ reasoningEffort }),
       setInputDraft: (inputDraft) => set({ inputDraft }),
@@ -86,6 +146,9 @@ export const useAssistantStore = create<AssistantStore>()(
         const state = { ...current, ...rest, activePanel };
         return {
           ...state,
+          showConversationList: false,
+          unseenCompletions: {},
+          submitLocks: {},
           model: resolveAssistantModelId(state.model),
           reasoningEffort: isAssistantReasoningEffort(state.reasoningEffort) ? state.reasoningEffort : null,
         };

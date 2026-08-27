@@ -178,7 +178,9 @@ function BuiltinSkillCard({ skill }: { skill: BuiltinSkill }) {
           <p className="text-muted-foreground text-sm">{skill.whenToUse}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <span className={cn("rounded-full px-2 py-0.5 font-medium text-xs", STATUS_META.active.className)}>Active</span>
+          <span className={cn("rounded-full px-2 py-0.5 font-medium text-xs", STATUS_META.active.className)}>
+            Active
+          </span>
           <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground text-xs">Built-in</span>
         </div>
       </div>

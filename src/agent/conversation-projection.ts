@@ -67,7 +67,54 @@ export function stepToolsFromContext(ctx: Pick<StepContext, "content" | "toolCal
   });
 }
 
-const WORKSPACE_FILES_PREFIX = "Uploaded files are available in the agent workspace:";
+export const WORKSPACE_FILES_PREFIX = "Uploaded files are available in the agent workspace:";
+
+export type ConversationTurnFile = {
+  filename: string;
+  mediaType: string;
+  size: number;
+  path: string;
+};
+
+function isConversationTurnFile(value: unknown): value is ConversationTurnFile {
+  if (typeof value !== "object" || value === null) return false;
+  if (!("filename" in value) || typeof value.filename !== "string") return false;
+  if (!("mediaType" in value) || typeof value.mediaType !== "string") return false;
+  if (!("size" in value) || typeof value.size !== "number" || !Number.isFinite(value.size)) return false;
+  if (!("path" in value) || typeof value.path !== "string") return false;
+  return true;
+}
+
+export function conversationTurnFilesFromData(data: string): ConversationTurnFile[] {
+  if (!data) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return [];
+  }
+  if (typeof parsed !== "object" || parsed === null || !("files" in parsed) || !Array.isArray(parsed.files)) {
+    return [];
+  }
+  return parsed.files.filter(isConversationTurnFile);
+}
+
+export function conversationTurnFilesData(files: readonly ConversationTurnFile[]): string {
+  if (files.length === 0) return "";
+  return JSON.stringify({ files });
+}
+
+export function workspaceFilesPrompt(files: readonly ConversationTurnFile[]): string {
+  if (files.length === 0) return "";
+  return [
+    WORKSPACE_FILES_PREFIX,
+    ...files.map((file) => `- ${file.filename}: ${file.path} (${file.mediaType}, ${file.size} bytes)`),
+  ].join("\n");
+}
+
+export function userTurnModelText(text: string, files: readonly ConversationTurnFile[]): string {
+  return [text.trim(), workspaceFilesPrompt(files)].filter(Boolean).join("\n\n");
+}
 
 export function toolProjectionId(sessionMessageId: string, toolCallId: string) {
   return `${sessionMessageId}:tool:${toolCallId}`;
@@ -83,25 +130,26 @@ export function stepTextProjectionId(sessionMessageId: string, stepNumber: numbe
   return `${sessionMessageId}:step-text:${stepNumber}`;
 }
 
-export function conversationTitleFromTurnText(text: string): string {
+export function conversationTitleFromTurnText(text: string, filenames: readonly string[] = []): string {
   const trimmed = text.trim();
-  if (!trimmed) return "";
-
   const suffixAt = trimmed.indexOf(WORKSPACE_FILES_PREFIX);
   const prose = (suffixAt === -1 ? trimmed : trimmed.slice(0, suffixAt)).trim();
   if (prose) return prose.slice(0, 80);
-  if (suffixAt === -1) return trimmed.slice(0, 80);
 
-  const names = trimmed
-    .slice(suffixAt + WORKSPACE_FILES_PREFIX.length)
-    .split("\n")
-    .map((line) => {
-      const item = line.trim().replace(/^- /, "");
-      const colon = item.indexOf(":");
-      return (colon === -1 ? item : item.slice(0, colon)).trim();
-    })
-    .filter(Boolean);
-  return (names.join(", ") || trimmed).slice(0, 80);
+  if (suffixAt !== -1) {
+    const names = trimmed
+      .slice(suffixAt + WORKSPACE_FILES_PREFIX.length)
+      .split("\n")
+      .map((line) => {
+        const item = line.trim().replace(/^- /, "");
+        const colon = item.indexOf(":");
+        return (colon === -1 ? item : item.slice(0, colon)).trim();
+      })
+      .filter(Boolean);
+    if (names.length > 0) return names.join(", ").slice(0, 80);
+  }
+
+  return filenames.filter(Boolean).join(", ").slice(0, 80);
 }
 
 function jsonData(value: unknown): string {

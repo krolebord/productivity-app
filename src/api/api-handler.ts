@@ -1,13 +1,11 @@
 import type { ORPCContext } from "../orpc/common/os";
 import { assistantDownloadHandler } from "./handlers/assistant.download";
-import { assistantUploadHandler } from "./handlers/assistant.upload";
 import { googleCallbackHandler } from "./handlers/callback.google";
 import { googleCalendarCallbackHandler } from "./handlers/callback.google-calendar";
 import { MONOBANK_WEBHOOK_PREFIX, monobankWebhookHandler } from "./handlers/monobank.webhook";
 
 export const apiHandler = createApiHandler({
   handlers: {
-    "/assistant/upload": assistantUploadHandler,
     "/assistant/download": assistantDownloadHandler,
     "/auth/callback/google": googleCallbackHandler,
     "/auth/callback/google-calendar": googleCalendarCallbackHandler,
