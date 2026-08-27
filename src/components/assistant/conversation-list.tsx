@@ -23,7 +23,6 @@ import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
 import { useConfirmDialogStore } from "../confirm-dialog";
 
-const DELETE_ROW_HOTKEY = "Mod+Backspace";
 const ROW_SELECTOR = "[data-conversation-row]";
 
 /**
@@ -247,15 +246,6 @@ function moveRowFocus(container: HTMLElement | null, from: EventTarget | null, d
   rows[next]?.focus();
 }
 
-function KeyHint({ keys, children }: { keys: string; children: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <kbd className="rounded-sm border bg-background px-1 font-mono text-[10px] leading-4">{keys}</kbd>
-      {children}
-    </span>
-  );
-}
-
 export function ConversationList({
   conversations,
   activeId,
@@ -384,7 +374,7 @@ export function ConversationList({
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onListKeyDown}>
           {sections.map((section) => (
             <section key={section.kind} className="pb-1.5">
-              <h3 className="flex items-center justify-between px-2.5 py-1.5 font-medium font-mono text-[10px] text-muted-foreground uppercase tracking-[0.09em]">
+              <h3 className="flex items-center justify-between px-2.5 py-1.5 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
                 {CONVERSATION_LIST_SECTION_LABELS[section.kind]}
                 <span className="opacity-70">{section.conversations.length}</span>
               </h3>
@@ -413,12 +403,6 @@ export function ConversationList({
           ))}
         </div>
       )}
-
-      <div className="hidden h-8 shrink-0 items-center gap-3.5 border-t bg-muted/40 px-3 text-[11px] text-muted-foreground md:flex">
-        <KeyHint keys="↑↓">move</KeyHint>
-        <KeyHint keys="↵">open</KeyHint>
-        <KeyHint keys={formatForDisplay(DELETE_ROW_HOTKEY)}>delete</KeyHint>
-      </div>
     </div>
   );
 }
