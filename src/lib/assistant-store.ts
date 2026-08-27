@@ -30,7 +30,11 @@ interface AssistantStore {
    * opening the panel always resumes the last chat.
    */
   showConversationList: boolean;
-  /** Completions/failures on chats the user was not looking at. Cleared on list visit. */
+  /**
+   * Completions/failures on chats the user was not looking at. The list renders
+   * these as its Unread section, so an entry survives until that chat is opened
+   * (or deleted) rather than being dropped when the list is shown.
+   */
   unseenCompletions: Record<string, UnseenCompletionStatus>;
   /**
    * In-flight sends keyed by conversation id so switching chats or opening the
@@ -61,6 +65,8 @@ interface AssistantStore {
   /** Open a chat and leave the list. Used by the list, new-chat, and command palette. */
   openConversation: (id: string) => void;
   markUnseenCompletion: (id: string, status: UnseenCompletionStatus) => void;
+  /** Drops the unread marker without opening the chat — used when it is deleted. */
+  clearUnseenCompletion: (id: string) => void;
   setSubmitLock: (id: string, lock: SubmitLock) => void;
   clearSubmitLock: (id: string) => void;
   setModel: (model: AssistantModelId) => void;
@@ -100,7 +106,7 @@ export const useAssistantStore = create<AssistantStore>()(
             ...(panel === "assistant" && !closing ? { showConversationList: false } : {}),
           };
         }),
-      openConversationList: () => set({ showConversationList: true, unseenCompletions: {} }),
+      openConversationList: () => set({ showConversationList: true }),
       setActiveConversation: (id) =>
         set((s) => ({
           activeConversationId: id,
@@ -114,6 +120,7 @@ export const useAssistantStore = create<AssistantStore>()(
         })),
       markUnseenCompletion: (id, status) =>
         set((s) => ({ unseenCompletions: { ...s.unseenCompletions, [id]: status } })),
+      clearUnseenCompletion: (id) => set((s) => ({ unseenCompletions: omitUnseenCompletion(s.unseenCompletions, id) })),
       setSubmitLock: (id, lock) => set((s) => ({ submitLocks: { ...s.submitLocks, [id]: lock } })),
       clearSubmitLock: (id) => set((s) => ({ submitLocks: omitSubmitLock(s.submitLocks, id) })),
       setModel: (model) => set({ model }),

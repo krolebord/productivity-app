@@ -1,29 +1,63 @@
 import { generateId } from "@sqlite-sync/core";
 import { formatForDisplay } from "@tanstack/hotkeys";
-import { formatDistanceToNow } from "date-fns";
 import { ChevronLeft, CircleAlert, Loader2, PlusIcon, Sparkles, Trash2, X } from "lucide-react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { parseDateKey } from "@/lib/agenda";
 import { useAssistantStore } from "@/lib/assistant-store";
 import {
   CONVERSATION_LIST_SECTION_LABELS,
   type ConversationActivity,
   type ConversationListItem,
+  type ConversationRowStatus,
   conversationActivityLabel,
-  conversationModelLabel,
+  conversationRowStatus,
+  conversationTimeLabel,
   conversationTitle,
   groupConversations,
   summarizeConversationActivity,
+  turnElapsedLabel,
 } from "@/lib/conversation-list";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
-import { useCurrentDayKey } from "@/lib/use-current-day";
 import { cn } from "@/lib/utils";
+import { useDbQuery } from "@/user-db/user-db";
 import { useConfirmDialogStore } from "../confirm-dialog";
 
-function formatCost(cost: number) {
-  if (cost > 0 && cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
+const DELETE_ROW_HOTKEY = "Mod+Backspace";
+const ROW_SELECTOR = "[data-conversation-row]";
+
+/**
+ * Clock for the relative labels. Rows would otherwise keep whatever "4m" they
+ * rendered with, since a sync push is the only thing that re-renders them.
+ */
+function useNowMs(fast: boolean) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), fast ? 1_000 : 30_000);
+    return () => clearInterval(id);
+  }, [fast]);
+
+  return nowMs;
+}
+
+/**
+ * Turn start per conversation. The agent writes the user row with the turn's
+ * timestamp immediately before flipping turnStatus to running, so the newest
+ * user message is when the current turn began.
+ */
+function useTurnStarts() {
+  return useDbQuery(
+    (db) =>
+      db
+        .selectFrom("conversation_message")
+        .select((eb) => ["conversationId", eb.fn.max("createdAt").as("startedAt")])
+        .where("role", "=", "user")
+        .groupBy("conversationId"),
+    {
+      mapData: (rows) => new Map(rows.map((row) => [row.conversationId, Number(row.startedAt ?? 0)])),
+    },
+  );
 }
 
 function ConversationDeleteButton({
@@ -39,7 +73,10 @@ function ConversationDeleteButton({
   return (
     <button
       type="button"
-      className={cn("rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-destructive", className)}
+      className={cn(
+        "shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-destructive",
+        className,
+      )}
       aria-label={`Delete ${label}`}
       onClick={(e) => {
         e.stopPropagation();
@@ -110,71 +147,112 @@ function UnseenCompletionBadge({ activity, count }: { activity: ConversationActi
   );
 }
 
-function ConversationStatusIcon({ conversation }: { conversation: ConversationListItem }) {
-  if (conversation.turnStatus === "running") {
-    return <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />;
+const ROW_STATUS_LABELS = {
+  running: "running",
+  error: "failed",
+  unread: "unread",
+  idle: null,
+} as const satisfies Record<ConversationRowStatus, string | null>;
+
+function ConversationStatusGlyph({ status }: { status: ConversationRowStatus }) {
+  if (status === "running") {
+    return <Loader2 className="size-3.5 animate-spin text-primary" aria-hidden="true" />;
   }
-  if (conversation.turnStatus === "error") {
-    return <CircleAlert className="size-3.5 shrink-0 text-destructive" aria-hidden="true" />;
+  if (status === "error") {
+    return <CircleAlert className="size-3.5 text-destructive" aria-hidden="true" />;
   }
-  return <span className="size-3.5 shrink-0" aria-hidden="true" />;
+  if (status === "unread") {
+    return <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />;
+  }
+  return null;
 }
 
-function ConversationMeta({ conversation }: { conversation: ConversationListItem }) {
-  const parts: string[] = [];
-  const modelLabel = conversationModelLabel(conversation.model);
-  if (modelLabel) parts.push(modelLabel);
-  parts.push(formatDistanceToNow(conversation.updatedAt, { addSuffix: true }));
-  if (conversation.totalCost > 0 || conversation.totalTokens > 0) {
-    parts.push(formatCost(conversation.totalCost));
-  }
-
-  return <p className="truncate text-muted-foreground text-xs">{parts.join(" · ")}</p>;
-}
-
-function ConversationListRow({
+function ConversationRow({
   conversation,
+  status,
+  timeLabel,
   active,
   onOpen,
   onDelete,
 }: {
   conversation: ConversationListItem;
+  status: ConversationRowStatus;
+  timeLabel: string;
   active: boolean;
   onOpen: () => void;
   onDelete: () => void;
 }) {
   const label = conversationTitle(conversation);
-  const statusLabel =
-    conversation.turnStatus === "running" ? "running" : conversation.turnStatus === "error" ? "failed" : null;
+  const statusLabel = ROW_STATUS_LABELS[status];
 
   return (
     <div
       className={cn(
-        "group flex items-start gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent",
-        active && "bg-accent",
+        "group relative flex items-center rounded-md pr-1 pl-2 transition-colors",
+        "focus-within:bg-muted hover:bg-muted",
+        active && "bg-accent/60 focus-within:bg-accent hover:bg-accent",
       )}
     >
+      {active && (
+        <span className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full bg-primary" aria-hidden="true" />
+      )}
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-start gap-2"
+        data-conversation-row
+        data-conversation-id={conversation.id}
+        className="flex min-w-0 flex-1 items-center gap-2.5 py-2 text-left outline-none"
         aria-current={active ? "true" : undefined}
         aria-label={statusLabel ? `${label}, ${statusLabel}` : label}
         onClick={onOpen}
       >
-        <span className="mt-0.5">
-          <ConversationStatusIcon conversation={conversation} />
+        <span className="flex size-3.5 shrink-0 items-center justify-center">
+          <ConversationStatusGlyph status={status} />
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium text-sm">{label}</span>
-          <ConversationMeta conversation={conversation} />
-        </span>
+        <span className={cn("truncate text-sm", active ? "font-semibold" : "font-medium")}>{label}</span>
       </button>
+      <span
+        className={cn(
+          "shrink-0 pl-2 font-mono text-[11px] tabular-nums",
+          status === "running" ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        {timeLabel}
+      </span>
       <ConversationDeleteButton
         label={label}
         onDelete={onDelete}
-        className="mt-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100"
+        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
       />
     </div>
+  );
+}
+
+/** Arrow keys walk the rows; the row buttons themselves hold focus. */
+function moveRowFocus(container: HTMLElement | null, from: EventTarget | null, delta: number | "first" | "last") {
+  if (!container) return;
+  const rows = [...container.querySelectorAll<HTMLButtonElement>(ROW_SELECTOR)];
+  if (rows.length === 0) return;
+
+  if (delta === "first") {
+    rows[0].focus();
+    return;
+  }
+  if (delta === "last") {
+    rows[rows.length - 1].focus();
+    return;
+  }
+
+  const index = rows.indexOf(from as HTMLButtonElement);
+  const next = index === -1 ? 0 : Math.min(rows.length - 1, Math.max(0, index + delta));
+  rows[next]?.focus();
+}
+
+function KeyHint({ keys, children }: { keys: string; children: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <kbd className="rounded-sm border bg-background px-1 font-mono text-[10px] leading-4">{keys}</kbd>
+      {children}
+    </span>
   );
 }
 
@@ -189,18 +267,70 @@ export function ConversationList({
 }) {
   const closePanel = useAssistantStore((s) => s.closePanel);
   const openConversation = useAssistantStore((s) => s.openConversation);
-  const dayKey = useCurrentDayKey();
-  const sections = groupConversations({
-    conversations,
-    nowMs: parseDateKey(dayKey).getTime(),
-  });
+  const unseenCompletions = useAssistantStore((s) => s.unseenCompletions);
+  const confirm = useConfirmDialogStore((s) => s.confirm);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const hasRunning = conversations.some((conversation) => conversation.turnStatus === "running");
+  const nowMs = useNowMs(hasRunning);
+  const { data: turnStarts } = useTurnStarts();
+  const sections = groupConversations({ conversations, nowMs, unseenCompletions });
+
+  // Land focus on the open chat so the arrow keys work without a click first.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const container = listRef.current;
+      if (!container) return;
+      const rows = [...container.querySelectorAll<HTMLButtonElement>(ROW_SELECTOR)];
+      const current = rows.find((row) => row.getAttribute("aria-current") === "true");
+      (current ?? rows[0])?.focus({ preventScroll: true });
+      current?.scrollIntoView({ block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  function onListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveRowFocus(listRef.current, event.target, 1);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveRowFocus(listRef.current, event.target, -1);
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      moveRowFocus(listRef.current, event.target, "first");
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      moveRowFocus(listRef.current, event.target, "last");
+      return;
+    }
+    if (event.key === "Backspace" && (event.metaKey || event.ctrlKey)) {
+      const row = (event.target as HTMLElement).closest<HTMLButtonElement>(ROW_SELECTOR);
+      const id = row?.dataset.conversationId;
+      const conversation = conversations.find((item) => item.id === id);
+      if (!conversation) return;
+      event.preventDefault();
+      confirm({
+        title: "Delete conversation",
+        description: `"${conversationTitle(conversation)}" will be permanently deleted. This cannot be undone.`,
+        confirmLabel: "Delete",
+        onConfirm: () => onDeleteConversation(conversation),
+      });
+    }
+  }
 
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center gap-1 border-b px-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5">
           <Sparkles className="size-4 shrink-0 text-primary" />
-          <span className="truncate font-semibold text-sm">Chats</span>
+          <h2 className="truncate font-semibold text-sm">Chats</h2>
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -237,40 +367,57 @@ export function ConversationList({
         </Tooltip>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        {conversations.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
-            <Sparkles className="size-6 text-muted-foreground" />
-            <div>
-              <p className="font-medium text-sm">No conversations yet</p>
-              <p className="text-muted-foreground text-sm">Start one and it will show up here.</p>
-            </div>
-            <Button type="button" size="sm" onClick={() => openConversation(generateId())}>
-              New conversation
-            </Button>
+      {conversations.length === 0 ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-3 px-4 py-12 text-center">
+          <Sparkles className="size-6 text-muted-foreground" />
+          <div>
+            <p className="font-medium text-sm">No chats yet</p>
+            <p className="text-muted-foreground text-sm">Start one and it will show up here.</p>
           </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {sections.map((section) => (
-              <section key={section.kind}>
-                <h2 className="px-2 pb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  {CONVERSATION_LIST_SECTION_LABELS[section.kind]}
-                </h2>
-                <div className="flex flex-col">
-                  {section.conversations.map((conversation) => (
-                    <ConversationListRow
-                      key={conversation.id}
-                      conversation={conversation}
-                      active={conversation.id === activeId}
-                      onOpen={() => openConversation(conversation.id)}
-                      onDelete={() => onDeleteConversation(conversation)}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
+          <Button type="button" size="sm" onClick={() => openConversation(generateId())}>
+            New conversation
+          </Button>
+        </div>
+      ) : (
+        // Key handling sits on the container: the rows are the focus targets, and
+        // arrow keys move focus between them rather than each row tracking a cursor.
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onListKeyDown}>
+          {sections.map((section) => (
+            <section key={section.kind} className="pb-1.5">
+              <h3 className="flex items-center justify-between px-2.5 py-1.5 font-medium font-mono text-[10px] text-muted-foreground uppercase tracking-[0.09em]">
+                {CONVERSATION_LIST_SECTION_LABELS[section.kind]}
+                <span className="opacity-70">{section.conversations.length}</span>
+              </h3>
+              {section.conversations.map((conversation) => {
+                const status = conversationRowStatus({ conversation, unseenCompletions });
+                return (
+                  <ConversationRow
+                    key={conversation.id}
+                    conversation={conversation}
+                    status={status}
+                    timeLabel={
+                      status === "running"
+                        ? turnElapsedLabel({
+                            startedAt: turnStarts.get(conversation.id) ?? conversation.updatedAt,
+                            nowMs,
+                          })
+                        : conversationTimeLabel({ timestamp: conversation.updatedAt, nowMs })
+                    }
+                    active={conversation.id === activeId}
+                    onOpen={() => openConversation(conversation.id)}
+                    onDelete={() => onDeleteConversation(conversation)}
+                  />
+                );
+              })}
+            </section>
+          ))}
+        </div>
+      )}
+
+      <div className="hidden h-8 shrink-0 items-center gap-3.5 border-t bg-muted/40 px-3 text-[11px] text-muted-foreground md:flex">
+        <KeyHint keys="↑↓">move</KeyHint>
+        <KeyHint keys="↵">open</KeyHint>
+        <KeyHint keys={formatForDisplay(DELETE_ROW_HOTKEY)}>delete</KeyHint>
       </div>
     </div>
   );

@@ -1238,6 +1238,7 @@ export function AssistantSidebar() {
   async function deleteConversation(conversation: { id: string }) {
     await orpc.assistant.deleteConversation.call({ conversationId: conversation.id });
     useAssistantStore.getState().clearSubmitLock(conversation.id);
+    useAssistantStore.getState().clearUnseenCompletion(conversation.id);
     if (conversation.id === selectedConversationId) {
       const next = conversations.find((row) => row.id !== conversation.id);
       setActiveConversation(next?.id ?? generateId());
