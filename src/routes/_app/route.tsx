@@ -1,12 +1,15 @@
 import { ORPCError } from "@orpc/client";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { useRef } from "react";
+import { type ReactNode, useRef } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { AccountDialog } from "@/components/account-dialog";
 import { AppDndProvider } from "@/components/app-dnd";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
-import { ConversationActivityWatcher, SubmitLockWatcher } from "@/components/assistant/conversation-activity-watcher";
+import {
+  ConversationLastReadVisibilityWatcher,
+  SubmitLockWatcher,
+} from "@/components/assistant/conversation-activity-watcher";
 import { CategoryImportanceDialog } from "@/components/category-importance-dialog";
 import { CommandPalette } from "@/components/command-palette";
 import { Devtools } from "@/components/devtools";
@@ -19,6 +22,7 @@ import { TransactionDialog } from "@/components/transaction-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { clearCachedAuth, readCachedAuth, writeCachedAuth } from "@/lib/auth-cache";
+import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { orpc } from "@/orpc/orpc-client";
 import { DbProvider, initUserDb } from "@/user-db/user-db";
@@ -60,6 +64,20 @@ export const Route = createFileRoute("/_app")({
   staleTime: 1000 * 60 * 5,
 });
 
+function MobileAssistantSheet({ open, children }: { open: boolean; children: ReactNode }) {
+  const { closePanel } = useAssistantNavigation();
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) closePanel();
+      }}
+    >
+      {children}
+    </Sheet>
+  );
+}
+
 function RightRailContent({ panel }: { panel: "assistant" | "today" }) {
   if (panel === "today") {
     return <TodayPanel />;
@@ -71,7 +89,6 @@ function RightRailContent({ panel }: { panel: "assistant" | "today" }) {
 function RouteComponent() {
   const { db, auth } = Route.useLoaderData();
   const activePanel = useAssistantStore((s) => s.activePanel);
-  const closePanel = useAssistantStore((s) => s.closePanel);
   const isDesktop = useIsDesktop();
   const assistantEnabled = auth.assistantEnabled;
   const resolvedPanel =
@@ -92,7 +109,7 @@ function RouteComponent() {
     <DbProvider db={db}>
       {auth.assistantEnabled ? (
         <>
-          <ConversationActivityWatcher />
+          <ConversationLastReadVisibilityWatcher />
           <SubmitLockWatcher />
         </>
       ) : null}
@@ -123,12 +140,7 @@ function RouteComponent() {
           </Group>
         </div>
         {hasMountedMobileAssistant.current && !isDesktop && (
-          <Sheet
-            open={mobileAssistantOpen}
-            onOpenChange={(open) => {
-              if (!open) closePanel();
-            }}
-          >
+          <MobileAssistantSheet open={mobileAssistantOpen}>
             <SheetContent
               side="right"
               forceMount
@@ -140,7 +152,7 @@ function RouteComponent() {
               </SheetHeader>
               <RightRailContent panel="assistant" />
             </SheetContent>
-          </Sheet>
+          </MobileAssistantSheet>
         )}
         <CommandPalette />
         <NoteDialog />

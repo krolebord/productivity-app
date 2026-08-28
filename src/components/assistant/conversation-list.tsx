@@ -4,7 +4,6 @@ import { ChevronLeft, CircleAlert, Loader2, PlusIcon, Sparkles, Trash2, X } from
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAssistantStore } from "@/lib/assistant-store";
 import {
   CONVERSATION_LIST_SECTION_LABELS,
   type ConversationActivity,
@@ -19,6 +18,7 @@ import {
   turnElapsedLabel,
 } from "@/lib/conversation-list";
 import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
+import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
 import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
 import { useConfirmDialogStore } from "../confirm-dialog";
@@ -99,12 +99,10 @@ export function ChatsBackButton({
   conversations: ConversationListItem[];
   activeConversationId: string;
 }) {
-  const openConversationList = useAssistantStore((s) => s.openConversationList);
-  const unseenCompletions = useAssistantStore((s) => s.unseenCompletions);
+  const { openConversationList } = useAssistantNavigation();
   const activity = summarizeConversationActivity({
     conversations,
     activeConversationId,
-    unseenCompletions,
   });
   const activityLabel = conversationActivityLabel(activity);
   const unseenCount = activity.unseenFinishedCount + activity.unseenFailedCount;
@@ -187,7 +185,7 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        "group relative flex items-center rounded-md pr-1 pl-2 transition-colors",
+        "group relative flex items-center rounded-md px-2 transition-colors",
         "focus-within:bg-muted hover:bg-muted",
         active && "bg-accent/60 focus-within:bg-accent hover:bg-accent",
       )}
@@ -209,19 +207,27 @@ function ConversationRow({
         </span>
         <span className={cn("truncate text-sm", active ? "font-semibold" : "font-medium")}>{label}</span>
       </button>
-      <span
-        className={cn(
-          "shrink-0 pl-2 font-mono text-[11px] tabular-nums",
-          status === "running" ? "text-primary" : "text-muted-foreground",
-        )}
-      >
-        {timeLabel}
-      </span>
-      <ConversationDeleteButton
-        label={label}
-        onDelete={onDelete}
-        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-      />
+      <div className="grid shrink-0 items-center justify-items-end pl-2">
+        <ConversationDeleteButton
+          label={label}
+          onDelete={onDelete}
+          className={cn(
+            "peer col-start-1 row-start-1 z-10",
+            "opacity-100 md:pointer-events-none md:opacity-0",
+            "md:group-hover:pointer-events-auto md:group-hover:opacity-100",
+            "md:focus:pointer-events-auto md:focus:opacity-100",
+          )}
+        />
+        <span
+          className={cn(
+            "col-start-1 row-start-1 pointer-events-none font-mono text-[11px] tabular-nums",
+            "max-md:opacity-0 md:group-hover:opacity-0 md:peer-focus:opacity-0",
+            status === "running" ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          {timeLabel}
+        </span>
+      </div>
     </div>
   );
 }
@@ -255,16 +261,14 @@ export function ConversationList({
   activeId: string;
   onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
 }) {
-  const closePanel = useAssistantStore((s) => s.closePanel);
-  const openConversation = useAssistantStore((s) => s.openConversation);
-  const unseenCompletions = useAssistantStore((s) => s.unseenCompletions);
+  const { closePanel, openConversation } = useAssistantNavigation();
   const confirm = useConfirmDialogStore((s) => s.confirm);
   const listRef = useRef<HTMLDivElement>(null);
 
   const hasRunning = conversations.some((conversation) => conversation.turnStatus === "running");
   const nowMs = useNowMs(hasRunning);
   const { data: turnStarts } = useTurnStarts();
-  const sections = groupConversations({ conversations, nowMs, unseenCompletions });
+  const sections = groupConversations({ conversations, nowMs });
 
   // Land focus on the open chat so the arrow keys work without a click first.
   useEffect(() => {
@@ -374,12 +378,11 @@ export function ConversationList({
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onListKeyDown}>
           {sections.map((section) => (
             <section key={section.kind} className="pb-1.5">
-              <h3 className="flex items-center justify-between px-2.5 py-1.5 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+              <h3 className="px-2.5 py-1.5 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
                 {CONVERSATION_LIST_SECTION_LABELS[section.kind]}
-                <span className="opacity-70">{section.conversations.length}</span>
               </h3>
               {section.conversations.map((conversation) => {
-                const status = conversationRowStatus({ conversation, unseenCompletions });
+                const status = conversationRowStatus(conversation);
                 return (
                   <ConversationRow
                     key={conversation.id}

@@ -1,12 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Maximize2, X } from "lucide-react";
-import { useAssistantStore } from "@/lib/assistant-store";
+import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { TodayView } from "./today-view";
 
 export function TodayPanel() {
-  const closePanel = useAssistantStore((s) => s.closePanel);
+  const { closePanel } = useAssistantNavigation();
   const navigate = useNavigate();
 
   return (

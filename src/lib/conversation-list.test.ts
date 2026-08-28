@@ -3,20 +3,23 @@ import { localMidnightMs } from "@/lib/date-time";
 import {
   type ConversationListItem,
   conversationActivityLabel,
+  conversationLastReadCatchUp,
   conversationRowStatus,
   conversationTimeLabel,
   conversationTitle,
   groupConversations,
-  shouldRecordUnseenCompletion,
+  isConversationUnread,
   summarizeConversationActivity,
   turnElapsedLabel,
-  unseenCompletionFromTransition,
+  viewingConversationId,
 } from "./conversation-list";
 
 function item(overrides: Partial<ConversationListItem> & Pick<ConversationListItem, "id">): ConversationListItem {
+  const updatedAt = overrides.updatedAt ?? 0;
   return {
     title: "",
-    updatedAt: 0,
+    updatedAt,
+    lastReadAt: overrides.lastReadAt !== undefined ? overrides.lastReadAt : updatedAt,
     turnStatus: "idle",
     model: null,
     totalCost: 0,
@@ -43,13 +46,13 @@ describe("groupConversations", () => {
       item({ id: "run-new", turnStatus: "running", updatedAt: todayStart + 2 }),
       item({ id: "today", turnStatus: "idle", updatedAt: todayStart + 1 }),
       item({ id: "run-old", turnStatus: "running", updatedAt: todayStart - 5_000 }),
-      item({ id: "unread", turnStatus: "idle", updatedAt: todayStart - 1 }),
+      item({ id: "unread", turnStatus: "idle", updatedAt: todayStart - 1, lastReadAt: todayStart - 2 }),
       item({ id: "yesterday", turnStatus: "error", updatedAt: yesterdayStart }),
       item({ id: "month", turnStatus: "idle", updatedAt: monthStart }),
       item({ id: "older", turnStatus: "idle", updatedAt: monthStart - 1 }),
     ];
 
-    expect(groupConversations({ conversations, nowMs, unseenCompletions: { unread: "idle" } })).toEqual([
+    expect(groupConversations({ conversations, nowMs })).toEqual([
       { kind: "running", conversations: [conversations[0], conversations[2]] },
       { kind: "unread", conversations: [conversations[3]] },
       { kind: "today", conversations: [conversations[1]] },
@@ -59,9 +62,21 @@ describe("groupConversations", () => {
     ]);
   });
 
+  it("does not put a chat with no receipt in unread", () => {
+    const neverOpened = item({
+      id: "legacy",
+      turnStatus: "idle",
+      updatedAt: todayStart - 1,
+      lastReadAt: null,
+    });
+    expect(groupConversations({ conversations: [neverOpened], nowMs })).toEqual([
+      { kind: "yesterday", conversations: [neverOpened] },
+    ]);
+  });
+
   it("keeps a running chat out of unread", () => {
-    const running = item({ id: "a", turnStatus: "running", updatedAt: todayStart });
-    expect(groupConversations({ conversations: [running], nowMs, unseenCompletions: { a: "error" } })).toEqual([
+    const running = item({ id: "a", turnStatus: "running", updatedAt: todayStart, lastReadAt: todayStart - 1 });
+    expect(groupConversations({ conversations: [running], nowMs })).toEqual([
       { kind: "running", conversations: [running] },
     ]);
   });
@@ -78,18 +93,24 @@ describe("groupConversations", () => {
   });
 });
 
-describe("conversationRowStatus", () => {
-  it("prefers the synced turn status over the local unread marker", () => {
-    const status = (
-      conversation: Parameters<typeof conversationRowStatus>[0]["conversation"],
-      unseenCompletions: Parameters<typeof conversationRowStatus>[0]["unseenCompletions"] = {},
-    ) => conversationRowStatus({ conversation, unseenCompletions });
+describe("isConversationUnread", () => {
+  it("ignores running rows and rows with no receipt", () => {
+    expect(isConversationUnread({ turnStatus: "running", updatedAt: 2, lastReadAt: 1 })).toBe(false);
+    expect(isConversationUnread({ turnStatus: "idle", updatedAt: 2, lastReadAt: null })).toBe(false);
+    expect(isConversationUnread({ turnStatus: "error", updatedAt: 2, lastReadAt: null })).toBe(false);
+    expect(isConversationUnread({ turnStatus: "idle", updatedAt: 2, lastReadAt: 2 })).toBe(false);
+    expect(isConversationUnread({ turnStatus: "idle", updatedAt: 2, lastReadAt: 1 })).toBe(true);
+    expect(isConversationUnread({ turnStatus: "error", updatedAt: 2, lastReadAt: 1 })).toBe(true);
+  });
+});
 
-    expect(status({ id: "a", turnStatus: "running" }, { a: "idle" })).toBe("running");
-    expect(status({ id: "a", turnStatus: "error" })).toBe("error");
-    expect(status({ id: "a", turnStatus: "idle" }, { a: "error" })).toBe("error");
-    expect(status({ id: "a", turnStatus: "idle" }, { a: "idle" })).toBe("unread");
-    expect(status({ id: "a", turnStatus: "idle" })).toBe("idle");
+describe("conversationRowStatus", () => {
+  it("prefers the synced turn status over the lastReadAt receipt", () => {
+    expect(conversationRowStatus({ turnStatus: "running", updatedAt: 2, lastReadAt: 1 })).toBe("running");
+    expect(conversationRowStatus({ turnStatus: "error", updatedAt: 2, lastReadAt: 2 })).toBe("error");
+    expect(conversationRowStatus({ turnStatus: "error", updatedAt: 2, lastReadAt: 1 })).toBe("error");
+    expect(conversationRowStatus({ turnStatus: "idle", updatedAt: 2, lastReadAt: 1 })).toBe("unread");
+    expect(conversationRowStatus({ turnStatus: "idle", updatedAt: 2, lastReadAt: 2 })).toBe("idle");
   });
 });
 
@@ -119,55 +140,46 @@ describe("turnElapsedLabel", () => {
   });
 });
 
-describe("unseenCompletionFromTransition", () => {
-  it("records idle and error only after running", () => {
-    expect(unseenCompletionFromTransition("running", "idle")).toBe("idle");
-    expect(unseenCompletionFromTransition("running", "error")).toBe("error");
-    expect(unseenCompletionFromTransition(undefined, "idle")).toBeNull();
-    expect(unseenCompletionFromTransition("idle", "error")).toBeNull();
-    expect(unseenCompletionFromTransition("running", "running")).toBeNull();
-  });
-});
-
-describe("shouldRecordUnseenCompletion", () => {
-  const base = {
-    conversationId: "b",
+describe("viewingConversationId", () => {
+  const viewing = {
     activePanel: "assistant" as const,
     showConversationList: false,
     activeConversationId: "a",
   };
 
-  it("skips only the chat the user has open", () => {
-    expect(shouldRecordUnseenCompletion({ ...base, conversationId: "a" })).toBe(false);
+  it("is the open thread, not the list or another panel", () => {
+    expect(viewingConversationId(viewing)).toBe("a");
+    expect(viewingConversationId({ ...viewing, activePanel: null })).toBeNull();
+    expect(viewingConversationId({ ...viewing, activePanel: "today" })).toBeNull();
+    expect(viewingConversationId({ ...viewing, showConversationList: true })).toBeNull();
+    expect(viewingConversationId({ ...viewing, activeConversationId: null })).toBeNull();
   });
+});
 
-  it("records when the panel is closed, on Today, on the list, or another chat is open", () => {
-    expect(shouldRecordUnseenCompletion({ ...base, activePanel: null })).toBe(true);
-    expect(shouldRecordUnseenCompletion({ ...base, activePanel: "today" })).toBe(true);
-    expect(shouldRecordUnseenCompletion({ ...base, showConversationList: true })).toBe(true);
-    expect(shouldRecordUnseenCompletion(base)).toBe(true);
-  });
-
-  it("still records a chat finishing while its own chat is open behind the list", () => {
-    expect(shouldRecordUnseenCompletion({ ...base, conversationId: "a", showConversationList: true })).toBe(true);
+describe("conversationLastReadCatchUp", () => {
+  it("copies updatedAt when behind, otherwise no-ops", () => {
+    expect(conversationLastReadCatchUp(null)).toBeNull();
+    expect(conversationLastReadCatchUp({ lastReadAt: null, updatedAt: 10 })).toBe(10);
+    expect(conversationLastReadCatchUp({ lastReadAt: 4, updatedAt: 10 })).toBe(10);
+    expect(conversationLastReadCatchUp({ lastReadAt: 10, updatedAt: 10 })).toBeNull();
+    expect(conversationLastReadCatchUp({ lastReadAt: 11, updatedAt: 10 })).toBeNull();
   });
 });
 
 describe("summarizeConversationActivity", () => {
   const conversations = [
-    item({ id: "a", turnStatus: "idle" }),
-    item({ id: "b", turnStatus: "running" }),
-    item({ id: "c", turnStatus: "running" }),
-    item({ id: "d", turnStatus: "error" }),
-    item({ id: "e", turnStatus: "idle" }),
+    item({ id: "a", turnStatus: "idle", updatedAt: 2, lastReadAt: 2 }),
+    item({ id: "b", turnStatus: "running", updatedAt: 2, lastReadAt: 1 }),
+    item({ id: "c", turnStatus: "running", updatedAt: 2, lastReadAt: 1 }),
+    item({ id: "d", turnStatus: "error", updatedAt: 2, lastReadAt: 1 }),
+    item({ id: "e", turnStatus: "idle", updatedAt: 2, lastReadAt: 1 }),
   ];
 
-  it("counts other running chats and unseen completions, ignoring the active chat", () => {
+  it("counts other running chats and unread completions, ignoring the active chat", () => {
     expect(
       summarizeConversationActivity({
         conversations,
         activeConversationId: "a",
-        unseenCompletions: { a: "idle", d: "error", e: "idle" },
       }),
     ).toEqual({ otherRunningCount: 2, unseenFinishedCount: 1, unseenFailedCount: 1 });
   });
@@ -177,19 +189,8 @@ describe("summarizeConversationActivity", () => {
       summarizeConversationActivity({
         conversations,
         activeConversationId: "b",
-        unseenCompletions: {},
       }),
-    ).toEqual({ otherRunningCount: 1, unseenFinishedCount: 0, unseenFailedCount: 0 });
-  });
-
-  it("ignores unseen completions for chats that no longer exist", () => {
-    expect(
-      summarizeConversationActivity({
-        conversations,
-        activeConversationId: "a",
-        unseenCompletions: { gone: "idle", missing: "error" },
-      }),
-    ).toEqual({ otherRunningCount: 2, unseenFinishedCount: 0, unseenFailedCount: 0 });
+    ).toEqual({ otherRunningCount: 1, unseenFinishedCount: 1, unseenFailedCount: 1 });
   });
 });
 

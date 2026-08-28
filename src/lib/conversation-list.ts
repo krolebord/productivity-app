@@ -4,11 +4,10 @@ import type { ConversationItem } from "@/user-db/migrations";
 
 export type ConversationListItem = Pick<
   ConversationItem,
-  "id" | "title" | "updatedAt" | "turnStatus" | "model" | "totalCost" | "totalTokens"
+  "id" | "title" | "updatedAt" | "lastReadAt" | "turnStatus" | "model" | "totalCost" | "totalTokens"
 >;
 
 export type ConversationTurnStatus = ConversationItem["turnStatus"];
-export type UnseenCompletionStatus = Exclude<ConversationTurnStatus, "running">;
 
 export type ConversationListSectionKind = "running" | "unread" | "today" | "yesterday" | "month" | "older";
 
@@ -34,34 +33,38 @@ export type ConversationActivity = {
   unseenFailedCount: number;
 };
 
-/** Row state, which merges the synced turn status with the local unread marker. */
+/** Row state, which merges the synced turn status with the lastReadAt receipt. */
 export type ConversationRowStatus = "running" | "error" | "unread" | "idle";
 
 export function conversationTitle(conversation: Pick<ConversationListItem, "title">) {
   return conversation.title || "New conversation";
 }
 
-export function conversationRowStatus(input: {
-  conversation: Pick<ConversationListItem, "id" | "turnStatus">;
-  unseenCompletions: Record<string, UnseenCompletionStatus>;
-}): ConversationRowStatus {
-  if (input.conversation.turnStatus === "running") return "running";
-  if (input.conversation.turnStatus === "error") return "error";
-  const unseen = input.unseenCompletions[input.conversation.id];
-  if (unseen === "error") return "error";
-  return unseen === "idle" ? "unread" : "idle";
+export function isConversationUnread(
+  conversation: Pick<ConversationListItem, "turnStatus" | "updatedAt" | "lastReadAt">,
+): boolean {
+  if (conversation.turnStatus === "running") return false;
+  if (conversation.lastReadAt == null) return false;
+  return conversation.updatedAt > conversation.lastReadAt;
+}
+
+export function conversationRowStatus(
+  conversation: Pick<ConversationListItem, "turnStatus" | "updatedAt" | "lastReadAt">,
+): ConversationRowStatus {
+  if (conversation.turnStatus === "running") return "running";
+  if (conversation.turnStatus === "error") return "error";
+  return isConversationUnread(conversation) ? "unread" : "idle";
 }
 
 function sectionKind(input: {
   conversation: ConversationListItem;
-  unseenCompletions: Record<string, UnseenCompletionStatus>;
   todayStart: number;
   yesterdayStart: number;
   monthStart: number;
 }): ConversationListSectionKind {
   const { conversation } = input;
   if (conversation.turnStatus === "running") return "running";
-  if (conversation.id in input.unseenCompletions) return "unread";
+  if (isConversationUnread(conversation)) return "unread";
   if (conversation.updatedAt >= input.todayStart) return "today";
   if (conversation.updatedAt >= input.yesterdayStart) return "yesterday";
   if (conversation.updatedAt >= input.monthStart) return "month";
@@ -71,7 +74,6 @@ function sectionKind(input: {
 export function groupConversations(input: {
   conversations: readonly ConversationListItem[];
   nowMs: number;
-  unseenCompletions?: Record<string, UnseenCompletionStatus>;
 }): ConversationListSection[] {
   const now = new Date(input.nowMs);
   const todayStart = localMidnightMs(now);
@@ -79,7 +81,6 @@ export function groupConversations(input: {
   // midnights keeps the boundaries right through a DST shift.
   const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  const unseenCompletions = input.unseenCompletions ?? {};
 
   const buckets: Record<ConversationListSectionKind, ConversationListItem[]> = {
     running: [],
@@ -91,9 +92,7 @@ export function groupConversations(input: {
   };
 
   for (const conversation of input.conversations) {
-    buckets[sectionKind({ conversation, unseenCompletions, todayStart, yesterdayStart, monthStart })].push(
-      conversation,
-    );
+    buckets[sectionKind({ conversation, todayStart, yesterdayStart, monthStart })].push(conversation);
   }
 
   return SECTION_ORDER.filter((kind) => buckets[kind].length > 0).map((kind) => ({
@@ -129,47 +128,40 @@ export function turnElapsedLabel(input: { startedAt: number; nowMs: number }): s
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${seconds}`;
 }
 
-export function unseenCompletionFromTransition(
-  previous: ConversationTurnStatus | undefined,
-  next: ConversationTurnStatus,
-): UnseenCompletionStatus | null {
-  if (previous !== "running") return null;
-  if (next === "idle" || next === "error") return next;
-  return null;
-}
-
-/** Completions the user is already looking at should not land in Unread. */
-export function shouldRecordUnseenCompletion(input: {
-  conversationId: string;
+/** The open thread, or null when the list/another panel is showing. */
+export function viewingConversationId(input: {
   activePanel: "assistant" | "today" | null;
   showConversationList: boolean;
   activeConversationId: string | null;
 }) {
-  if (input.activePanel !== "assistant") return true;
-  // The list shows Unread as its own section, so a turn that lands while the user
-  // is reading the list still gets marked; only the open chat is exempt.
-  if (input.showConversationList) return true;
-  return input.activeConversationId !== input.conversationId;
+  if (input.activePanel !== "assistant" || input.showConversationList) return null;
+  return input.activeConversationId;
+}
+
+/** Next lastReadAt to persist, or null if missing or already current. */
+export function conversationLastReadCatchUp(
+  conversation: Pick<ConversationListItem, "lastReadAt" | "updatedAt"> | null | undefined,
+): number | null {
+  if (conversation == null) return null;
+  if (conversation.lastReadAt != null && conversation.lastReadAt >= conversation.updatedAt) return null;
+  return conversation.updatedAt;
 }
 
 export function summarizeConversationActivity(input: {
-  conversations: readonly Pick<ConversationListItem, "id" | "turnStatus">[];
+  conversations: readonly Pick<ConversationListItem, "id" | "turnStatus" | "updatedAt" | "lastReadAt">[];
   activeConversationId: string;
-  unseenCompletions: Record<string, UnseenCompletionStatus>;
 }): ConversationActivity {
-  const conversationIds = new Set(input.conversations.map((conversation) => conversation.id));
   let otherRunningCount = 0;
-  for (const conversation of input.conversations) {
-    if (conversation.turnStatus === "running" && conversation.id !== input.activeConversationId) {
-      otherRunningCount += 1;
-    }
-  }
-
   let unseenFinishedCount = 0;
   let unseenFailedCount = 0;
-  for (const [id, status] of Object.entries(input.unseenCompletions)) {
-    if (id === input.activeConversationId || !conversationIds.has(id)) continue;
-    if (status === "error") unseenFailedCount += 1;
+  for (const conversation of input.conversations) {
+    if (conversation.id === input.activeConversationId) continue;
+    if (conversation.turnStatus === "running") {
+      otherRunningCount += 1;
+      continue;
+    }
+    if (!isConversationUnread(conversation)) continue;
+    if (conversation.turnStatus === "error") unseenFailedCount += 1;
     else unseenFinishedCount += 1;
   }
 

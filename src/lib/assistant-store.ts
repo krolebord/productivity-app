@@ -7,20 +7,9 @@ import {
   isAssistantReasoningEffort,
   resolveAssistantModelId,
 } from "@/agent/models";
-import type { UnseenCompletionStatus } from "@/lib/conversation-list";
 import { omitSubmitLock, type SubmitLock } from "@/lib/submit-lock";
 
 export type RightPanel = "assistant" | "today";
-
-function omitUnseenCompletion(
-  unseenCompletions: Record<string, UnseenCompletionStatus>,
-  id: string | null,
-): Record<string, UnseenCompletionStatus> {
-  if (id == null || !(id in unseenCompletions)) return unseenCompletions;
-  const next = { ...unseenCompletions };
-  delete next[id];
-  return next;
-}
 
 interface AssistantStore {
   activePanel: RightPanel | null;
@@ -30,12 +19,6 @@ interface AssistantStore {
    * opening the panel always resumes the last chat.
    */
   showConversationList: boolean;
-  /**
-   * Completions/failures on chats the user was not looking at. The list renders
-   * these as its Unread section, so an entry survives until that chat is opened
-   * (or deleted) rather than being dropped when the list is shown.
-   */
-  unseenCompletions: Record<string, UnseenCompletionStatus>;
   /**
    * In-flight sends keyed by conversation id so switching chats or opening the
    * list does not unlock the composer before the user message and turn status
@@ -64,9 +47,6 @@ interface AssistantStore {
   setActiveConversation: (id: string | null) => void;
   /** Open a chat and leave the list. Used by the list, new-chat, and command palette. */
   openConversation: (id: string) => void;
-  markUnseenCompletion: (id: string, status: UnseenCompletionStatus) => void;
-  /** Drops the unread marker without opening the chat — used when it is deleted. */
-  clearUnseenCompletion: (id: string) => void;
   setSubmitLock: (id: string, lock: SubmitLock) => void;
   clearSubmitLock: (id: string) => void;
   setModel: (model: AssistantModelId) => void;
@@ -86,7 +66,6 @@ export const useAssistantStore = create<AssistantStore>()(
       activePanel: null,
       activeConversationId: null,
       showConversationList: false,
-      unseenCompletions: {},
       submitLocks: {},
       model: DEFAULT_ASSISTANT_MODEL,
       reasoningEffort: null,
@@ -107,20 +86,12 @@ export const useAssistantStore = create<AssistantStore>()(
           };
         }),
       openConversationList: () => set({ showConversationList: true }),
-      setActiveConversation: (id) =>
-        set((s) => ({
-          activeConversationId: id,
-          unseenCompletions: omitUnseenCompletion(s.unseenCompletions, id),
-        })),
+      setActiveConversation: (id) => set({ activeConversationId: id }),
       openConversation: (id) =>
-        set((s) => ({
+        set({
           activeConversationId: id,
           showConversationList: false,
-          unseenCompletions: omitUnseenCompletion(s.unseenCompletions, id),
-        })),
-      markUnseenCompletion: (id, status) =>
-        set((s) => ({ unseenCompletions: { ...s.unseenCompletions, [id]: status } })),
-      clearUnseenCompletion: (id) => set((s) => ({ unseenCompletions: omitUnseenCompletion(s.unseenCompletions, id) })),
+        }),
       setSubmitLock: (id, lock) => set((s) => ({ submitLocks: { ...s.submitLocks, [id]: lock } })),
       clearSubmitLock: (id) => set((s) => ({ submitLocks: omitSubmitLock(s.submitLocks, id) })),
       setModel: (model) => set({ model }),
@@ -154,7 +125,6 @@ export const useAssistantStore = create<AssistantStore>()(
         return {
           ...state,
           showConversationList: false,
-          unseenCompletions: {},
           submitLocks: {},
           model: resolveAssistantModelId(state.model),
           reasoningEffort: isAssistantReasoningEffort(state.reasoningEffort) ? state.reasoningEffort : null,

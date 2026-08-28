@@ -262,6 +262,7 @@ export class UserDbServer extends Server<Env> {
           title: "",
           createdAt: now,
           updatedAt: now,
+          lastReadAt: 0,
           model: input.model,
           reasoningEffort: input.reasoningEffort,
           totalCost: 0,
@@ -298,7 +299,7 @@ export class UserDbServer extends Server<Env> {
 
   async updateConversation(
     id: string,
-    payload: Partial<Omit<ConversationItem, "id" | "tombstone">> & { updatedAt?: number },
+    payload: Partial<Omit<ConversationItem, "id" | "tombstone" | "lastReadAt">> & { updatedAt?: number },
   ): Promise<void> {
     this.syncDb.enqueueEvent(
       this.syncDb.createEvent({

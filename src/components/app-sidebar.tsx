@@ -50,6 +50,7 @@ import {
 import { useSidebarStore } from "@/lib/sidebar-store";
 import { type Theme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
+import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { useDb, useDbState } from "@/user-db/user-db";
@@ -215,7 +216,7 @@ function SidebarPanelRow({ collapsed, onNavigate }: { collapsed: boolean; onNavi
   const isDesktop = useIsDesktop();
   const location = useSidebarLocation();
   const activePanel = useAssistantStore((s) => s.activePanel);
-  const togglePanel = useAssistantStore((s) => s.togglePanel);
+  const { togglePanel } = useAssistantNavigation();
   const assistantEnabled = useAssistantEnabled();
 
   return (
@@ -483,7 +484,7 @@ function MobileSidebar() {
 export function AppSidebar() {
   const collapsed = useSidebarStore((s) => s.collapsed);
   const toggle = useSidebarStore((s) => s.toggle);
-  const togglePanel = useAssistantStore((s) => s.togglePanel);
+  const { togglePanel } = useAssistantNavigation();
   const assistantEnabled = useAssistantEnabled();
 
   useHotkey(TOGGLE_SIDEBAR_HOTKEY, (e) => {

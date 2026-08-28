@@ -443,6 +443,14 @@ const migrations = createMigrations((b) => ({
       idx.on("_conversation_message").columns(["conversationId", "seq"]).where(sql.ref("tombstone"), "=", 0),
     ),
   ],
+  25: [
+    b.addColumn({
+      table: "_conversation",
+      column: "lastReadAt",
+      type: "integer",
+      defaultValue: null,
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -571,11 +579,19 @@ export const syncDbSchema = defineSyncSchema({
       .describe(
         "Amount is in the account currency: negative for expenses and transfer sources, positive for income, either sign for adjustments. Transfers set counterparty fields; otherwise counterpartyAccountId is empty and counterpartyAmount is null.",
       ),
+    // lastReadAt is a client receipt on an otherwise agent-authored row. Per-column
+    // LWW keeps it from clobbering turnStatus/updatedAt; writes must be "any" or
+    // those receipts never leave the tab that wrote them.
     conversation: t.table(
       {
         title: t.text().default(""),
         createdAt: t.integer(),
         updatedAt: t.integer(),
+        lastReadAt: t
+          .integer()
+          .nullable()
+          .default(null)
+          .describe("Client read receipt. Null means none: never unread. Unread when a receipt is behind updatedAt."),
         model: t.text().nullable().default(null).describe("Fixed after the first message."),
         reasoningEffort: t.text().nullable().default(null).describe("Fixed after the first message."),
         totalCost: t.real().default(0).describe("Cumulative cost in USD."),
@@ -583,7 +599,7 @@ export const syncDbSchema = defineSyncSchema({
         turnStatus: t.enum(["idle", "running", "error"]).default("idle"),
         turnError: t.text().default(""),
       },
-      { writes: "server", exportImport: "ignore" },
+      { writes: "any", exportImport: "ignore" },
     ),
     conversation_message: t
       .table(

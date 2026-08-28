@@ -5,7 +5,7 @@ export const userDbSchemaDocContext: SchemaDocContext = {
     "# User database schema",
     "",
     "This is a personal productivity app for notes, tasks, habits, financial accounts, and transactions.",
-    "All `id` columns are UUIDs and all timestamps (`createdAt`, `updatedAt`, `effectiveAt`)",
+    "All `id` columns are UUIDs and all timestamps (`createdAt`, `updatedAt`, `lastReadAt`, `effectiveAt`)",
     "are unix epoch milliseconds.",
     "When using mutateDb, omit ids for create events; the tool generates them and returns createdIds.",
   ].join("\n"),

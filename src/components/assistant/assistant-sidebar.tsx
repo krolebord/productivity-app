@@ -61,6 +61,8 @@ import {
   shouldClearComposerAfterSubmit,
   shouldClearSubmitLockOnError,
 } from "@/lib/submit-lock";
+import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
+import { useCatchUpConversationLastReadAt } from "@/lib/use-catch-up-conversation-last-read";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { orpc } from "@/orpc/orpc-client";
@@ -759,8 +761,7 @@ function ConversationView({
   onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
 }) {
   const auth = useAuth();
-  const closePanel = useAssistantStore((s) => s.closePanel);
-  const openConversation = useAssistantStore((s) => s.openConversation);
+  const { closePanel, openConversation } = useAssistantNavigation();
   const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agentIdCopied, setAgentIdCopied] = useState(false);
   const conversation = target.kind === "persisted" ? target.conversation : null;
@@ -1206,8 +1207,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
 
 /** Opens the assistant with an unpersisted conversation draft. */
 export function useNewConversation() {
-  const openPanel = useAssistantStore((s) => s.openPanel);
-  const openConversation = useAssistantStore((s) => s.openConversation);
+  const { openPanel, openConversation } = useAssistantNavigation();
 
   return useCallback(() => {
     openPanel("assistant");
@@ -1216,6 +1216,7 @@ export function useNewConversation() {
 }
 
 export function AssistantSidebar() {
+  const catchUp = useCatchUpConversationLastReadAt();
   const activeConversationId = useAssistantStore((s) => s.activeConversationId);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
   const showConversationList = useAssistantStore((s) => s.showConversationList);
@@ -1238,10 +1239,10 @@ export function AssistantSidebar() {
   async function deleteConversation(conversation: { id: string }) {
     await orpc.assistant.deleteConversation.call({ conversationId: conversation.id });
     useAssistantStore.getState().clearSubmitLock(conversation.id);
-    useAssistantStore.getState().clearUnseenCompletion(conversation.id);
     if (conversation.id === selectedConversationId) {
       const next = conversations.find((row) => row.id !== conversation.id);
       setActiveConversation(next?.id ?? generateId());
+      if (!showConversationList && next) catchUp(next.id);
     }
   }
 
