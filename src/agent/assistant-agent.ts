@@ -12,10 +12,12 @@ import {
 } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { withTracing } from "@posthog/ai";
 import { type AiMutationResult, type AiQueryResult, createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
 import { tavilyExtract, tavilySearch } from "@tavily/ai-sdk";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
+import { PostHog } from "posthog-node";
 import { z } from "zod";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from "../lib/assistant-files";
 import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
@@ -154,6 +156,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   };
 
   private turnNextSeq = 0;
+  private posthogClient?: PostHog;
 
   private reserveFileIndices(count: number): number {
     const current = this.state.fileCounter ?? 0;
@@ -161,12 +164,23 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     return current + 1;
   }
 
+  private getPosthogClient(): PostHog {
+    if (!this.posthogClient) {
+      this.posthogClient = new PostHog(this.env.POSTHOG_API_KEY, {
+        host: this.env.POSTHOG_HOST,
+        flushAt: 1,
+        flushInterval: 0,
+      });
+    }
+    return this.posthogClient;
+  }
+
   getModel(modelId: AssistantModelId = DEFAULT_ASSISTANT_MODEL, reasoningEffortOverride?: unknown): LanguageModel {
     const openrouter = createOpenRouter({
       apiKey: this.env.OPENROUTER_API_KEY,
     });
     const reasoningEffort = resolveAssistantReasoningEffort(modelId, reasoningEffortOverride);
-    return openrouter.chat(modelId, {
+    const model = openrouter.chat(modelId, {
       usage: { include: true },
       ...(reasoningEffort
         ? {
@@ -174,6 +188,11 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
             reasoning: { effort: reasoningEffort as "xhigh" | "high" | "medium" | "low" | "minimal" | "none" },
           }
         : {}),
+    });
+    return withTracing(model, this.getPosthogClient(), {
+      posthogDistinctId: this.getUserId(),
+      posthogTraceId: crypto.randomUUID(),
+      posthogProperties: { $ai_session_id: this.getConversationId() },
     });
   }
 
@@ -312,6 +331,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   }
 
   async onStepEnd(ctx: StepContext): Promise<void> {
+    this.ctx.waitUntil(this.getPosthogClient().flush());
     const usage = (
       ctx.providerMetadata as { openrouter?: { usage?: { cost?: number; totalTokens?: number } } } | undefined
     )?.openrouter?.usage;
@@ -787,6 +807,14 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     return await getServerByName(this.env.UserDbServer, userDbName, {
       locationHint: "weur",
     });
+  }
+
+  private getUserId(): string {
+    const separatorIndex = this.name.indexOf(":");
+    if (separatorIndex === -1) {
+      throw new Error(`Unexpected agent name without a user-db prefix: ${this.name}`);
+    }
+    return this.name.slice("user-".length, separatorIndex);
   }
 
   private getConversationId(): string {
