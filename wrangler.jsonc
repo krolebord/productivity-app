@@ -22,7 +22,8 @@
   // VITE_APP_URL via `wrangler deploy --var` so deployments run in production mode.
   "vars": {
     "MODE": "development",
-    "VITE_APP_URL": "http://localhost:3301"
+    "VITE_APP_URL": "http://localhost:3301",
+    "POSTHOG_HOST": "https://eu.i.posthog.com"
   },
   "worker_loaders": [
     {
