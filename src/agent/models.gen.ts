@@ -199,8 +199,8 @@ export const ASSISTANT_MODELS = [
     reasoningEffort: "medium"
   },
   {
-    id: "meta/muse-spark-1.2-contributor",
-    label: "Muse Spark 1.2",
+    id: "meta/muse-spark-1.3-contributor",
+    label: "Muse Spark 1.3",
     inputModalities: [
       "text",
       "image",

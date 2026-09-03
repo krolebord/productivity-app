@@ -37,7 +37,7 @@ export const SUPPORTED_MODELS = [
   { id: "x-ai/grok-4.5", name: "Grok 4.5" },
   { id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B" },
   { id: "google/gemini-3.7-flash", name: "Gemini 3.7 Flash" },
-  { id: "meta/muse-spark-1.2-contributor", name: "Muse Spark 1.2" },
+  { id: "meta/muse-spark-1.3-contributor", name: "Muse Spark 1.3" },
   // Legacy — kept resolvable for existing conversations, hidden from the picker.
   { id: "stealth/ox-alpha", name: "Ox Alpha", selectable: false },
   { id: "xiaomi/mimo-v2.5", name: "MiMo V2.5", selectable: false },
