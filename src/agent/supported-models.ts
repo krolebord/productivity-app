@@ -13,6 +13,8 @@ import type { AssistantReasoningEffort } from "./models";
  * - `default`              marks the default model. Exactly one entry must set this.
  * - `selectable`           set `false` to keep a model available (e.g. legacy support)
  *                          but hidden from the model picker.
+ * - `aliases`              previous ids that resolve to this model. Use when a slug is
+ *                          retired from OpenRouter and should no longer be a catalog entry.
  * - `reasoningEffort`      override the provider's default effort for this model.
  * - `selectableReasoning`  force the per-conversation effort toggle on/off. When omitted
  *                          it is inferred: a model is toggleable when it exposes more than
@@ -23,13 +25,14 @@ export type SupportedModel = {
   name?: string;
   default?: boolean;
   selectable?: boolean;
+  aliases?: readonly string[];
   reasoningEffort?: AssistantReasoningEffort;
   selectableReasoning?: boolean;
 };
 
 export const SUPPORTED_MODELS = [
-  { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash" },
-  { id: "deepseek/deepseek-v4-flash-0731", name: "DeepSeek V4 Flash", default: true },
+  { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash", aliases: ["stealth/ox-alpha"] },
+  { id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", default: true },
   { id: "openai/gpt-5.6-luna", name: "GPT-5.6 Luna", reasoningEffort: "high" },
   { id: "deepseek/deepseek-v4-pro-0813", name: "DeepSeek V4 Pro" },
   { id: "openai/gpt-5.6-terra", name: "GPT-5.6 Terra" },
@@ -39,7 +42,7 @@ export const SUPPORTED_MODELS = [
   { id: "google/gemini-3.7-flash", name: "Gemini 3.7 Flash" },
   { id: "meta/muse-spark-1.3-contributor", name: "Muse Spark 1.3" },
   // Legacy — kept resolvable for existing conversations, hidden from the picker.
-  { id: "stealth/ox-alpha", name: "Ox Alpha", selectable: false },
+  { id: "deepseek/deepseek-v4-flash-0731", name: "DeepSeek V4 Flash", selectable: false },
   { id: "xiaomi/mimo-v2.5", name: "MiMo V2.5", selectable: false },
   { id: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro (preview)", selectable: false },
   { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash (preview)", selectable: false },

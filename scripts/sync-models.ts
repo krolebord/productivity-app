@@ -2,8 +2,8 @@
  * Scrapes model metadata from OpenRouter for the models declared in
  * `src/agent/supported-models.ts` and writes a ready-to-use `src/agent/models.gen.ts`.
  *
- * Editorial fields (name, selectable, reasoningEffort override, default) come from the
- * seed; factual fields (pricing, input modalities, supported reasoning efforts,
+ * Editorial fields (name, selectable, aliases, reasoningEffort override, default) come
+ * from the seed; factual fields (pricing, input modalities, supported reasoning efforts,
  * intelligence score) come from OpenRouter. On any drift, OpenRouter wins silently.
  *
  * Run with `pnpm sync:models`.
@@ -73,6 +73,7 @@ type GeneratedModel = {
   reasoningEffort?: ReasoningEffort;
   selectableReasoning?: boolean;
   selectable?: boolean;
+  aliases?: string[];
 };
 
 function buildModel(seed: SupportedModel, remote: OpenRouterModel): GeneratedModel {
@@ -102,8 +103,35 @@ function buildModel(seed: SupportedModel, remote: OpenRouterModel): GeneratedMod
 
   if (seed.selectableReasoning !== undefined) model.selectableReasoning = seed.selectableReasoning;
   if (seed.selectable === false) model.selectable = false;
+  if (seed.aliases && seed.aliases.length > 0) model.aliases = [...seed.aliases];
 
   return model;
+}
+
+function defaultModelId(seeds: readonly SupportedModel[]): string {
+  const defaults = seeds.filter((m) => m.default);
+  const selected = defaults[0];
+  if (defaults.length !== 1 || !selected) {
+    throw new Error(`Exactly one model must be marked \`default\` in supported-models.ts (found ${defaults.length}).`);
+  }
+  return selected.id;
+}
+
+function validateAliases(seeds: readonly SupportedModel[]): void {
+  const catalogIds = new Set(seeds.map((seed) => seed.id));
+  const claimed = new Map<string, string>();
+  for (const seed of seeds) {
+    for (const alias of seed.aliases ?? []) {
+      if (catalogIds.has(alias)) {
+        throw new Error(`Alias ${JSON.stringify(alias)} on ${seed.id} collides with a catalog id.`);
+      }
+      const existing = claimed.get(alias);
+      if (existing) {
+        throw new Error(`Alias ${JSON.stringify(alias)} is claimed by both ${existing} and ${seed.id}.`);
+      }
+      claimed.set(alias, seed.id);
+    }
+  }
 }
 
 function serialize(models: GeneratedModel[], defaultModelId: string): string {
@@ -129,15 +157,13 @@ async function main() {
     throw new Error(`Models not found on OpenRouter:\n  ${missing.join("\n  ")}`);
   }
 
-  const defaults = seeds.filter((m) => m.default);
-  if (defaults.length !== 1) {
-    throw new Error(`Exactly one model must be marked \`default\` in supported-models.ts (found ${defaults.length}).`);
-  }
+  validateAliases(seeds);
+  const defaultId = defaultModelId(seeds);
 
   // biome-ignore lint/style/noNonNullAssertion: presence checked above.
   const models = seeds.map((seed) => buildModel(seed, remote.get(seed.id)!));
 
-  await writeFile(OUTPUT_PATH, serialize(models, defaults[0].id), "utf8");
+  await writeFile(OUTPUT_PATH, serialize(models, defaultId), "utf8");
   console.log(`Wrote ${models.length} models to ${OUTPUT_PATH}`);
 }
 

@@ -12,29 +12,33 @@ export const ASSISTANT_MODELS = [
       "video"
     ],
     pricing: {
-      inputPerMillion: 0.075,
-      outputPerMillion: 0.25,
-      cacheReadPerMillion: 0.015
+      inputPerMillion: 0.15,
+      outputPerMillion: 0.5,
+      cacheReadPerMillion: 0.03
     },
+    intelligenceScore: 41.9,
     supportedReasoningEfforts: [
       "low",
       "high",
       "max"
     ],
-    reasoningEffort: "max"
+    reasoningEffort: "max",
+    aliases: [
+      "stealth/ox-alpha"
+    ]
   },
   {
-    id: "deepseek/deepseek-v4-flash-0731",
-    label: "DeepSeek V4 Flash",
+    id: "deepseek/deepseek-v4.1-flash",
+    label: "DeepSeek V4.1 Flash",
     inputModalities: [
-      "text"
+      "text",
+      "image"
     ],
     pricing: {
-      inputPerMillion: 0.06,
-      outputPerMillion: 0.12,
-      cacheReadPerMillion: 0.012
+      inputPerMillion: 0.15,
+      outputPerMillion: 0.6,
+      cacheReadPerMillion: 0.003
     },
-    intelligenceScore: 51.8,
     supportedReasoningEfforts: [
       "low",
       "high",
@@ -55,7 +59,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 1.2,
       cacheReadPerMillion: 0.02
     },
-    intelligenceScore: 52.3,
+    intelligenceScore: 37.5,
     supportedReasoningEfforts: [
       "none",
       "low",
@@ -73,11 +77,11 @@ export const ASSISTANT_MODELS = [
       "text"
     ],
     pricing: {
-      inputPerMillion: 1.32,
-      outputPerMillion: 3.96,
-      cacheReadPerMillion: 0.044
+      inputPerMillion: 0.57948,
+      outputPerMillion: 1.73844,
+      cacheReadPerMillion: 0.018438
     },
-    intelligenceScore: 53.2,
+    intelligenceScore: 36.3,
     supportedReasoningEfforts: [
       "low",
       "high",
@@ -98,7 +102,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 12,
       cacheReadPerMillion: 0.2
     },
-    intelligenceScore: 56.6,
+    intelligenceScore: 42.3,
     supportedReasoningEfforts: [
       "none",
       "low",
@@ -122,7 +126,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 10,
       cacheReadPerMillion: 0.2
     },
-    intelligenceScore: 60.9,
+    intelligenceScore: 47.1,
     supportedReasoningEfforts: [
       "none",
       "low",
@@ -146,7 +150,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 6,
       cacheReadPerMillion: 0.3
     },
-    intelligenceScore: 55.8,
+    intelligenceScore: 39.1,
     supportedReasoningEfforts: [
       "low",
       "medium",
@@ -163,11 +167,11 @@ export const ASSISTANT_MODELS = [
       "video"
     ],
     pricing: {
-      inputPerMillion: 0.425,
-      outputPerMillion: 2.55,
+      inputPerMillion: 0.42,
+      outputPerMillion: 3,
       cacheReadPerMillion: 0.085
     },
-    intelligenceScore: 52,
+    intelligenceScore: 33.9,
     supportedReasoningEfforts: [
       "low",
       "medium",
@@ -186,11 +190,11 @@ export const ASSISTANT_MODELS = [
       "video"
     ],
     pricing: {
-      inputPerMillion: 0.375,
-      outputPerMillion: 1.875,
-      cacheReadPerMillion: 0.0375
+      inputPerMillion: 0.75,
+      outputPerMillion: 3.75,
+      cacheReadPerMillion: 0.075
     },
-    intelligenceScore: 56,
+    intelligenceScore: 39.4,
     supportedReasoningEfforts: [
       "low",
       "medium",
@@ -217,28 +221,29 @@ export const ASSISTANT_MODELS = [
       "low",
       "medium",
       "high",
-      "xhigh"
+      "xhigh",
+      "max"
     ],
     reasoningEffort: "medium"
   },
   {
-    id: "stealth/ox-alpha",
-    label: "Ox Alpha",
+    id: "deepseek/deepseek-v4-flash-0731",
+    label: "DeepSeek V4 Flash",
     inputModalities: [
-      "text",
-      "image",
-      "video"
+      "text"
     ],
     pricing: {
-      inputPerMillion: 0,
-      outputPerMillion: 0
+      inputPerMillion: 0.065,
+      outputPerMillion: 0.18,
+      cacheReadPerMillion: 0.016
     },
+    intelligenceScore: 34.5,
     supportedReasoningEfforts: [
       "low",
       "high",
       "max"
     ],
-    reasoningEffort: "max",
+    reasoningEffort: "high",
     selectable: false
   },
   {
@@ -255,7 +260,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 0.28,
       cacheReadPerMillion: 0.0028
     },
-    intelligenceScore: 38,
+    intelligenceScore: 22.3,
     selectable: false
   },
   {
@@ -269,7 +274,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 1.74,
       cacheReadPerMillion: 0.0725
     },
-    intelligenceScore: 45.3,
+    intelligenceScore: 30.9,
     supportedReasoningEfforts: [
       "high",
       "xhigh"
@@ -284,11 +289,11 @@ export const ASSISTANT_MODELS = [
       "text"
     ],
     pricing: {
-      inputPerMillion: 0.0826,
-      outputPerMillion: 0.1652,
-      cacheReadPerMillion: 0.01652
+      inputPerMillion: 0.08554,
+      outputPerMillion: 0.17108,
+      cacheReadPerMillion: 0.017108
     },
-    intelligenceScore: 42.1,
+    intelligenceScore: 24.8,
     supportedReasoningEfforts: [
       "high",
       "xhigh"
@@ -307,7 +312,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 0.87,
       cacheReadPerMillion: 0.0036
     },
-    intelligenceScore: 42.9,
+    intelligenceScore: 26.4,
     selectable: false
   },
   {
@@ -323,7 +328,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 30,
       cacheReadPerMillion: 0.5
     },
-    intelligenceScore: 56.3,
+    intelligenceScore: 38.6,
     supportedReasoningEfforts: [
       "none",
       "low",
@@ -347,7 +352,7 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 4.5,
       cacheReadPerMillion: 0.075
     },
-    intelligenceScore: 40.9,
+    intelligenceScore: 24.6,
     supportedReasoningEfforts: [
       "none",
       "low",
@@ -394,9 +399,9 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 1.2,
       cacheReadPerMillion: 0.06
     },
-    intelligenceScore: 45.4,
+    intelligenceScore: 29.6,
     selectable: false
   }
 ] satisfies AssistantModel[];
 
-export const DEFAULT_ASSISTANT_MODEL: AssistantModelId = "deepseek/deepseek-v4-flash-0731";
+export const DEFAULT_ASSISTANT_MODEL: AssistantModelId = "deepseek/deepseek-v4.1-flash";

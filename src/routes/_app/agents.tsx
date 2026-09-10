@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bot, Brain, Workflow } from "lucide-react";
 import { Cell, Pie, PieChart } from "recharts";
 import { z } from "zod";
-import { ASSISTANT_MODELS } from "@/agent/models";
+import { getAssistantModel } from "@/agent/models";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
@@ -31,7 +31,7 @@ function formatCost(cost: number) {
 
 function modelLabel(modelId: string | null) {
   if (!modelId) return "No model";
-  return ASSISTANT_MODELS.find((model) => model.id === modelId)?.label ?? modelId;
+  return getAssistantModel(modelId)?.label ?? modelId;
 }
 
 function StatCard({ label, value, detail }: { label: string; value: string; detail?: string }) {
@@ -90,8 +90,9 @@ function AgentsPage() {
   const modelRows = Object.values(
     scopedConversations.reduce<Record<string, { model: string | null; conversations: number; cost: number }>>(
       (groups, conversation) => {
-        const key = conversation.model ?? "__none";
-        const current = groups[key] ?? { model: conversation.model, conversations: 0, cost: 0 };
+        const model = conversation.model ? (getAssistantModel(conversation.model)?.id ?? conversation.model) : null;
+        const key = model ?? "__none";
+        const current = groups[key] ?? { model, conversations: 0, cost: 0 };
         groups[key] = {
           ...current,
           conversations: current.conversations + 1,

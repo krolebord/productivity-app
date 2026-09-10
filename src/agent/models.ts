@@ -42,6 +42,8 @@ export type AssistantModel = {
   selectableReasoning?: boolean;
   /** Hidden from the picker when `false`; still resolvable. Defaults to `true`. */
   selectable?: boolean;
+  /** Retired ids that resolve to this catalog entry. */
+  aliases?: readonly string[];
 };
 
 export { ASSISTANT_MODELS, DEFAULT_ASSISTANT_MODEL };
@@ -53,16 +55,23 @@ export const ASSISTANT_MODELS_BY_PRICE = [...SELECTABLE_ASSISTANT_MODELS].sort(
     a.pricing.inputPerMillion - b.pricing.inputPerMillion || a.pricing.outputPerMillion - b.pricing.outputPerMillion,
 );
 
+const ASSISTANT_MODELS_BY_ID = new Map<string, AssistantModel>(ASSISTANT_MODELS.map((model) => [model.id, model]));
+const ASSISTANT_MODEL_ALIAS_TO_ID = new Map<string, AssistantModelId>(
+  ASSISTANT_MODELS.flatMap((model) => (model.aliases ?? []).map((alias) => [alias, model.id])),
+);
+
 export function isAssistantModelId(value: unknown): value is AssistantModelId {
-  return typeof value === "string" && ASSISTANT_MODELS.some((model) => model.id === value);
+  return typeof value === "string" && ASSISTANT_MODELS_BY_ID.has(value);
 }
 
 export function resolveAssistantModelId(value: unknown): AssistantModelId {
-  return isAssistantModelId(value) ? value : DEFAULT_ASSISTANT_MODEL;
+  if (typeof value !== "string") return DEFAULT_ASSISTANT_MODEL;
+  return getAssistantModel(value)?.id ?? DEFAULT_ASSISTANT_MODEL;
 }
 
-export function getAssistantModel(id: AssistantModelId): AssistantModel | undefined {
-  return ASSISTANT_MODELS.find((model) => model.id === id);
+export function getAssistantModel(id: string): AssistantModel | undefined {
+  const canonical = ASSISTANT_MODEL_ALIAS_TO_ID.get(id) ?? id;
+  return ASSISTANT_MODELS_BY_ID.get(canonical);
 }
 
 /** Reasoning efforts offered for a model, falling back to the full scale. */

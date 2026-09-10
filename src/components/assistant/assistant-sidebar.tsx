@@ -617,7 +617,7 @@ function ModelSelect({
   locked: boolean;
   onSelect: (model: AssistantModelId) => void;
 }) {
-  const active = ASSISTANT_MODELS.find((m) => m.id === model) ?? ASSISTANT_MODELS[0];
+  const active = getAssistantModel(model) ?? ASSISTANT_MODELS[0];
 
   if (locked) {
     return (
