@@ -17,13 +17,13 @@ import { useAccounts } from "@/lib/finance/accounts";
 import { useDisplayCurrency } from "@/lib/finance/display-currency";
 import {
   buildCashFlowSeries,
+  buildDailyBuckets,
+  buildDailySpendingSeries,
   buildNetWorthSeries,
   buildTrendBuckets,
   sumFlowTotals,
   sumNetWorth,
-  topCategories,
 } from "@/lib/finance/overview";
-import { CATEGORY_DONUT_PALETTE } from "@/lib/finance-ui";
 import { useCurrentDayKey } from "@/lib/use-current-day";
 import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
@@ -38,7 +38,6 @@ export const Route = createFileRoute("/_app/finances/")({
 });
 
 const RECENT_LIMIT = 12;
-const TOP_CATEGORIES = 6;
 const TREND_BUCKETS = 6;
 
 const CHART_TABS = [
@@ -114,15 +113,14 @@ function FinancesPage() {
       .groupBy(["type", "accountCurrency"]),
   );
 
-  const { data: categoryRows } = useDbQuery((db) =>
+  const { data: dailyExpenseRows } = useDbQuery((db) =>
     db
       .selectFrom("transaction_entry")
-      .select((eb) => ["category", "accountCurrency", eb.fn.sum<number>("amount").as("total")])
+      .select(["accountCurrency", "accountId", "amount", "category", "effectiveAt"])
       .where("type", "=", "expense")
       .where("effectiveAt", ">=", rangeStart)
       .where("effectiveAt", "<=", rangeEnd)
-      .$if(excludedIds.length > 0, (qb) => qb.where("accountId", "not in", excludedIds))
-      .groupBy(["category", "accountCurrency"]),
+      .$if(excludedIds.length > 0, (qb) => qb.where("accountId", "not in", excludedIds)),
   );
 
   // Trend charts need individual rows: the net worth series rewinds each one.
@@ -166,10 +164,12 @@ function FinancesPage() {
     excludedAccountIds,
     nowTs,
   });
-  const categoryData = topCategories(categoryRows, convert, TOP_CATEGORIES).map((slice, index) => ({
-    ...slice,
-    fill: CATEGORY_DONUT_PALETTE[index % CATEGORY_DONUT_PALETTE.length],
-  }));
+  const dailySpending = buildDailySpendingSeries({
+    rows: dailyExpenseRows,
+    buckets: buildDailyBuckets(rangeStart, rangeEnd),
+    convert,
+    excludedAccountIds,
+  });
 
   const accountMap = useMemo(() => new Map(allAccounts.map((account) => [account.id, account])), [allAccounts]);
 
@@ -178,7 +178,7 @@ function FinancesPage() {
       ? `Cash flow · last ${TREND_BUCKETS} ${trendPeriodLabel}`
       : activeChart === "networth"
         ? `Net worth · last ${TREND_BUCKETS} ${trendPeriodLabel}`
-        : `Spending by category · ${rangeLabel.toLowerCase()}`;
+        : `Spending per day · ${rangeLabel.toLowerCase()}`;
 
   const displayCurrencySelect = (className: string) => (
     <CurrencySelect
@@ -272,7 +272,7 @@ function FinancesPage() {
           <OverviewCharts
             activeChart={activeChart}
             baseCurrency={baseCurrency}
-            categoryData={categoryData}
+            dailySpending={dailySpending}
             flowData={flowData}
             hasAccounts={includedAccounts.length > 0}
             netWorthData={netWorthData}

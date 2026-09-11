@@ -1,4 +1,13 @@
-import { endOfDay, endOfMonth, format, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
+import {
+  eachDayOfInterval,
+  endOfDay,
+  endOfMonth,
+  format,
+  startOfDay,
+  startOfMonth,
+  subDays,
+  subMonths,
+} from "date-fns";
 import { convertAmount } from "@/lib/currency/convert";
 import { cycleStartOnOrBefore, type DashboardRangeMode } from "@/lib/dashboard-range-store";
 import { IMPORTANCE_TIERS, type ImportanceTier, type TransactionRow } from "@/lib/transactions";
@@ -54,6 +63,11 @@ export type LedgerRow = Pick<
   | "type"
 >;
 
+export type DailySpendingRow = Pick<
+  TransactionRow,
+  "accountCurrency" | "accountId" | "amount" | "category" | "effectiveAt"
+>;
+
 export type GroupedFlowRow = {
   type: string;
   accountCurrency: string;
@@ -77,6 +91,19 @@ export type CashFlowPoint = FlowTotals & { label: string } & Record<ImportanceTi
 export type NetWorthPoint = {
   label: string;
   netWorth: number;
+};
+
+export type DailyCategoryShare = {
+  name: string;
+  value: number;
+};
+
+export type DailySpendingPoint = {
+  /** Short tick on the axis — day-of-month, with the month on the first day and month boundaries. */
+  label: string;
+  dateLabel: string;
+  total: number;
+  categories: DailyCategoryShare[];
 };
 
 export function buildTrendBuckets({
@@ -172,6 +199,62 @@ export function topCategories(rows: readonly GroupedCategoryRow[], convert: Amou
   return Array.from(totals, ([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, limit);
+}
+
+/** One calendar day per bar for the selected dashboard window. */
+export function buildDailyBuckets(rangeStart: number, rangeEnd: number): TrendBucket[] {
+  return eachDayOfInterval({ start: new Date(rangeStart), end: new Date(rangeEnd) }).map((day, index) => ({
+    label: format(day, index === 0 || day.getDate() === 1 ? "MMM d" : "d"),
+    start: startOfDay(day).getTime(),
+    end: endOfDay(day).getTime(),
+  }));
+}
+
+export function buildDailySpendingSeries({
+  rows,
+  buckets,
+  convert,
+  excludedAccountIds,
+  categoryLimit = 5,
+}: {
+  rows: readonly DailySpendingRow[];
+  buckets: readonly TrendBucket[];
+  convert: AmountConverter;
+  excludedAccountIds: ReadonlySet<string>;
+  categoryLimit?: number;
+}): DailySpendingPoint[] {
+  return buckets.map((bucket) => {
+    const totals = new Map<string, number>();
+    let total = 0;
+
+    for (const row of rows) {
+      if (row.effectiveAt < bucket.start || row.effectiveAt > bucket.end) {
+        continue;
+      }
+      if (excludedAccountIds.has(row.accountId)) {
+        continue;
+      }
+      const value = convert(Number(row.amount), row.accountCurrency);
+      if (value === null) {
+        continue;
+      }
+      const magnitude = Math.abs(value);
+      total += magnitude;
+      const name = row.category || "Uncategorized";
+      totals.set(name, (totals.get(name) ?? 0) + magnitude);
+    }
+
+    const categories = Array.from(totals, ([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, categoryLimit);
+
+    return {
+      label: bucket.label,
+      dateLabel: format(new Date(bucket.start), "EEE, MMM d"),
+      total,
+      categories,
+    };
+  });
 }
 
 function emptyTiers(): Record<ImportanceTier, number> {

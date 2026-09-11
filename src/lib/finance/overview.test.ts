@@ -3,9 +3,12 @@ import type { CurrencyRateItem } from "@/user-db/migrations";
 import {
   type AmountConverter,
   buildCashFlowSeries,
+  buildDailyBuckets,
+  buildDailySpendingSeries,
   buildNetWorthSeries,
   buildTrendBuckets,
   createAmountConverter,
+  type DailySpendingRow,
   type LedgerRow,
   sumFlowTotals,
   sumNetWorth,
@@ -23,6 +26,16 @@ const rateRow = {
   USD: 1,
   EUR: 0.5,
 } as unknown as CurrencyRateItem;
+
+function dailyRow(partial: Partial<DailySpendingRow> & Pick<DailySpendingRow, "effectiveAt">): DailySpendingRow {
+  return {
+    accountId: partial.accountId ?? "a1",
+    accountCurrency: partial.accountCurrency ?? "USD",
+    amount: partial.amount ?? -10,
+    category: partial.category ?? "Food",
+    ...partial,
+  };
+}
 
 function ledgerRow(partial: Partial<LedgerRow> & Pick<LedgerRow, "effectiveAt">): LedgerRow {
   return {
@@ -289,6 +302,65 @@ describe("buildNetWorthSeries", () => {
     });
 
     expect(series[0].netWorth).toBe(100);
+  });
+});
+
+describe("buildDailyBuckets", () => {
+  it("emits one bucket per calendar day and marks month boundaries", () => {
+    const start = new Date(2026, 6, 30, 8, 0, 0).getTime();
+    const end = new Date(2026, 7, 2, 18, 0, 0).getTime();
+    const buckets = buildDailyBuckets(start, end);
+
+    expect(buckets.map((b) => b.label)).toEqual(["Jul 30", "31", "Aug 1", "2"]);
+    expect(buckets[0].start).toBe(new Date(2026, 6, 30).getTime());
+    expect(buckets.at(-1)?.end).toBe(new Date(2026, 7, 2, 23, 59, 59, 999).getTime());
+  });
+});
+
+describe("buildDailySpendingSeries", () => {
+  const start = new Date(2026, 7, 1).getTime();
+  const end = new Date(2026, 7, 3, 23, 59, 59, 999).getTime();
+  const buckets = buildDailyBuckets(start, end);
+
+  it("totals each day and keeps the top categories", () => {
+    const series = buildDailySpendingSeries({
+      rows: [
+        dailyRow({ effectiveAt: start + 1, amount: -40, category: "Rent" }),
+        dailyRow({ effectiveAt: start + 2, amount: -10, category: "Food" }),
+        dailyRow({ effectiveAt: start + 3, amount: -8, category: "Coffee" }),
+        dailyRow({ effectiveAt: start + 4, amount: -6, category: "Taxi" }),
+        dailyRow({ effectiveAt: start + 5, amount: -4, category: "Snacks" }),
+        dailyRow({ effectiveAt: start + 6, amount: -2, category: "Tips" }),
+        dailyRow({ effectiveAt: start + 86_400_000, amount: -15, category: "Food" }),
+      ],
+      buckets,
+      convert: identity,
+      excludedAccountIds: new Set(),
+      categoryLimit: 5,
+    });
+
+    expect(series).toHaveLength(3);
+    expect(series[0].total).toBe(70);
+    expect(series[0].categories.map((c) => c.name)).toEqual(["Rent", "Food", "Coffee", "Taxi", "Snacks"]);
+    expect(series[1]).toMatchObject({ total: 15, categories: [{ name: "Food", value: 15 }] });
+    expect(series[2].total).toBe(0);
+    expect(series[2].categories).toEqual([]);
+  });
+
+  it("merges blank categories, converts currency, and skips excluded or unconvertible rows", () => {
+    const [point] = buildDailySpendingSeries({
+      rows: [
+        dailyRow({ effectiveAt: start + 1, amount: -10, category: "", accountCurrency: "EUR" }),
+        dailyRow({ effectiveAt: start + 2, amount: -900, category: "Rent", accountCurrency: "UAH" }),
+        dailyRow({ effectiveAt: start + 3, amount: -20, category: "Food", accountId: "hidden" }),
+      ],
+      buckets: [buckets[0]],
+      convert: createAmountConverter(rateRow, "USD"),
+      excludedAccountIds: new Set(["hidden"]),
+    });
+
+    expect(point.total).toBe(20);
+    expect(point.categories).toEqual([{ name: "Uncategorized", value: 20 }]);
   });
 });
 

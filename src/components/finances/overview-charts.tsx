@@ -3,11 +3,9 @@ import {
   Area,
   AreaChart,
   Bar,
+  BarChart,
   CartesianGrid,
-  Cell,
   ComposedChart,
-  Pie,
-  PieChart,
   Rectangle,
   type RectangleProps,
   XAxis,
@@ -22,17 +20,11 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { formatBalance, formatCompactNumber } from "@/lib/currency/format";
-import type { CashFlowPoint, NetWorthPoint } from "@/lib/finance/overview";
-import { FLOW_COLOR, IMPORTANCE_STYLE } from "@/lib/finance-ui";
+import type { CashFlowPoint, DailySpendingPoint, NetWorthPoint } from "@/lib/finance/overview";
+import { CATEGORY_DONUT_PALETTE, FLOW_COLOR, IMPORTANCE_STYLE } from "@/lib/finance-ui";
 import { IMPORTANCE_TIERS, type ImportanceTier } from "@/lib/transactions";
 
 export type OverviewChart = "flow" | "networth" | "spending";
-
-export type CategorySlice = {
-  name: string;
-  value: number;
-  fill: string;
-};
 
 const flowConfig = {
   income: { label: "Income", color: FLOW_COLOR.income },
@@ -46,6 +38,10 @@ const flowConfig = {
 
 const netWorthConfig = {
   netWorth: { label: "Net worth", color: FLOW_COLOR.netWorth },
+} satisfies ChartConfig;
+
+const spendingConfig = {
+  total: { label: "Spending", color: FLOW_COLOR.expense },
 } satisfies ChartConfig;
 
 function ChartEmptyState({ children }: { children: string }) {
@@ -155,6 +151,55 @@ function CashFlowTooltipContent({
   );
 }
 
+type DailySpendingTooltipPayload = {
+  payload?: DailySpendingPoint;
+};
+
+function DailySpendingTooltipContent({
+  active,
+  baseCurrency,
+  payload,
+}: {
+  active?: boolean;
+  baseCurrency: string;
+  payload?: DailySpendingTooltipPayload[];
+}) {
+  const row = payload?.[0]?.payload;
+  if (!active || !row) {
+    return null;
+  }
+
+  return (
+    <div className="grid min-w-48 items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+      <div className="font-medium">{row.dateLabel}</div>
+      {row.categories.length > 0 ? (
+        <div className="grid gap-1.5">
+          {row.categories.map((item, index) => (
+            <div key={item.name} className="flex items-center gap-2">
+              <div
+                className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                style={{ backgroundColor: CATEGORY_DONUT_PALETTE[index % CATEGORY_DONUT_PALETTE.length] }}
+              />
+              <span className="text-muted-foreground">{item.name}</span>
+              <span className="ml-auto font-medium font-mono text-foreground tabular-nums">
+                {formatBalance(item.value, baseCurrency)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-muted-foreground">No spending</div>
+      )}
+      <div className="mt-1 flex items-center gap-2 border-t pt-1.5">
+        <span className="text-muted-foreground">Total</span>
+        <span className="ml-auto font-medium font-mono text-foreground tabular-nums">
+          {formatBalance(row.total, baseCurrency)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The three overview charts. Imported lazily by the overview page so recharts
  * stays out of the finances entry chunk.
@@ -162,23 +207,18 @@ function CashFlowTooltipContent({
 export function OverviewCharts({
   activeChart,
   baseCurrency,
-  categoryData,
+  dailySpending,
   flowData,
   hasAccounts,
   netWorthData,
 }: {
   activeChart: OverviewChart;
   baseCurrency: string;
-  categoryData: CategorySlice[];
+  dailySpending: DailySpendingPoint[];
   flowData: CashFlowPoint[];
   hasAccounts: boolean;
   netWorthData: NetWorthPoint[];
 }) {
-  const categoryConfig: ChartConfig = {};
-  for (const slice of categoryData) {
-    categoryConfig[slice.name] = { label: slice.name, color: slice.fill };
-  }
-
   if (activeChart === "flow") {
     const hasData = flowData.some((point) => point.income !== 0 || point.expense !== 0);
     if (!hasData) {
@@ -233,21 +273,19 @@ export function OverviewCharts({
     );
   }
 
-  if (categoryData.length === 0) {
+  if (dailySpending.every((point) => point.total === 0)) {
     return <ChartEmptyState>No spending recorded in this period.</ChartEmptyState>;
   }
 
   return (
-    <ChartContainer config={categoryConfig} className="aspect-auto h-64 w-full">
-      <PieChart>
-        <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
-        <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={52}>
-          {categoryData.map((slice) => (
-            <Cell key={slice.name} fill={slice.fill} />
-          ))}
-        </Pie>
-        <ChartLegend content={<ChartLegendContent nameKey="name" />} />
-      </PieChart>
+    <ChartContainer config={spendingConfig} className="aspect-auto h-64 w-full">
+      <BarChart data={dailySpending} margin={{ left: 4, right: 12, top: 4 }}>
+        <CartesianGrid vertical={false} />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={16} />
+        <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={formatCompactNumber} />
+        <ChartTooltip content={<DailySpendingTooltipContent baseCurrency={baseCurrency} />} />
+        <Bar dataKey="total" fill="var(--color-total)" radius={4} />
+      </BarChart>
     </ChartContainer>
   );
 }
