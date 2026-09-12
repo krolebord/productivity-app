@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { RefreshCwIcon, SettingsIcon } from "lucide-react";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CurrencySelect } from "@/components/currency-select";
 import { DashboardRangeSelect } from "@/components/dashboard-range-select";
 import { AccountsOverviewCard } from "@/components/finances/accounts-overview-card";
@@ -23,7 +23,9 @@ import {
   buildTrendBuckets,
   sumFlowTotals,
   sumNetWorth,
+  trailingDailyRange,
 } from "@/lib/finance/overview";
+import { MAX_SPENDING_DAYS, spendingDaysForWidth } from "@/lib/finance/spending-days";
 import { useCurrentDayKey } from "@/lib/use-current-day";
 import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
@@ -66,18 +68,39 @@ function useDashboardRange(rangeMode: DashboardRangeMode, rangeDays: number, ran
   }, [rangeMode, rangeDays, rangeCycleDay, currentDayKey]);
 }
 
+function useColumnWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) {
+      return;
+    }
+
+    const update = () => setWidth(node.getBoundingClientRect().width);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, width };
+}
+
 function FinancesPage() {
   const { mode: rangeMode, days: rangeDays, cycleDay: rangeCycleDay } = useDashboardSettings();
   const { baseCurrency, setBaseCurrency, latestRate, convert, currencyOptions } = useDisplayCurrency();
   const { refreshRates, isRefreshing } = useRefreshRates();
   const [activeChart, setActiveChart] = useState<OverviewChart>("flow");
+  const { ref: columnRef, width: columnWidth } = useColumnWidth();
+  const spendingDays = spendingDaysForWidth(columnWidth);
 
   const {
     rangeStart,
     rangeEnd,
     prevRangeStart,
     prevRangeEnd,
-    rangeLabel,
     spanLabel,
     cardSuffix,
     prevLabel,
@@ -113,13 +136,16 @@ function FinancesPage() {
       .groupBy(["type", "accountCurrency"]),
   );
 
+  const spendingLookback = trailingDailyRange(MAX_SPENDING_DAYS, new Date(nowTs));
+  const spendingVisible = trailingDailyRange(spendingDays, new Date(nowTs));
+
   const { data: dailyExpenseRows } = useDbQuery((db) =>
     db
       .selectFrom("transaction_entry")
       .select(["accountCurrency", "accountId", "amount", "category", "effectiveAt"])
       .where("type", "=", "expense")
-      .where("effectiveAt", ">=", rangeStart)
-      .where("effectiveAt", "<=", rangeEnd)
+      .where("effectiveAt", ">=", spendingLookback.start)
+      .where("effectiveAt", "<=", spendingLookback.end)
       .$if(excludedIds.length > 0, (qb) => qb.where("accountId", "not in", excludedIds)),
   );
 
@@ -166,7 +192,7 @@ function FinancesPage() {
   });
   const dailySpending = buildDailySpendingSeries({
     rows: dailyExpenseRows,
-    buckets: buildDailyBuckets(rangeStart, rangeEnd),
+    buckets: buildDailyBuckets(spendingVisible.start, spendingVisible.end),
     convert,
     excludedAccountIds,
   });
@@ -178,7 +204,7 @@ function FinancesPage() {
       ? `Cash flow · last ${TREND_BUCKETS} ${trendPeriodLabel}`
       : activeChart === "networth"
         ? `Net worth · last ${TREND_BUCKETS} ${trendPeriodLabel}`
-        : `Spending per day · ${rangeLabel.toLowerCase()}`;
+        : `Spending per day · last ${spendingDays} days`;
 
   const displayCurrencySelect = (className: string) => (
     <CurrencySelect
@@ -190,7 +216,7 @@ function FinancesPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={columnRef} className="flex flex-col gap-6">
       <PageToolbar className="justify-between">
         <p className="font-medium text-sm">{spanLabel}</p>
         <div className="@xl:flex hidden flex-wrap items-center gap-2">

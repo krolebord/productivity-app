@@ -201,7 +201,15 @@ export function topCategories(rows: readonly GroupedCategoryRow[], convert: Amou
     .slice(0, limit);
 }
 
-/** One calendar day per bar for the selected dashboard window. */
+/** Inclusive trailing window ending today: `count` calendar days. */
+export function trailingDailyRange(count: number, now: Date): { start: number; end: number } {
+  return {
+    start: startOfDay(subDays(now, count - 1)).getTime(),
+    end: endOfDay(now).getTime(),
+  };
+}
+
+/** One calendar day per bar for a start/end window. */
 export function buildDailyBuckets(rangeStart: number, rangeEnd: number): TrendBucket[] {
   return eachDayOfInterval({ start: new Date(rangeStart), end: new Date(rangeEnd) }).map((day, index) => ({
     label: format(day, index === 0 || day.getDate() === 1 ? "MMM d" : "d"),

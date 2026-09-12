@@ -14,6 +14,7 @@ import {
   sumNetWorth,
   type TrendBucket,
   topCategories,
+  trailingDailyRange,
 } from "./overview";
 
 const identity: AmountConverter = (amount) => amount;
@@ -302,6 +303,16 @@ describe("buildNetWorthSeries", () => {
     });
 
     expect(series[0].netWorth).toBe(100);
+  });
+});
+
+describe("trailingDailyRange", () => {
+  it("covers count inclusive days ending today", () => {
+    const now = new Date(2026, 7, 4, 12, 0, 0);
+    const range = trailingDailyRange(7, now);
+
+    expect(range.start).toBe(new Date(2026, 6, 29).getTime());
+    expect(range.end).toBe(new Date(2026, 7, 4, 23, 59, 59, 999).getTime());
   });
 });
 
