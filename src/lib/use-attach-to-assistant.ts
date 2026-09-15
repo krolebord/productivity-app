@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { useAssistantStore } from "./assistant-store";
-import { useAssistantNavigation } from "./use-assistant-navigation";
+import { useAssistantSurface } from "./use-assistant-surface";
 
 /**
  * A row the user can pull into the assistant as context. `table` is the synced
@@ -69,16 +69,16 @@ function getServerSnapshot(): boolean {
 export function useAttachToAssistant() {
   const isContextKeyHeld = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const appendToInput = useAssistantStore((s) => s.appendToInput);
-  const { openPanel } = useAssistantNavigation();
+  const { open: openAssistant } = useAssistantSurface();
   const requestComposerFocus = useAssistantStore((s) => s.requestComposerFocus);
 
   const attach = useCallback(
     (ref: AttachRef) => {
       appendToInput(formatAttachToken(ref));
-      openPanel("assistant");
+      openAssistant();
       requestComposerFocus();
     },
-    [appendToInput, openPanel, requestComposerFocus],
+    [appendToInput, openAssistant, requestComposerFocus],
   );
 
   const getAttachClickHandler = useCallback(

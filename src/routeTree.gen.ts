@@ -14,6 +14,7 @@ import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountsRouteImport } from './routes/_app/accounts'
 import { Route as AppAgentsRouteImport } from './routes/_app/agents'
+import { Route as AppAssistantRouteImport } from './routes/_app/assistant'
 import { Route as AppCurrenciesRouteImport } from './routes/_app/currencies'
 import { Route as AppFinancesRouteImport } from './routes/_app/finances'
 import { Route as AppHabitsRouteImport } from './routes/_app/habits'
@@ -50,6 +51,11 @@ const AppAccountsRoute = AppAccountsRouteImport.update({
 const AppAgentsRoute = AppAgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppAssistantRoute = AppAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AppCurrenciesRoute = AppCurrenciesRouteImport.update({
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/accounts': typeof AppAccountsRoute
   '/agents': typeof AppAgentsRoute
+  '/assistant': typeof AppAssistantRoute
   '/currencies': typeof AppCurrenciesRoute
   '/finances': typeof AppFinancesRouteWithChildren
   '/habits': typeof AppHabitsRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/accounts': typeof AppAccountsRoute
   '/agents': typeof AppAgentsRoute
+  '/assistant': typeof AppAssistantRoute
   '/currencies': typeof AppCurrenciesRoute
   '/habits': typeof AppHabitsRoute
   '/integrations': typeof AppIntegrationsRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_app/accounts': typeof AppAccountsRoute
   '/_app/agents': typeof AppAgentsRoute
+  '/_app/assistant': typeof AppAssistantRoute
   '/_app/currencies': typeof AppCurrenciesRoute
   '/_app/finances': typeof AppFinancesRouteWithChildren
   '/_app/habits': typeof AppHabitsRoute
@@ -188,6 +197,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/agents'
+    | '/assistant'
     | '/currencies'
     | '/finances'
     | '/habits'
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/agents'
+    | '/assistant'
     | '/currencies'
     | '/habits'
     | '/integrations'
@@ -226,6 +237,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_app/accounts'
     | '/_app/agents'
+    | '/_app/assistant'
     | '/_app/currencies'
     | '/_app/finances'
     | '/_app/habits'
@@ -283,6 +295,13 @@ declare module '@tanstack/react-router' {
       path: '/agents'
       fullPath: '/agents'
       preLoaderRoute: typeof AppAgentsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/assistant': {
+      id: '/_app/assistant'
+      path: '/assistant'
+      fullPath: '/assistant'
+      preLoaderRoute: typeof AppAssistantRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/_app/currencies': {
@@ -407,6 +426,7 @@ const AppFinancesRouteWithChildren = AppFinancesRoute._addFileChildren(
 interface AppRouteRouteChildren {
   AppAccountsRoute: typeof AppAccountsRoute
   AppAgentsRoute: typeof AppAgentsRoute
+  AppAssistantRoute: typeof AppAssistantRoute
   AppCurrenciesRoute: typeof AppCurrenciesRoute
   AppFinancesRoute: typeof AppFinancesRouteWithChildren
   AppHabitsRoute: typeof AppHabitsRoute
@@ -421,6 +441,7 @@ interface AppRouteRouteChildren {
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppAccountsRoute: AppAccountsRoute,
   AppAgentsRoute: AppAgentsRoute,
+  AppAssistantRoute: AppAssistantRoute,
   AppCurrenciesRoute: AppCurrenciesRoute,
   AppFinancesRoute: AppFinancesRouteWithChildren,
   AppHabitsRoute: AppHabitsRoute,

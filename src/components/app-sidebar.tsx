@@ -51,6 +51,7 @@ import { useSidebarStore } from "@/lib/sidebar-store";
 import { type Theme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
+import { useAssistantSurface, useIsAssistantPage } from "@/lib/use-assistant-surface";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { useDb, useDbState } from "@/user-db/user-db";
@@ -210,7 +211,7 @@ function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
 /**
  * Today and the assistant are overlay panels, not destinations, so they sit
  * together above the nav list instead of being split between it and the footer.
- * On mobile there is no room for a side panel, so Today is a page there.
+ * On mobile there is no room for a side panel, so both are pages there.
  */
 function SidebarPanelRow({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const isDesktop = useIsDesktop();
@@ -239,19 +240,29 @@ function SidebarPanelRow({ collapsed, onNavigate }: { collapsed: boolean; onNavi
           onNavigate={onNavigate}
         />
       )}
-      {assistantEnabled && (
-        <SidebarPanel
-          icon={Sparkles}
-          label="Assistant"
-          isOpen={activePanel === "assistant"}
-          collapsed={collapsed}
-          hotkey={TOGGLE_ASSISTANT_HOTKEY}
-          onToggle={() => {
-            togglePanel("assistant");
-            onNavigate?.();
-          }}
-        />
-      )}
+      {assistantEnabled &&
+        (isDesktop ? (
+          <SidebarPanel
+            icon={Sparkles}
+            label="Assistant"
+            isOpen={activePanel === "assistant" || location.isPath("/assistant")}
+            collapsed={collapsed}
+            hotkey={TOGGLE_ASSISTANT_HOTKEY}
+            onToggle={() => {
+              togglePanel("assistant");
+              onNavigate?.();
+            }}
+          />
+        ) : (
+          <SidebarPanel
+            icon={Sparkles}
+            label="Assistant"
+            isOpen={location.isPath("/assistant")}
+            collapsed={collapsed}
+            target={{ to: "/assistant" }}
+            onNavigate={onNavigate}
+          />
+        ))}
     </div>
   );
 }
@@ -421,12 +432,17 @@ function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const hasIntegrationError = useIntegrationsHasError();
+  const isAssistantPage = useIsAssistantPage();
 
   useEffect(() => {
     return router.subscribe("onBeforeNavigate", () => setOpen(false));
   }, [router]);
 
   const openCommand = useCommandStore((s) => s.open);
+
+  // The assistant page pins its composer to the bottom, where the buttons would
+  // sit on top of it. Its header close button is the way back out.
+  if (isAssistantPage) return null;
 
   return (
     <>
@@ -484,7 +500,7 @@ function MobileSidebar() {
 export function AppSidebar() {
   const collapsed = useSidebarStore((s) => s.collapsed);
   const toggle = useSidebarStore((s) => s.toggle);
-  const { togglePanel } = useAssistantNavigation();
+  const { toggle: toggleAssistant } = useAssistantSurface();
   const assistantEnabled = useAssistantEnabled();
 
   useHotkey(TOGGLE_SIDEBAR_HOTKEY, (e) => {
@@ -497,7 +513,7 @@ export function AppSidebar() {
     TOGGLE_ASSISTANT_HOTKEY,
     (e) => {
       e.preventDefault();
-      togglePanel("assistant");
+      toggleAssistant();
     },
     { enabled: assistantEnabled },
   );

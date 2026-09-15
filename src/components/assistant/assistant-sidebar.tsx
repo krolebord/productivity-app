@@ -1,5 +1,4 @@
 import { generateId } from "@sqlite-sync/core";
-import { formatForDisplay } from "@tanstack/hotkeys";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -49,12 +48,12 @@ import {
   resolveAssistantModelId,
   resolveAssistantReasoningEffort,
 } from "@/agent/models";
+import { AssistantHeaderActions } from "@/components/assistant/assistant-header-actions";
 import { ChatsBackButton, ConversationList } from "@/components/assistant/conversation-list";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@/lib/assistant-files";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
 import { conversationTitle } from "@/lib/conversation-list";
-import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
 import {
   isSubmitLockHolding,
   type SubmitLock,
@@ -62,6 +61,7 @@ import {
   shouldClearSubmitLockOnError,
 } from "@/lib/submit-lock";
 import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
+import { useAssistantSurface } from "@/lib/use-assistant-surface";
 import { useCatchUpConversationLastReadAt } from "@/lib/use-catch-up-conversation-last-read";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
@@ -761,7 +761,7 @@ function ConversationView({
   onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
 }) {
   const auth = useAuth();
-  const { closePanel, openConversation } = useAssistantNavigation();
+  const { openConversation } = useAssistantNavigation();
   const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agentIdCopied, setAgentIdCopied] = useState(false);
   const conversation = target.kind === "persisted" ? target.conversation : null;
@@ -849,24 +849,7 @@ function ConversationView({
             </TooltipContent>
           </Tooltip>
         )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              aria-label="Close assistant"
-              aria-keyshortcuts={TOGGLE_ASSISTANT_HOTKEY}
-              onClick={closePanel}
-            >
-              <X className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            Close <span className="hidden md:inline">({formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)})</span>
-          </TooltipContent>
-        </Tooltip>
+        <AssistantHeaderActions />
       </div>
 
       <Suspense
@@ -1207,12 +1190,13 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
 
 /** Opens the assistant with an unpersisted conversation draft. */
 export function useNewConversation() {
-  const { openPanel, openConversation } = useAssistantNavigation();
+  const { openConversation } = useAssistantNavigation();
+  const { open } = useAssistantSurface();
 
   return useCallback(() => {
-    openPanel("assistant");
+    open();
     openConversation(generateId());
-  }, [openPanel, openConversation]);
+  }, [open, openConversation]);
 }
 
 export function AssistantSidebar() {

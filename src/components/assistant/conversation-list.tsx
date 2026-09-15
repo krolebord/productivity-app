@@ -1,7 +1,7 @@
 import { generateId } from "@sqlite-sync/core";
-import { formatForDisplay } from "@tanstack/hotkeys";
-import { ChevronLeft, CircleAlert, Loader2, PlusIcon, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronLeft, CircleAlert, Loader2, PlusIcon, Sparkles, Trash2 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { AssistantHeaderActions } from "@/components/assistant/assistant-header-actions";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -17,7 +17,6 @@ import {
   summarizeConversationActivity,
   turnElapsedLabel,
 } from "@/lib/conversation-list";
-import { TOGGLE_ASSISTANT_HOTKEY } from "@/lib/hotkeys";
 import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
 import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
@@ -261,7 +260,7 @@ export function ConversationList({
   activeId: string;
   onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
 }) {
-  const { closePanel, openConversation } = useAssistantNavigation();
+  const { openConversation } = useAssistantNavigation();
   const confirm = useConfirmDialogStore((s) => s.confirm);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -341,24 +340,7 @@ export function ConversationList({
           </TooltipTrigger>
           <TooltipContent side="bottom">New conversation</TooltipContent>
         </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              aria-label="Close assistant"
-              aria-keyshortcuts={TOGGLE_ASSISTANT_HOTKEY}
-              onClick={closePanel}
-            >
-              <X className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            Close <span className="hidden md:inline">({formatForDisplay(TOGGLE_ASSISTANT_HOTKEY)})</span>
-          </TooltipContent>
-        </Tooltip>
+        <AssistantHeaderActions />
       </div>
 
       {conversations.length === 0 ? (

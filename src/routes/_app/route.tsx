@@ -1,6 +1,5 @@
 import { ORPCError } from "@orpc/client";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { type ReactNode, useRef } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { AccountDialog } from "@/components/account-dialog";
 import { AppDndProvider } from "@/components/app-dnd";
@@ -19,11 +18,11 @@ import { SyncStatusMonitor } from "@/components/sync-status-monitor";
 import { TaskDialog } from "@/components/task-dialog";
 import { TodayPanel } from "@/components/today/today-panel";
 import { TransactionDialog } from "@/components/transaction-dialog";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { clearCachedAuth, readCachedAuth, writeCachedAuth } from "@/lib/auth-cache";
-import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
+import { useIsAssistantPage } from "@/lib/use-assistant-surface";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { cn } from "@/lib/utils";
 import { orpc } from "@/orpc/orpc-client";
 import { DbProvider, initUserDb } from "@/user-db/user-db";
 
@@ -64,28 +63,6 @@ export const Route = createFileRoute("/_app")({
   staleTime: 1000 * 60 * 5,
 });
 
-function MobileAssistantSheet({ open, children }: { open: boolean; children: ReactNode }) {
-  const { closePanel } = useAssistantNavigation();
-  return (
-    <Sheet
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) closePanel();
-      }}
-    >
-      {children}
-    </Sheet>
-  );
-}
-
-function RightRailContent({ panel }: { panel: "assistant" | "today" }) {
-  if (panel === "today") {
-    return <TodayPanel />;
-  }
-
-  return <AssistantSidebar />;
-}
-
 function RouteComponent() {
   const { db, auth } = Route.useLoaderData();
   const activePanel = useAssistantStore((s) => s.activePanel);
@@ -97,12 +74,10 @@ function RouteComponent() {
       : activePanel === "assistant" || activePanel === "today"
         ? activePanel
         : null;
-  const mobileAssistantOpen = resolvedPanel === "assistant" && !isDesktop;
-  const hasMountedMobileAssistant = useRef(false);
-  if (mobileAssistantOpen) {
-    hasMountedMobileAssistant.current = true;
-  }
-  const showRightPanel = resolvedPanel !== null && isDesktop;
+  // The assistant page renders the same view full width, so the rail stands down
+  // while it is up and the assistant never shows twice at once.
+  const isAssistantPage = useIsAssistantPage();
+  const showRightPanel = resolvedPanel !== null && isDesktop && !isAssistantPage;
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "assistant-layout" });
 
   return (
@@ -124,8 +99,9 @@ function RouteComponent() {
             onLayoutChanged={onLayoutChanged}
           >
             <Panel id="main" minSize="40%">
-              {/* pb clears the mobile FABs so the last rows stay readable. */}
-              <main className="h-full overflow-auto pb-36 md:pb-0">
+              {/* pb clears the mobile FABs so the last rows stay readable. The
+                  assistant page hides them and fills the height itself. */}
+              <main className={cn("h-full overflow-auto", !isAssistantPage && "pb-36 md:pb-0")}>
                 <Outlet />
               </main>
             </Panel>
@@ -133,27 +109,12 @@ function RouteComponent() {
               <>
                 <Separator className="w-px bg-border transition-colors data-[separator=active]:bg-ring data-[separator=hover]:bg-ring" />
                 <Panel id="assistant" defaultSize="400px" minSize="280px" maxSize="50%">
-                  <RightRailContent panel={resolvedPanel} />
+                  {resolvedPanel === "today" ? <TodayPanel /> : <AssistantSidebar />}
                 </Panel>
               </>
             )}
           </Group>
         </div>
-        {hasMountedMobileAssistant.current && !isDesktop && (
-          <MobileAssistantSheet open={mobileAssistantOpen}>
-            <SheetContent
-              side="right"
-              forceMount
-              className="inset-0 h-auto w-auto max-w-none gap-0 border-l-0 p-0 shadow-none data-[state=closed]:pointer-events-none data-[state=closed]:invisible md:hidden"
-            >
-              <SheetHeader className="sr-only">
-                <SheetTitle>Assistant</SheetTitle>
-                <SheetDescription>Chat with the assistant</SheetDescription>
-              </SheetHeader>
-              <RightRailContent panel="assistant" />
-            </SheetContent>
-          </MobileAssistantSheet>
-        )}
         <CommandPalette />
         <NoteDialog />
         <TaskDialog />
