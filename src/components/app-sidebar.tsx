@@ -51,7 +51,7 @@ import { useSidebarStore } from "@/lib/sidebar-store";
 import { type Theme, useThemeStore } from "@/lib/theme-store";
 import { useAssistantEnabled } from "@/lib/use-assistant-enabled";
 import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
-import { useAssistantSurface, useIsAssistantPage } from "@/lib/use-assistant-surface";
+import { useAssistantSurface } from "@/lib/use-assistant-surface";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { useDb, useDbState } from "@/user-db/user-db";
@@ -428,21 +428,23 @@ function SidebarContent({
   );
 }
 
+/**
+ * The floating buttons ride above --bottom-inset, which a page sets when it pins
+ * something to the bottom edge itself — the assistant composer (see useBottomInset).
+ */
+const FAB_BOTTOM = "bottom-[calc(1rem_+_var(--bottom-inset))]";
+const FAB_BOTTOM_STACKED = "bottom-[calc(4.75rem_+_var(--bottom-inset))]";
+
 function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const hasIntegrationError = useIntegrationsHasError();
-  const isAssistantPage = useIsAssistantPage();
 
   useEffect(() => {
     return router.subscribe("onBeforeNavigate", () => setOpen(false));
   }, [router]);
 
   const openCommand = useCommandStore((s) => s.open);
-
-  // The assistant page pins its composer to the bottom, where the buttons would
-  // sit on top of it. Its header close button is the way back out.
-  if (isAssistantPage) return null;
 
   return (
     <>
@@ -451,7 +453,7 @@ function MobileSidebar() {
           <Button
             variant="secondary"
             size="icon"
-            className="!rounded-full fixed bottom-4 left-4 z-40 size-11 shadow-lg md:hidden"
+            className={cn("!rounded-full fixed left-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM)}
             aria-label={hasIntegrationError ? "Open menu (integrations error)" : "Open menu"}
           >
             <Menu className="size-5" />
@@ -475,7 +477,7 @@ function MobileSidebar() {
       <Button
         variant="secondary"
         size="icon"
-        className="!rounded-full fixed right-4 bottom-[4.75rem] z-40 size-11 shadow-lg md:hidden"
+        className={cn("!rounded-full fixed right-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM_STACKED)}
         aria-label="Open today"
         asChild
       >
@@ -487,7 +489,7 @@ function MobileSidebar() {
       <Button
         variant="default"
         size="icon"
-        className="!rounded-full fixed right-4 bottom-4 z-40 size-11 shadow-lg md:hidden"
+        className={cn("!rounded-full fixed right-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM)}
         aria-label="Open command palette"
         onClick={openCommand}
       >

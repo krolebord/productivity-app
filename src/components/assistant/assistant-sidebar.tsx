@@ -61,7 +61,8 @@ import {
   shouldClearSubmitLockOnError,
 } from "@/lib/submit-lock";
 import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
-import { useAssistantSurface } from "@/lib/use-assistant-surface";
+import { useAssistantSurface, useIsAssistantPage } from "@/lib/use-assistant-surface";
+import { useBottomInset } from "@/lib/use-bottom-inset";
 import { useCatchUpConversationLastReadAt } from "@/lib/use-catch-up-conversation-last-read";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
@@ -869,6 +870,8 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   const conversation = target.kind === "persisted" ? target.conversation : null;
   const conversationId = target.kind === "persisted" ? target.conversation.id : target.conversationId;
   const isDesktop = useIsDesktop();
+  const isPage = useIsAssistantPage();
+  const composerRef = useBottomInset<HTMLFormElement>(isPage);
   const input = useAssistantStore((s) => s.inputDraft);
   const setInput = useAssistantStore((s) => s.setInputDraft);
   const submitLock = useAssistantStore((s) => s.submitLocks[conversationId]);
@@ -1046,7 +1049,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       <StickToBottom className="relative min-h-0 flex-1 overflow-y-auto" resize="smooth" initial="instant">
-        <StickToBottom.Content className="flex flex-col gap-4 p-3">
+        <StickToBottom.Content className={cn("flex flex-col gap-4 p-3", isPage && "max-md:pb-32")}>
           {messages.length === 0 && (
             <div className="flex flex-col items-center gap-4 py-12">
               <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
@@ -1087,6 +1090,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
       )}
 
       <form
+        ref={composerRef}
         className="flex shrink-0 flex-col gap-2 border-t p-3"
         onSubmit={(e) => {
           e.preventDefault();

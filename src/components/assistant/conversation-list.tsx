@@ -18,6 +18,7 @@ import {
   turnElapsedLabel,
 } from "@/lib/conversation-list";
 import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
+import { useIsAssistantPage } from "@/lib/use-assistant-surface";
 import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
 import { useConfirmDialogStore } from "../confirm-dialog";
@@ -261,6 +262,7 @@ export function ConversationList({
   onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
 }) {
   const { openConversation } = useAssistantNavigation();
+  const isPage = useIsAssistantPage();
   const confirm = useConfirmDialogStore((s) => s.confirm);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -344,7 +346,12 @@ export function ConversationList({
       </div>
 
       {conversations.length === 0 ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-3 px-4 py-12 text-center">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col items-center gap-3 px-4 py-12 text-center",
+            isPage && "max-md:pb-32",
+          )}
+        >
           <Sparkles className="size-6 text-muted-foreground" />
           <div>
             <p className="font-medium text-sm">No chats yet</p>
@@ -357,7 +364,11 @@ export function ConversationList({
       ) : (
         // Key handling sits on the container: the rows are the focus targets, and
         // arrow keys move focus between them rather than each row tracking a cursor.
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onListKeyDown}>
+        <div
+          ref={listRef}
+          className={cn("min-h-0 flex-1 overflow-y-auto p-1.5", isPage && "max-md:pb-32")}
+          onKeyDown={onListKeyDown}
+        >
           {sections.map((section) => (
             <section key={section.kind} className="pb-1.5">
               <h3 className="px-2.5 py-1.5 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
