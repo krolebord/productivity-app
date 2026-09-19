@@ -5,7 +5,6 @@ import {
   buildCashFlowSeries,
   buildDailyBuckets,
   buildDailySpendingSeries,
-  buildNetWorthSeries,
   buildTrendBuckets,
   createAmountConverter,
   type DailySpendingRow,
@@ -45,9 +44,6 @@ function ledgerRow(partial: Partial<LedgerRow> & Pick<LedgerRow, "effectiveAt">)
     accountCurrency: partial.accountCurrency ?? "USD",
     amount: partial.amount ?? -10,
     importance: partial.importance ?? null,
-    counterpartyAccountId: partial.counterpartyAccountId ?? "",
-    counterpartyCurrency: partial.counterpartyCurrency ?? "",
-    counterpartyAmount: partial.counterpartyAmount ?? null,
     ...partial,
   };
 }
@@ -223,86 +219,6 @@ describe("buildCashFlowSeries", () => {
     });
 
     expect(point.expense).toBe(20);
-  });
-});
-
-describe("buildNetWorthSeries", () => {
-  const buckets = [bucket("Jan", 0, 99), bucket("Feb", 100, 199)];
-  const balances = new Map([["USD", 1000]]);
-
-  it("rewinds later rows out of the current balance", () => {
-    const series = buildNetWorthSeries({
-      rows: [ledgerRow({ effectiveAt: 150, amount: -200 })],
-      buckets,
-      balancesByCurrency: balances,
-      convert: identity,
-      excludedAccountIds: new Set(),
-      nowTs: 199,
-    });
-
-    // The January point predates the expense, so the money was still there.
-    expect(series[0]).toEqual({ label: "Jan", netWorth: 1200 });
-    // The last bucket is measured at `now`, which is after the expense.
-    expect(series[1]).toEqual({ label: "Feb", netWorth: 1000 });
-  });
-
-  it("rewinds both legs of a transfer", () => {
-    const series = buildNetWorthSeries({
-      rows: [
-        ledgerRow({
-          effectiveAt: 150,
-          type: "transfer",
-          amount: -100,
-          accountCurrency: "USD",
-          counterpartyAccountId: "a2",
-          counterpartyCurrency: "EUR",
-          counterpartyAmount: 50,
-        }),
-      ],
-      buckets,
-      balancesByCurrency: new Map([
-        ["USD", 1000],
-        ["EUR", 50],
-      ]),
-      convert: createAmountConverter(rateRow, "USD"),
-      excludedAccountIds: new Set(),
-      nowTs: 199,
-    });
-
-    // Before the transfer the money sat in USD: 1100 USD and 0 EUR. Forgetting to
-    // rewind the destination leg would leave the 50 EUR double-counted (1200).
-    expect(series[0].netWorth).toBe(1100);
-    // At `now` the transfer has happened: 1000 USD + 50 EUR.
-    expect(series[1].netWorth).toBe(1100);
-  });
-
-  it("leaves excluded accounts out of the reconstruction", () => {
-    const series = buildNetWorthSeries({
-      rows: [ledgerRow({ effectiveAt: 150, amount: -200, accountId: "hidden" })],
-      buckets,
-      balancesByCurrency: balances,
-      convert: identity,
-      excludedAccountIds: new Set(["hidden"]),
-      nowTs: 199,
-    });
-
-    expect(series[0].netWorth).toBe(1000);
-  });
-
-  it("skips currencies without a rate instead of counting them as zero", () => {
-    const series = buildNetWorthSeries({
-      rows: [],
-      buckets: [buckets[0]],
-      balancesByCurrency: new Map([
-        ["USD", 100],
-        ["UAH", 9000],
-      ]),
-      convert: createAmountConverter(rateRow, "USD"),
-      excludedAccountIds: new Set(),
-      nowTs: 99,
-    });
-
-    expect(series[0].netWorth).toBe(100);
   });
 });
 

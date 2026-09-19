@@ -15,8 +15,8 @@ import type { CurrencyRateItem } from "@/user-db/migrations";
 
 /**
  * Pure derivations behind the finances overview. Everything here takes plain
- * rows and returns plain series so the maths (currency conversion, excluded
- * accounts, balance reconstruction) is testable without a database or a chart.
+ * rows and returns plain series so currency conversion and excluded accounts
+ * are testable without a database or a chart.
  */
 
 export type TrendBucket = {
@@ -52,15 +52,7 @@ export type AccountBalance = {
 
 export type LedgerRow = Pick<
   TransactionRow,
-  | "accountCurrency"
-  | "accountId"
-  | "amount"
-  | "counterpartyAccountId"
-  | "counterpartyAmount"
-  | "counterpartyCurrency"
-  | "effectiveAt"
-  | "importance"
-  | "type"
+  "accountCurrency" | "accountId" | "amount" | "effectiveAt" | "importance" | "type"
 >;
 
 export type DailySpendingRow = Pick<
@@ -87,11 +79,6 @@ export type FlowTotals = {
 };
 
 export type CashFlowPoint = FlowTotals & { label: string } & Record<ImportanceTier, number>;
-
-export type NetWorthPoint = {
-  label: string;
-  netWorth: number;
-};
 
 export type DailyCategoryShare = {
   name: string;
@@ -313,60 +300,4 @@ export function buildCashFlowSeries({
 
 function isImportanceTier(value: string | null): value is ImportanceTier {
   return value !== null && (IMPORTANCE_TIERS as readonly string[]).includes(value);
-}
-
-/**
- * Reconstructs past net worth by rewinding today's balances through every later
- * ledger row. Both legs of a transfer are rewound, and excluded accounts are left
- * out of the reconstruction as well as the starting balances.
- */
-export function buildNetWorthSeries({
-  rows,
-  buckets,
-  balancesByCurrency,
-  convert,
-  excludedAccountIds,
-  nowTs,
-}: {
-  rows: readonly LedgerRow[];
-  buckets: readonly TrendBucket[];
-  balancesByCurrency: ReadonlyMap<string, number>;
-  convert: AmountConverter;
-  excludedAccountIds: ReadonlySet<string>;
-  nowTs: number;
-}): NetWorthPoint[] {
-  return buckets.map((bucket, index) => {
-    const boundary = index === buckets.length - 1 ? nowTs : bucket.end;
-    const deltaByCurrency = new Map<string, number>();
-
-    for (const row of rows) {
-      if (row.effectiveAt <= boundary) {
-        continue;
-      }
-      if (!excludedAccountIds.has(row.accountId)) {
-        deltaByCurrency.set(row.accountCurrency, (deltaByCurrency.get(row.accountCurrency) ?? 0) + Number(row.amount));
-      }
-      if (
-        row.counterpartyCurrency &&
-        row.counterpartyAmount !== null &&
-        !excludedAccountIds.has(row.counterpartyAccountId)
-      ) {
-        deltaByCurrency.set(
-          row.counterpartyCurrency,
-          (deltaByCurrency.get(row.counterpartyCurrency) ?? 0) + Number(row.counterpartyAmount),
-        );
-      }
-    }
-
-    let netWorth = 0;
-    for (const currency of new Set([...balancesByCurrency.keys(), ...deltaByCurrency.keys()])) {
-      const balance = (balancesByCurrency.get(currency) ?? 0) - (deltaByCurrency.get(currency) ?? 0);
-      const value = convert(balance, currency);
-      if (value !== null) {
-        netWorth += value;
-      }
-    }
-
-    return { label: bucket.label, netWorth };
-  });
 }

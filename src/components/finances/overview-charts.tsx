@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -11,18 +11,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  type ChartConfig,
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
+import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "@/components/ui/chart";
 import { formatBalance, formatCompactNumber } from "@/lib/currency/format";
-import type { CashFlowPoint, DailySpendingPoint, NetWorthPoint } from "@/lib/finance/overview";
+import { type NetWorthPoint, netWorthQuery } from "@/lib/finance/net-worth";
+import type { CashFlowPoint, DailySpendingPoint, TrendBucket } from "@/lib/finance/overview";
 import { CATEGORY_DONUT_PALETTE, FLOW_COLOR, IMPORTANCE_STYLE } from "@/lib/finance-ui";
 import { IMPORTANCE_TIERS, type ImportanceTier } from "@/lib/transactions";
+
+import { useDbQuery } from "@/user-db/user-db";
 
 export type OverviewChart = "flow" | "networth" | "spending";
 
@@ -34,10 +30,6 @@ const flowConfig = {
   flexible: { label: IMPORTANCE_STYLE.flexible.label, color: IMPORTANCE_STYLE.flexible.chartColor },
   optional: { label: IMPORTANCE_STYLE.optional.label, color: IMPORTANCE_STYLE.optional.chartColor },
   investment: { label: IMPORTANCE_STYLE.investment.label, color: IMPORTANCE_STYLE.investment.chartColor },
-} satisfies ChartConfig;
-
-const netWorthConfig = {
-  netWorth: { label: "Net worth", color: FLOW_COLOR.netWorth },
 } satisfies ChartConfig;
 
 const spendingConfig = {
@@ -200,6 +192,75 @@ function DailySpendingTooltipContent({
   );
 }
 
+const netWorthConfig = { netWorth: { label: "Net worth", color: FLOW_COLOR.netWorth } };
+
+function NetWorthTooltip({
+  active,
+  payload,
+  baseCurrency,
+}: {
+  active?: boolean;
+  payload?: { payload?: NetWorthPoint }[];
+  baseCurrency: string;
+}) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+
+  return (
+    <div className="grid gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+      <div className="font-medium">{point.label}</div>
+      <div className="font-mono tabular-nums">
+        {point.netWorth === null ? "Exchange rate unavailable" : formatBalance(point.netWorth, baseCurrency)}
+      </div>
+      {point.estimatedCurrencies > 0 && (
+        <div className="text-muted-foreground">Uses exchange rates from a nearby date.</div>
+      )}
+    </div>
+  );
+}
+
+function NetWorthChart({ buckets, baseCurrency }: { buckets: TrendBucket[]; baseCurrency: string }) {
+  const { data, refresh } = useDbQuery<NetWorthPoint>(netWorthQuery({ buckets, baseCurrency }));
+
+  useEffect(() => {
+    const refreshVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const interval = window.setInterval(refreshVisible, 60_000);
+    document.addEventListener("visibilitychange", refreshVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshVisible);
+    };
+  }, [refresh]);
+
+  return (
+    <div>
+      <ChartContainer config={netWorthConfig} className="aspect-auto h-64 w-full">
+        <AreaChart data={data} margin={{ left: 4, right: 12, top: 4 }}>
+          <CartesianGrid vertical={false} />
+          <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+          <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={formatCompactNumber} />
+          <ChartTooltip filterNull={false} content={<NetWorthTooltip baseCurrency={baseCurrency} />} />
+          <Area
+            dataKey="netWorth"
+            type="monotone"
+            stroke="var(--color-netWorth)"
+            fill="var(--color-netWorth)"
+            fillOpacity={0.2}
+            strokeWidth={2}
+          />
+        </AreaChart>
+      </ChartContainer>
+      {data.some((point) => point.missingCurrencies > 0) && (
+        <p className="mt-2 text-muted-foreground text-xs">
+          Some points are unavailable because exchange rates are missing.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /**
  * The three overview charts. Imported lazily by the overview page so recharts
  * stays out of the finances entry chunk.
@@ -210,14 +271,14 @@ export function OverviewCharts({
   dailySpending,
   flowData,
   hasAccounts,
-  netWorthData,
+  trendBuckets,
 }: {
   activeChart: OverviewChart;
   baseCurrency: string;
   dailySpending: DailySpendingPoint[];
   flowData: CashFlowPoint[];
   hasAccounts: boolean;
-  netWorthData: NetWorthPoint[];
+  trendBuckets: TrendBucket[];
 }) {
   if (activeChart === "flow") {
     const hasData = flowData.some((point) => point.income !== 0 || point.expense !== 0);
@@ -253,24 +314,7 @@ export function OverviewCharts({
       return <ChartEmptyState>Add an account to track net worth.</ChartEmptyState>;
     }
 
-    return (
-      <ChartContainer config={netWorthConfig} className="aspect-auto h-64 w-full">
-        <AreaChart data={netWorthData} margin={{ left: 4, right: 12, top: 4 }}>
-          <CartesianGrid vertical={false} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
-          <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={formatCompactNumber} />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          <Area
-            dataKey="netWorth"
-            type="monotone"
-            stroke="var(--color-netWorth)"
-            fill="var(--color-netWorth)"
-            fillOpacity={0.2}
-            strokeWidth={2}
-          />
-        </AreaChart>
-      </ChartContainer>
-    );
+    return <NetWorthChart buckets={trendBuckets} baseCurrency={baseCurrency} />;
   }
 
   if (dailySpending.every((point) => point.total === 0)) {

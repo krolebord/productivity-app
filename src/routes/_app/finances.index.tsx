@@ -19,7 +19,6 @@ import {
   buildCashFlowSeries,
   buildDailyBuckets,
   buildDailySpendingSeries,
-  buildNetWorthSeries,
   buildTrendBuckets,
   sumFlowTotals,
   sumNetWorth,
@@ -149,22 +148,13 @@ function FinancesPage() {
       .$if(excludedIds.length > 0, (qb) => qb.where("accountId", "not in", excludedIds)),
   );
 
-  // Trend charts need individual rows: the net worth series rewinds each one.
   const { data: windowRows } = useDbQuery((db) =>
     db
       .selectFrom("transaction_entry")
-      .select([
-        "effectiveAt",
-        "type",
-        "accountId",
-        "accountCurrency",
-        "amount",
-        "importance",
-        "counterpartyAccountId",
-        "counterpartyCurrency",
-        "counterpartyAmount",
-      ])
-      .where("effectiveAt", ">=", windowStart),
+      .select(["effectiveAt", "type", "accountId", "accountCurrency", "amount", "importance"])
+      .where("effectiveAt", ">=", windowStart)
+      .where("effectiveAt", "<=", trendBuckets[trendBuckets.length - 1].end)
+      .where("type", "in", ["income", "expense"]),
   );
 
   const { data: recent } = useDbQuery((db) =>
@@ -177,19 +167,11 @@ function FinancesPage() {
       .limit(RECENT_LIMIT),
   );
 
-  const { netWorth, unconvertibleAccounts, balancesByCurrency } = sumNetWorth(includedAccounts, convert);
+  const { netWorth, unconvertibleAccounts } = sumNetWorth(includedAccounts, convert);
   const flow = sumFlowTotals(rangeRows, convert);
   const prevFlow = sumFlowTotals(prevRangeRows, convert);
 
   const flowData = buildCashFlowSeries({ rows: windowRows, buckets: trendBuckets, convert, excludedAccountIds });
-  const netWorthData = buildNetWorthSeries({
-    rows: windowRows,
-    buckets: trendBuckets,
-    balancesByCurrency,
-    convert,
-    excludedAccountIds,
-    nowTs,
-  });
   const dailySpending = buildDailySpendingSeries({
     rows: dailyExpenseRows,
     buckets: buildDailyBuckets(spendingVisible.start, spendingVisible.end),
@@ -301,7 +283,7 @@ function FinancesPage() {
             dailySpending={dailySpending}
             flowData={flowData}
             hasAccounts={includedAccounts.length > 0}
-            netWorthData={netWorthData}
+            trendBuckets={trendBuckets}
           />
         </Suspense>
       </SectionCard>

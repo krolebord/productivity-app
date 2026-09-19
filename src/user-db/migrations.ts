@@ -451,6 +451,11 @@ const migrations = createMigrations((b) => ({
       defaultValue: null,
     }),
   ],
+  26: [
+    b.createIndex("currency_rate_date_base", (idx) =>
+      idx.on("_currency_rate").columns(["date", "baseCurrency"]).where(sql.ref("tombstone"), "=", 0),
+    ),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
