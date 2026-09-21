@@ -439,6 +439,11 @@ function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const hasIntegrationError = useIntegrationsHasError();
+  const location = useSidebarLocation();
+  const assistantEnabled = useAssistantEnabled();
+  // On Today the stacked FAB would only re-open the same page, so it becomes
+  // the assistant shortcut instead. That's the pair you hop between on a phone.
+  const stackedToAssistant = location.isPath("/today") && assistantEnabled;
 
   useEffect(() => {
     return router.subscribe("onBeforeNavigate", () => setOpen(false));
@@ -478,11 +483,11 @@ function MobileSidebar() {
         variant="secondary"
         size="icon"
         className={cn("!rounded-full fixed right-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM_STACKED)}
-        aria-label="Open today"
+        aria-label={stackedToAssistant ? "Open assistant" : "Open today"}
         asChild
       >
-        <Link to="/today" viewTransition>
-          <CalendarCheck className="size-5" />
+        <Link to={stackedToAssistant ? "/assistant" : "/today"} viewTransition>
+          {stackedToAssistant ? <Sparkles className="size-5" /> : <CalendarCheck className="size-5" />}
         </Link>
       </Button>
 
