@@ -54,7 +54,7 @@ function useFieldMessageState() {
   };
 }
 
-function getErrorMessage(error: unknown) {
+export function getErrorMessage(error: unknown) {
   if (typeof error === "string") {
     return error;
   }

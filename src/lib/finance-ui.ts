@@ -1,10 +1,4 @@
-import {
-  ArrowDownLeftIcon,
-  ArrowLeftRightIcon,
-  ArrowUpRightIcon,
-  type LucideIcon,
-  SlidersHorizontalIcon,
-} from "lucide-react";
+import { ArrowDownLeftIcon, ArrowLeftRightIcon, ArrowUpRightIcon, type LucideIcon, ScaleIcon } from "lucide-react";
 import type { ImportanceTier, TransactionType } from "@/lib/transactions";
 
 /**
@@ -41,7 +35,7 @@ export const TRANSACTION_TYPE_STYLE = {
   adjustment: {
     label: "Adjustment",
     shortLabel: "Adjust",
-    icon: SlidersHorizontalIcon,
+    icon: ScaleIcon,
     accent: "text-amber-600 dark:text-amber-400",
     dot: "bg-amber-500",
     activeClass: "bg-background text-amber-600 shadow-sm dark:bg-input/50 dark:text-amber-400",

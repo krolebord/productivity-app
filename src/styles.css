@@ -197,6 +197,13 @@
     background-color: oklch(0.6056 0.2189 292.7172 / 0.2);
   }
 
+  /* Base UI unmounts a popup only once all of its parts finish animating, so
+     a part whose exit ends early (e.g. a backdrop) would otherwise snap back
+     to fully visible until then. */
+  [data-closed] {
+    --tw-animation-fill-mode: forwards;
+  }
+
   /* Refined scrollbar for webkit; follows the theme via --border, so no
      separate .dark overrides are needed. */
   ::-webkit-scrollbar {

@@ -1,6 +1,6 @@
 import { useStore } from "@tanstack/react-form";
-import { ArrowLeftRightIcon, Trash2Icon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowBigUpIcon, ArrowLeftRightIcon, CornerDownLeftIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { formatDateTimeLocal, parseDateTimeLocal } from "@/lib/date-time";
@@ -17,14 +17,13 @@ import {
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { useCreateAccount } from "./account-dialog";
-import { ImportanceSelector } from "./importance-selector";
 import { createTransactionFormSchema } from "./transaction-dialog.schema";
+import { AccountPicker, CategoryPicker, Chip, DatePicker, ImportancePicker } from "./transaction-dialog-pickers";
 import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
-import { useAppForm } from "./ui/form";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
+import { getErrorMessage, useAppForm } from "./ui/form";
 import { useInlineConfirm } from "./ui/inline-confirm";
-import { SelectItem } from "./ui/select";
+import { Textarea } from "./ui/textarea";
 
 type TransactionDialogDraft = {
   accountId?: string;
@@ -111,29 +110,130 @@ function getDialogTitle(mode: "create" | "edit" | null, type: TransactionType | 
   }
 }
 
-function SwapButton({ label, onClick }: { label: string; onClick: () => void }) {
+const TITLE_PLACEHOLDER: Record<TransactionType, string> = {
+  expense: "What was it?",
+  income: "Where from?",
+  transfer: "Between accounts",
+  adjustment: "Manual correction",
+};
+
+const SUBMIT_CLASS: Record<TransactionType, string | undefined> = {
+  expense: undefined,
+  income: "bg-emerald-600 text-white hover:bg-emerald-600/90 active:bg-emerald-600/80",
+  transfer: "bg-blue-600 text-white hover:bg-blue-600/90 active:bg-blue-600/80",
+  adjustment: "bg-amber-500 text-amber-950 hover:bg-amber-500/90 active:bg-amber-500/80",
+};
+
+const VALIDATED_FIELDS = [
+  "type",
+  "accountId",
+  "counterpartyAccountId",
+  "amount",
+  "counterpartyAmount",
+  "effectiveAt",
+] as const;
+
+function sanitizeAmount(raw: string) {
+  const [whole = "", ...fraction] = raw
+    .replace(/,/g, ".")
+    .replace(/[^\d.]/g, "")
+    .split(".");
+  return fraction.length > 0 ? `${whole}.${fraction.join("")}` : whole;
+}
+
+function isNonZeroAmount(amount: string) {
+  const value = Number.parseFloat(amount);
+  return Number.isFinite(value) && value !== 0;
+}
+
+function formatRate(amount: string, counterpartyAmount: string, currency: string, counterpartyCurrency: string) {
+  const sent = Number.parseFloat(amount);
+  const received = Number.parseFloat(counterpartyAmount);
+  if (!(sent > 0 && received > 0)) return null;
+
+  const format = (rate: number) => rate.toLocaleString(undefined, { maximumFractionDigits: rate >= 10 ? 2 : 4 });
+  return sent >= received
+    ? `1 ${counterpartyCurrency} = ${format(sent / received)} ${currency}`
+    : `1 ${currency} = ${format(received / sent)} ${counterpartyCurrency}`;
+}
+
+function AmountInput({
+  value,
+  onChange,
+  onBlur,
+  sign,
+  suffix,
+  inputRef,
+  invalid,
+  label,
+  className,
+}: {
+  value: string;
+  onChange: (value: string, typedSign: "+" | "-" | null) => void;
+  onBlur?: () => void;
+  sign?: ReactNode;
+  suffix?: ReactNode;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  invalid?: boolean;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex max-w-full items-baseline justify-center font-mono font-semibold tabular-nums tracking-tight",
+        className,
+      )}
+    >
+      {sign}
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        aria-label={label}
+        aria-invalid={invalid || undefined}
+        placeholder="0"
+        value={value}
+        onChange={(event) => {
+          const raw = event.currentTarget.value;
+          onChange(sanitizeAmount(raw), raw.includes("-") ? "-" : raw.includes("+") ? "+" : null);
+        }}
+        onBlur={onBlur}
+        style={{ width: `${Math.max(value.length, 1) + 0.25}ch` }}
+        className={cn(
+          "min-w-0 max-w-full bg-transparent outline-none placeholder:text-muted-foreground/40",
+          invalid && "underline decoration-2 decoration-destructive underline-offset-8",
+        )}
+      />
+      {suffix && <span className="ml-1 font-normal font-sans text-muted-foreground text-sm">{suffix}</span>}
+    </div>
+  );
+}
+
+function SwapButton({ onClick }: { onClick: () => void }) {
   return (
     <Button
       type="button"
       variant="ghost"
-      size="icon-sm"
+      size="icon-lg"
       onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="mb-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+      aria-label="Swap accounts"
+      title="Swap accounts"
+      className="shrink-0 bg-muted text-blue-600 md:size-8 dark:text-blue-400"
     >
       <ArrowLeftRightIcon />
     </Button>
   );
 }
 
-function TransactionDialogContent() {
+function TransactionDialogContent({ amountInputRef }: { amountInputRef: RefObject<HTMLInputElement | null> }) {
   const db = useDb();
   const createAccount = useCreateAccount();
   const { draft, mode, transactionId } = useTransactionDialogStore();
   const closeDialog = useTransactionDialogStore((state) => state.close);
-  const [addMore, setAddMore] = useState(false);
-  const amountInputRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const addMoreRef = useRef(false);
   const importanceTouchedRef = useRef(mode === "edit");
 
   const deleteConfirm = useInlineConfirm({
@@ -154,10 +254,10 @@ function TransactionDialogContent() {
   const { data: categoryRows } = useDbQuery((query) =>
     query
       .selectFrom("transaction_entry")
-      .select("category")
-      .distinct()
+      .select((eb) => ["category", eb.fn.max("effectiveAt").as("lastUsedAt")])
       .where("category", "!=", "")
-      .orderBy("category", "asc"),
+      .groupBy("category")
+      .orderBy("lastUsedAt", "desc"),
   );
   const categories = categoryRows.map((row) => row.category);
 
@@ -183,16 +283,12 @@ function TransactionDialogContent() {
     return new Map([...best].map(([category, value]) => [category, value.importance] as const));
   }, [importanceRows]);
 
-  useEffect(() => {
-    if (accounts.length === 0) return;
-    queueMicrotask(() => amountInputRef.current?.focus());
-  }, [accounts.length]);
-
   const existing = mode === "edit" ? existingTransactions[0] : undefined;
   const selectedType = (existing?.type ?? draft?.type ?? "expense") as TransactionType;
   const fallbackAccountId = accounts[0]?.id ?? "";
   const fallbackTransferAccountId =
     accounts.find((account) => account.id !== (draft?.accountId ?? fallbackAccountId))?.id ?? "";
+  const [showNotes, setShowNotes] = useState(Boolean(existing?.notes));
 
   const form = useAppForm({
     validationLogic: createDynamicValidationLogic(),
@@ -215,6 +311,8 @@ function TransactionDialogContent() {
       type: selectedType,
     },
     onSubmit: ({ value }) => {
+      const addMore = addMoreRef.current;
+      addMoreRef.current = false;
       const effectiveAt = parseDateTimeLocal(value.effectiveAt);
       const baseInput = {
         accountId: value.accountId,
@@ -264,6 +362,7 @@ function TransactionDialogContent() {
         for (const field of ["amount", "counterpartyAmount", "notes", "title"] as const) {
           form.setFieldValue(field, "", { dontValidate: true });
         }
+        setShowNotes(false);
         queueMicrotask(() => amountInputRef.current?.focus());
         return;
       }
@@ -281,58 +380,103 @@ function TransactionDialogContent() {
     createTransaction(db.db, input);
   }
 
-  const currentType = useStore(form.store, (state) => state.values.type as TransactionType);
-  const currentAccountId = useStore(form.store, (state) => state.values.accountId);
-  const currentCategory = useStore(form.store, (state) => state.values.category);
+  const values = useStore(form.store, (state) => state.values);
+  const submissionAttempts = useStore(form.store, (state) => state.submissionAttempts);
+  const fieldMeta = useStore(form.store, (state) => state.fieldMeta);
+  const currentType = values.type as TransactionType;
 
   useEffect(() => {
     if (currentType !== "expense" || importanceTouchedRef.current) return;
-    const suggested = importanceByCategory.get(currentCategory.trim()) ?? DEFAULT_IMPORTANCE;
+    const suggested = importanceByCategory.get(values.category.trim()) ?? DEFAULT_IMPORTANCE;
     if (form.getFieldValue("importance") !== suggested) {
       form.setFieldValue("importance", suggested);
     }
-  }, [currentType, currentCategory, importanceByCategory, form]);
-  const currentCounterpartyId = useStore(form.store, (state) => state.values.counterpartyAccountId);
-  const sourceAccount = accounts.find((account) => account.id === currentAccountId);
-  const destinationAccount = accounts.find((account) => account.id === currentCounterpartyId);
-  const hasOrphanSourceAccount = currentAccountId !== "" && !sourceAccount;
-  const hasOrphanCounterpartyAccount = currentCounterpartyId !== "" && !destinationAccount;
+  }, [currentType, values.category, importanceByCategory, form]);
+
+  const sourceAccount = accounts.find((account) => account.id === values.accountId);
+  const destinationAccount = accounts.find((account) => account.id === values.counterpartyAccountId);
   const canRenderTransfer = currentType === "transfer" && accounts.length >= 2;
-  const accountItems = accounts.map((account) => ({
-    value: account.id,
-    label: `${account.labelText || "Untitled"} (${account.currency})`,
-  }));
+  const hasCounterpartyAmount =
+    canRenderTransfer &&
+    !(sourceAccount && destinationAccount && sourceAccount.currency === destinationAccount.currency);
+  const rate =
+    hasCounterpartyAmount && sourceAccount && destinationAccount
+      ? formatRate(values.amount, values.counterpartyAmount, sourceAccount.currency, destinationAccount.currency)
+      : null;
+
+  const defaultValues = form.options.defaultValues;
+  const isUnchanged =
+    mode === "edit" &&
+    defaultValues !== undefined &&
+    (Object.keys(values) as (keyof typeof values)[]).every((key) => values[key] === defaultValues[key]);
+  const canSubmit =
+    Boolean(sourceAccount) &&
+    isNonZeroAmount(values.amount) &&
+    (currentType !== "transfer" || (canRenderTransfer && Boolean(destinationAccount))) &&
+    (!hasCounterpartyAmount || isNonZeroAmount(values.counterpartyAmount)) &&
+    !isUnchanged;
+
+  const visibleErrors = new Map<string, string>();
+  for (const field of VALIDATED_FIELDS) {
+    if (field === "counterpartyAmount" && !hasCounterpartyAmount) continue;
+    const meta = fieldMeta[field];
+    if (meta && meta.errors.length > 0 && (meta.isTouched || submissionAttempts > 0)) {
+      visibleErrors.set(field, getErrorMessage(meta.errors[0]));
+    }
+  }
+  const errorMessages = [...new Set(visibleErrors.values())];
+
+  function mirrorTransferAmount() {
+    if (form.getFieldValue("type") !== "transfer") return;
+    const source = accounts.find((account) => account.id === form.getFieldValue("accountId"));
+    const destination = accounts.find((account) => account.id === form.getFieldValue("counterpartyAccountId"));
+    if (source && destination && source.currency === destination.currency) {
+      form.setFieldValue("counterpartyAmount", form.getFieldValue("amount"));
+    }
+  }
+
+  function changeType(type: TransactionType) {
+    form.setFieldValue("type", type);
+    const amount = form.getFieldValue("amount");
+    if (type !== "adjustment" && amount.startsWith("-")) {
+      form.setFieldValue("amount", amount.slice(1));
+    }
+    mirrorTransferAmount();
+  }
+
+  function swapTransferSides() {
+    const accountId = form.getFieldValue("accountId");
+    const amount = form.getFieldValue("amount");
+    form.setFieldValue("accountId", form.getFieldValue("counterpartyAccountId"));
+    form.setFieldValue("counterpartyAccountId", accountId);
+    form.setFieldValue("amount", form.getFieldValue("counterpartyAmount"));
+    form.setFieldValue("counterpartyAmount", amount);
+  }
+
+  function revealNotes() {
+    setShowNotes(true);
+    queueMicrotask(() => notesRef.current?.focus());
+  }
+
+  function submit(addMore: boolean) {
+    if (!canSubmit) return;
+    addMoreRef.current = addMore;
+    form.handleSubmit();
+  }
 
   function openAccountCreator() {
     closeDialog();
     createAccount();
   }
 
-  function swapAccounts() {
-    const source = form.getFieldValue("accountId");
-    const destination = form.getFieldValue("counterpartyAccountId");
-    form.setFieldValue("accountId", destination);
-    form.setFieldValue("counterpartyAccountId", source);
-  }
-
-  function swapAmounts() {
-    const amount = form.getFieldValue("amount");
-    const counterpartyAmount = form.getFieldValue("counterpartyAmount");
-    form.setFieldValue("amount", counterpartyAmount);
-    form.setFieldValue("counterpartyAmount", amount);
-  }
-
   const typeStyle = TRANSACTION_TYPE_STYLE[currentType];
+  const isNegativeAdjustment = currentType === "adjustment" && values.amount.startsWith("-");
 
-  return (
-    <>
-      <div className="flex items-center gap-2">
-        <span className={cn("size-2 shrink-0 rounded-full transition-colors", typeStyle.dot)} />
+  if (accounts.length === 0) {
+    return (
+      <>
         <DialogTitle>{getDialogTitle(mode, currentType)}</DialogTitle>
-      </div>
-      <DialogDescription className="sr-only">Create or edit a balance-affecting transaction.</DialogDescription>
-
-      {accounts.length === 0 ? (
+        <DialogDescription className="sr-only">Create or edit a balance-affecting transaction.</DialogDescription>
         <div className="flex flex-col items-center gap-4 py-4 text-center">
           <p className="text-muted-foreground text-sm">
             Create an account before adding income, expenses, or transfers.
@@ -346,283 +490,390 @@ function TransactionDialogContent() {
             </Button>
           </div>
         </div>
-      ) : (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            form.handleSubmit();
-          }}
+      </>
+    );
+  }
+
+  return (
+    <form
+      className="flex min-w-0 flex-col gap-5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter") return;
+        if (event.metaKey || event.ctrlKey) {
+          event.preventDefault();
+          submit(false);
+        } else if (event.shiftKey && mode === "create" && !(event.target instanceof HTMLTextAreaElement)) {
+          event.preventDefault();
+          submit(true);
+        }
+      }}
+    >
+      <DialogTitle className="sr-only">{getDialogTitle(mode, currentType)}</DialogTitle>
+      <DialogDescription className="sr-only">Create or edit a balance-affecting transaction.</DialogDescription>
+
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:flex md:justify-center">
+        <DialogClose
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              aria-label="Close"
+              className="justify-self-start text-muted-foreground md:hidden"
+            />
+          }
         >
-          <form.AppField name="type">
-            {(field) => (
-              <field.FormItem>
-                <div className="grid grid-cols-4 gap-1 rounded-lg bg-muted/50 p-1">
-                  {TRANSACTION_TYPES.map((type) => {
-                    const style = TRANSACTION_TYPE_STYLE[type];
-                    const Icon = style.icon;
-                    const isActive = field.state.value === type;
-                    return (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => field.handleChange(type)}
-                        className={cn(
-                          "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 font-medium text-sm transition-all",
-                          isActive
-                            ? style.activeClass
-                            : "text-muted-foreground hover:bg-background/50 hover:text-foreground",
-                        )}
-                      >
-                        <Icon className="size-3.5 shrink-0" />
-                        <span className="hidden sm:inline">{style.shortLabel}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <field.FormMessage />
-              </field.FormItem>
-            )}
-          </form.AppField>
+          <XIcon />
+        </DialogClose>
 
-          <div className={canRenderTransfer ? "flex items-end gap-2" : "grid gap-3"}>
-            <div className="min-w-0 flex-1">
-              <form.AppField name="accountId">
-                {(field) => (
-                  <field.FieldContainer labelText={currentType === "transfer" ? "Source account" : "Account"}>
-                    <field.FormSelect
-                      placeholder="Select account"
-                      items={
-                        hasOrphanSourceAccount
-                          ? [{ value: currentAccountId, label: "No account" }, ...accountItems]
-                          : accountItems
-                      }
-                    >
-                      {hasOrphanSourceAccount && <SelectItem value={currentAccountId}>No account</SelectItem>}
-                      {accountItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </field.FormSelect>
-                  </field.FieldContainer>
+        <div role="radiogroup" aria-label="Transaction type" className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+          {TRANSACTION_TYPES.map((type) => {
+            const style = TRANSACTION_TYPE_STYLE[type];
+            const Icon = style.icon;
+            const isActive = currentType === type;
+            const iconOnly = type === "adjustment";
+            return (
+              <button
+                key={type}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                aria-label={style.label}
+                title={iconOnly ? style.label : undefined}
+                onClick={() => changeType(type)}
+                className={cn(
+                  "flex h-10 items-center gap-1.5 rounded-md font-medium text-xs transition-colors md:h-9 md:px-3.5 md:text-sm",
+                  iconOnly ? "px-2" : "px-2.5",
+                  isActive ? style.activeClass : "text-muted-foreground hover:text-foreground",
                 )}
-              </form.AppField>
-            </div>
+              >
+                <Icon className={cn("size-3.5", !iconOnly && "hidden md:block")} />
+                <span className={cn(iconOnly && "hidden md:inline")}>{style.shortLabel}</span>
+              </button>
+            );
+          })}
+        </div>
 
-            {canRenderTransfer && (
-              <>
-                <SwapButton label="Swap accounts" onClick={swapAccounts} />
-                <div className="min-w-0 flex-1">
-                  <form.AppField name="counterpartyAccountId">
-                    {(field) => (
-                      <field.FieldContainer labelText="Destination account">
-                        <field.FormSelect
-                          placeholder="Select destination"
-                          items={
-                            hasOrphanCounterpartyAccount
-                              ? [{ value: currentCounterpartyId, label: "No account" }, ...accountItems]
-                              : accountItems
-                          }
-                        >
-                          {hasOrphanCounterpartyAccount && (
-                            <SelectItem value={currentCounterpartyId}>No account</SelectItem>
-                          )}
-                          {accountItems.map((item) => (
-                            <SelectItem key={item.value} value={item.value}>
-                              {item.label}
-                            </SelectItem>
-                          ))}
-                        </field.FormSelect>
-                      </field.FieldContainer>
-                    )}
-                  </form.AppField>
-                </div>
-              </>
+        {mode === "edit" && transactionId ? (
+          <Button
+            type="button"
+            variant={deleteConfirm.armed ? "destructive" : "ghost"}
+            size={deleteConfirm.armed ? "sm" : "icon-lg"}
+            aria-label={deleteConfirm.armed ? "Click again to delete" : "Delete transaction"}
+            className={cn(
+              "h-10 justify-self-end md:hidden",
+              !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
             )}
-          </div>
+            {...deleteConfirm.getButtonProps()}
+          >
+            <Trash2Icon />
+            {deleteConfirm.armed && "Delete?"}
+          </Button>
+        ) : (
+          <span />
+        )}
+      </div>
 
-          <div className={canRenderTransfer ? "flex items-end gap-2" : "grid gap-3 sm:grid-cols-2"}>
-            <div className="min-w-0 flex-1">
-              <form.AppField name="amount">
-                {(field) => (
-                  <field.FieldContainer
-                    labelText={
-                      currentType === "adjustment"
-                        ? `Balance delta${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
-                        : `Amount${sourceAccount ? ` (${sourceAccount.currency})` : ""}`
-                    }
-                  >
-                    <field.FormInput
-                      ref={amountInputRef}
-                      type="number"
-                      step="0.01"
-                      placeholder={currentType === "adjustment" ? "-12.50 or 12.50" : "0.00"}
-                      className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      <div className="flex min-w-0 flex-col items-center gap-3">
+        {hasCounterpartyAmount ? (
+          <>
+            <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2">
+              <div className="flex min-w-0 flex-col items-center gap-2">
+                <form.Field name="amount">
+                  {(field) => (
+                    <AmountInput
+                      inputRef={amountInputRef}
+                      label={`Sent amount${sourceAccount ? ` (${sourceAccount.currency})` : ""}`}
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      onBlur={field.handleBlur}
+                      invalid={visibleErrors.has("amount")}
+                      suffix={sourceAccount?.currency}
+                      className="text-3xl"
                     />
-                  </field.FieldContainer>
-                )}
-              </form.AppField>
+                  )}
+                </form.Field>
+                <form.Field name="accountId">
+                  {(field) => (
+                    <AccountPicker
+                      title="From account"
+                      accounts={accounts}
+                      value={field.state.value}
+                      onChange={(accountId) => {
+                        field.handleChange(accountId);
+                        mirrorTransferAmount();
+                      }}
+                      invalid={visibleErrors.has("accountId")}
+                      showCurrency={false}
+                    />
+                  )}
+                </form.Field>
+              </div>
+              <div className="pt-1">
+                <SwapButton onClick={swapTransferSides} />
+              </div>
+              <div className="flex min-w-0 flex-col items-center gap-2">
+                <form.Field name="counterpartyAmount">
+                  {(field) => (
+                    <AmountInput
+                      label={`Received amount${destinationAccount ? ` (${destinationAccount.currency})` : ""}`}
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      onBlur={field.handleBlur}
+                      invalid={visibleErrors.has("counterpartyAmount")}
+                      suffix={destinationAccount?.currency}
+                      className="text-3xl"
+                    />
+                  )}
+                </form.Field>
+                <form.Field name="counterpartyAccountId">
+                  {(field) => (
+                    <AccountPicker
+                      title="To account"
+                      accounts={accounts}
+                      value={field.state.value}
+                      onChange={(accountId) => {
+                        field.handleChange(accountId);
+                        mirrorTransferAmount();
+                      }}
+                      invalid={visibleErrors.has("counterpartyAccountId")}
+                      showCurrency={false}
+                    />
+                  )}
+                </form.Field>
+              </div>
             </div>
-
-            {canRenderTransfer ? (
-              <>
-                <SwapButton label="Swap amounts" onClick={swapAmounts} />
-                <div className="min-w-0 flex-1">
-                  <form.AppField name="counterpartyAmount">
-                    {(field) => (
-                      <field.FieldContainer
-                        labelText={`Received amount${destinationAccount ? ` (${destinationAccount.currency})` : ""}`}
+            {rate && <p className="font-mono text-muted-foreground text-xs">{rate}</p>}
+          </>
+        ) : (
+          <>
+            <form.Field name="amount">
+              {(field) => (
+                <AmountInput
+                  inputRef={amountInputRef}
+                  label={`${currentType === "adjustment" ? "Balance change" : "Amount"}${sourceAccount ? ` (${sourceAccount.currency})` : ""}`}
+                  value={field.state.value.replace(/^-/, "")}
+                  onChange={(amount, typedSign) => {
+                    const negative = typedSign ? typedSign === "-" : isNegativeAdjustment;
+                    const signed = currentType === "adjustment" && negative ? `-${amount}` : amount;
+                    field.handleChange(signed);
+                    if (canRenderTransfer) form.setFieldValue("counterpartyAmount", signed);
+                    if (typedSign && (currentType === "expense" || currentType === "income")) {
+                      changeType(typedSign === "+" ? "income" : "expense");
+                    }
+                  }}
+                  onBlur={field.handleBlur}
+                  invalid={visibleErrors.has("amount")}
+                  className={cn("text-5xl", typeStyle.accent)}
+                  sign={
+                    currentType === "adjustment" ? (
+                      <button
+                        type="button"
+                        aria-label={isNegativeAdjustment ? "Make positive" : "Make negative"}
+                        onClick={() =>
+                          field.handleChange(
+                            isNegativeAdjustment ? field.state.value.slice(1) : `-${field.state.value}`,
+                          )
+                        }
+                        className="rounded-md px-1 hover:bg-muted"
                       >
-                        <field.FormInput
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          className="font-mono tabular-nums [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        />
-                      </field.FieldContainer>
-                    )}
-                  </form.AppField>
-                </div>
-              </>
-            ) : (
-              <form.AppField name="effectiveAt">
-                {(field) => (
-                  <field.FieldContainer labelText="Date and time">
-                    <field.FormDateTimeInput />
-                  </field.FieldContainer>
-                )}
-              </form.AppField>
-            )}
-          </div>
-
-          {canRenderTransfer && (
-            <form.AppField name="effectiveAt">
-              {(field) => (
-                <field.FieldContainer labelText="Date and time">
-                  <field.FormDateTimeInput />
-                </field.FieldContainer>
-              )}
-            </form.AppField>
-          )}
-
-          {currentType === "transfer" && accounts.length < 2 && (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-              Transfers require at least two accounts.
-            </p>
-          )}
-
-          {currentType !== "transfer" && (
-            <form.AppField name="category">
-              {(field) => (
-                <field.FieldContainer labelText="Category">
-                  <field.FormComboboxInput options={categories} placeholder="Optional category" />
-                </field.FieldContainer>
-              )}
-            </form.AppField>
-          )}
-
-          {currentType === "expense" && (
-            <form.AppField name="importance">
-              {(field) => (
-                <field.FieldContainer labelText="Importance">
-                  <ImportanceSelector
-                    value={field.state.value ? (field.state.value as ImportanceTier) : null}
-                    onChange={(tier) => {
-                      importanceTouchedRef.current = true;
-                      field.handleChange(tier);
-                    }}
-                  />
-                </field.FieldContainer>
-              )}
-            </form.AppField>
-          )}
-
-          <form.AppField name="title">
-            {(field) => (
-              <field.FieldContainer labelText="Title">
-                <field.FormInput
-                  placeholder={
-                    currentType === "expense"
-                      ? "Coffee"
-                      : currentType === "income"
-                        ? "Salary"
-                        : currentType === "transfer"
-                          ? "Between accounts"
-                          : "Manual correction"
+                        {isNegativeAdjustment ? "−" : "+"}
+                      </button>
+                    ) : (
+                      <span aria-hidden>{currentType === "expense" ? "−" : currentType === "income" ? "+" : ""}</span>
+                    )
                   }
                 />
-              </field.FieldContainer>
-            )}
-          </form.AppField>
-
-          <form.AppField name="notes">
-            {(field) => (
-              <field.FieldContainer labelText="Notes">
-                <field.FormTextarea placeholder="Optional notes..." className="min-h-20 resize-none" />
-              </field.FieldContainer>
-            )}
-          </form.AppField>
-
-          {currentType === "transfer" &&
-            sourceAccount &&
-            destinationAccount &&
-            sourceAccount.currency !== destinationAccount.currency && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-                This transfer stores both entered amounts exactly. No exchange-rate conversion is applied.
-              </p>
-            )}
-
-          <DialogFooter className="flex-row items-center justify-between gap-3">
-            {mode === "edit" && transactionId ? (
-              <Button
-                type="button"
-                variant={deleteConfirm.armed ? "destructive" : "ghost"}
-                size="sm"
-                className={cn(
-                  !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+              )}
+            </form.Field>
+            <div className="flex max-w-full items-center gap-1.5">
+              <form.Field name="accountId">
+                {(field) => (
+                  <AccountPicker
+                    title={canRenderTransfer ? "From account" : "Account"}
+                    accounts={accounts}
+                    value={field.state.value}
+                    onChange={(accountId) => {
+                      field.handleChange(accountId);
+                      mirrorTransferAmount();
+                    }}
+                    invalid={visibleErrors.has("accountId")}
+                  />
                 )}
-                {...deleteConfirm.getButtonProps()}
-              >
-                <Trash2Icon />
-                {deleteConfirm.armed ? "Click again to delete" : "Delete"}
-              </Button>
-            ) : (
-              <label
-                htmlFor="transaction-add-more"
-                className="flex cursor-pointer items-center gap-2 text-muted-foreground text-sm"
-              >
-                <Checkbox
-                  id="transaction-add-more"
-                  checked={addMore}
-                  onCheckedChange={(checked) => setAddMore(checked === true)}
-                />
-                Add more
-              </label>
-            )}
-
-            <div className="ml-auto flex gap-2">
-              <Button type="button" variant="outline" onClick={closeDialog}>
-                Cancel
-              </Button>
-              <Button type="submit">{mode === "edit" ? "Save" : "Create"}</Button>
+              </form.Field>
+              {canRenderTransfer && (
+                <>
+                  <SwapButton onClick={swapTransferSides} />
+                  <form.Field name="counterpartyAccountId">
+                    {(field) => (
+                      <AccountPicker
+                        title="To account"
+                        accounts={accounts}
+                        value={field.state.value}
+                        onChange={(accountId) => {
+                          field.handleChange(accountId);
+                          mirrorTransferAmount();
+                        }}
+                        invalid={visibleErrors.has("counterpartyAccountId")}
+                      />
+                    )}
+                  </form.Field>
+                </>
+              )}
             </div>
-          </DialogFooter>
-        </form>
+          </>
+        )}
+      </div>
+
+      {currentType === "transfer" && accounts.length < 2 && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          Transfers require at least two accounts.
+        </p>
       )}
-    </>
+
+      <div className="flex flex-col gap-3">
+        <form.Field name="title">
+          {(field) => (
+            <input
+              aria-label="Title"
+              autoComplete="off"
+              placeholder={TITLE_PLACEHOLDER[currentType]}
+              value={field.state.value}
+              onChange={(event) => field.handleChange(event.currentTarget.value)}
+              onBlur={field.handleBlur}
+              className="w-full rounded-md bg-transparent px-2 py-1 text-center font-medium text-lg outline-none placeholder:font-normal placeholder:text-muted-foreground/60 placeholder-shown:bg-muted/40 focus-visible:bg-muted"
+            />
+          )}
+        </form.Field>
+
+        <div className="flex flex-wrap justify-center gap-2">
+          {currentType !== "transfer" && (
+            <form.Field name="category">
+              {(field) => (
+                <CategoryPicker categories={categories} value={field.state.value} onChange={field.handleChange} />
+              )}
+            </form.Field>
+          )}
+          {currentType === "expense" && (
+            <form.Field name="importance">
+              {(field) => (
+                <ImportancePicker
+                  value={field.state.value ? (field.state.value as ImportanceTier) : null}
+                  onChange={(tier) => {
+                    importanceTouchedRef.current = true;
+                    field.handleChange(tier);
+                  }}
+                />
+              )}
+            </form.Field>
+          )}
+          <form.Field name="effectiveAt">
+            {(field) => (
+              <DatePicker
+                value={field.state.value}
+                onChange={field.handleChange}
+                invalid={visibleErrors.has("effectiveAt")}
+              />
+            )}
+          </form.Field>
+          {!showNotes && (
+            <Chip empty onClick={revealNotes}>
+              <PlusIcon className="size-3.5" />
+              Note
+            </Chip>
+          )}
+        </div>
+
+        {showNotes && (
+          <form.Field name="notes">
+            {(field) => (
+              <Textarea
+                ref={notesRef}
+                aria-label="Note"
+                placeholder="Note"
+                rows={2}
+                value={field.state.value}
+                onChange={(event) => field.handleChange(event.currentTarget.value)}
+                onBlur={field.handleBlur}
+                className="min-h-16 resize-none"
+              />
+            )}
+          </form.Field>
+        )}
+      </div>
+
+      {errorMessages.length > 0 && (
+        <div role="alert" className="-mt-1 text-center text-destructive text-sm">
+          {errorMessages.map((message) => (
+            <p key={message}>{message}</p>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2 md:justify-end">
+        {mode === "edit" && transactionId && (
+          <Button
+            type="button"
+            variant={deleteConfirm.armed ? "destructive" : "ghost"}
+            className={cn(
+              "mr-auto hidden md:inline-flex",
+              !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+            )}
+            {...deleteConfirm.getButtonProps()}
+          >
+            <Trash2Icon />
+            {deleteConfirm.armed ? "Click again to delete" : "Delete"}
+          </Button>
+        )}
+        {mode === "create" && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!canSubmit}
+            onClick={() => submit(true)}
+            className="h-11 md:h-9"
+          >
+            <span className="md:hidden">Create &amp; new</span>
+            <span className="hidden md:inline">Create &amp; add another</span>
+            <Kbd className="hidden text-muted-foreground md:inline-flex">
+              <ArrowBigUpIcon className="size-3" />
+              <CornerDownLeftIcon className="size-3" />
+            </Kbd>
+          </Button>
+        )}
+        <Button
+          type="submit"
+          disabled={!canSubmit}
+          className={cn("h-11 flex-1 md:h-9 md:flex-none", SUBMIT_CLASS[currentType])}
+        >
+          {mode === "edit" ? "Save" : "Create"}
+          <Kbd className="hidden border-current/30 opacity-80 md:inline-flex">
+            <CornerDownLeftIcon className="size-3" />
+          </Kbd>
+        </Button>
+      </div>
+    </form>
   );
+}
+
+function Kbd({ children, className }: { children: ReactNode; className?: string }) {
+  return <kbd className={cn("inline-flex h-5 items-center rounded border px-1", className)}>{children}</kbd>;
 }
 
 export function TransactionDialog() {
   const isOpen = useTransactionDialogStore((state) => state.isOpen);
   const openRevision = useTransactionDialogStore((state) => state.openRevision);
   const closeDialog = useTransactionDialogStore((state) => state.close);
+  const amountInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeDialog()}>
-      <DialogContent className="sm:max-w-xl">
-        <TransactionDialogContent key={openRevision} />
+      <DialogContent showCloseButton={false} initialFocus={amountInputRef} className="sm:max-w-[30rem]">
+        <TransactionDialogContent key={openRevision} amountInputRef={amountInputRef} />
       </DialogContent>
     </Dialog>
   );
