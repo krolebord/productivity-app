@@ -1,5 +1,5 @@
 import { useStore } from "@tanstack/react-form";
-import { ArrowBigUpIcon, ArrowLeftRightIcon, CornerDownLeftIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { ArrowBigUpIcon, ArrowLeftRightIcon, CornerDownLeftIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { type ReactNode, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
@@ -14,13 +14,15 @@ import {
   type TransactionType,
   updateTransaction,
 } from "@/lib/transactions";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 import { useCreateAccount } from "./account-dialog";
 import { createTransactionFormSchema } from "./transaction-dialog.schema";
 import { AccountPicker, CategoryPicker, Chip, DatePicker, ImportancePicker } from "./transaction-dialog-pickers";
 import { Button } from "./ui/button";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle, DrawerVirtualKeyboardProvider } from "./ui/drawer";
 import { getErrorMessage, useAppForm } from "./ui/form";
 import { useInlineConfirm } from "./ui/inline-confirm";
 import { Textarea } from "./ui/textarea";
@@ -92,6 +94,9 @@ export function useCreateTransfer(defaults?: Omit<TransactionDialogDraft, "type"
 }
 
 const DEFAULT_IMPORTANCE: ImportanceTier = "flexible";
+
+const DIALOG_PARTS = { Title: DialogTitle, Description: DialogDescription };
+const DRAWER_PARTS = { Title: DrawerTitle, Description: DrawerDescription };
 
 function getDialogTitle(mode: "create" | "edit" | null, type: TransactionType | undefined) {
   if (mode === "edit") {
@@ -231,6 +236,7 @@ function TransactionDialogContent({ amountInputRef }: { amountInputRef: RefObjec
   const db = useDb();
   const createAccount = useCreateAccount();
   const { draft, mode, transactionId } = useTransactionDialogStore();
+  const { Title, Description } = useIsDesktop() ? DIALOG_PARTS : DRAWER_PARTS;
   const closeDialog = useTransactionDialogStore((state) => state.close);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const addMoreRef = useRef(false);
@@ -475,8 +481,8 @@ function TransactionDialogContent({ amountInputRef }: { amountInputRef: RefObjec
   if (accounts.length === 0) {
     return (
       <>
-        <DialogTitle>{getDialogTitle(mode, currentType)}</DialogTitle>
-        <DialogDescription className="sr-only">Create or edit a balance-affecting transaction.</DialogDescription>
+        <Title>{getDialogTitle(mode, currentType)}</Title>
+        <Description className="sr-only">Create or edit a balance-affecting transaction.</Description>
         <div className="flex flex-col items-center gap-4 py-4 text-center">
           <p className="text-muted-foreground text-sm">
             Create an account before adding income, expenses, or transfers.
@@ -512,24 +518,10 @@ function TransactionDialogContent({ amountInputRef }: { amountInputRef: RefObjec
         }
       }}
     >
-      <DialogTitle className="sr-only">{getDialogTitle(mode, currentType)}</DialogTitle>
-      <DialogDescription className="sr-only">Create or edit a balance-affecting transaction.</DialogDescription>
+      <Title className="sr-only">{getDialogTitle(mode, currentType)}</Title>
+      <Description className="sr-only">Create or edit a balance-affecting transaction.</Description>
 
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:flex md:justify-center">
-        <DialogClose
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-lg"
-              aria-label="Close"
-              className="justify-self-start text-muted-foreground md:hidden"
-            />
-          }
-        >
-          <XIcon />
-        </DialogClose>
-
+      <div className="flex justify-center">
         <div role="radiogroup" aria-label="Transaction type" className="flex gap-0.5 rounded-lg bg-muted p-0.5">
           {TRANSACTION_TYPES.map((type) => {
             const style = TRANSACTION_TYPE_STYLE[type];
@@ -551,31 +543,12 @@ function TransactionDialogContent({ amountInputRef }: { amountInputRef: RefObjec
                   isActive ? style.activeClass : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className={cn("size-3.5", !iconOnly && "hidden md:block")} />
+                <Icon className="size-3.5" />
                 <span className={cn(iconOnly && "hidden md:inline")}>{style.shortLabel}</span>
               </button>
             );
           })}
         </div>
-
-        {mode === "edit" && transactionId ? (
-          <Button
-            type="button"
-            variant={deleteConfirm.armed ? "destructive" : "ghost"}
-            size={deleteConfirm.armed ? "sm" : "icon-lg"}
-            aria-label={deleteConfirm.armed ? "Click again to delete" : "Delete transaction"}
-            className={cn(
-              "h-10 justify-self-end md:hidden",
-              !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
-            )}
-            {...deleteConfirm.getButtonProps()}
-          >
-            <Trash2Icon />
-            {deleteConfirm.armed && "Delete?"}
-          </Button>
-        ) : (
-          <span />
-        )}
       </div>
 
       <div className="flex min-w-0 flex-col items-center gap-3">
@@ -818,15 +791,23 @@ function TransactionDialogContent({ amountInputRef }: { amountInputRef: RefObjec
         {mode === "edit" && transactionId && (
           <Button
             type="button"
-            variant={deleteConfirm.armed ? "destructive" : "ghost"}
+            variant={deleteConfirm.armed ? "destructive" : "outline"}
+            aria-label={deleteConfirm.armed ? undefined : "Delete transaction"}
             className={cn(
-              "mr-auto hidden md:inline-flex",
-              !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+              "h-11 md:mr-auto md:h-9",
+              !deleteConfirm.armed && "w-11 text-destructive hover:bg-destructive/10 hover:text-destructive md:w-auto",
             )}
             {...deleteConfirm.getButtonProps()}
           >
             <Trash2Icon />
-            {deleteConfirm.armed ? "Click again to delete" : "Delete"}
+            {deleteConfirm.armed ? (
+              <>
+                <span className="md:hidden">Delete?</span>
+                <span className="hidden md:inline">Click again to delete</span>
+              </>
+            ) : (
+              <span className="hidden md:inline">Delete</span>
+            )}
           </Button>
         )}
         {mode === "create" && (
@@ -868,13 +849,49 @@ export function TransactionDialog() {
   const isOpen = useTransactionDialogStore((state) => state.isOpen);
   const openRevision = useTransactionDialogStore((state) => state.openRevision);
   const closeDialog = useTransactionDialogStore((state) => state.close);
+  const isCreating = useTransactionDialogStore((state) => state.mode === "create");
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const isDesktop = useIsDesktop();
 
+  const onOpenChange = (open: boolean) => {
+    if (!open) closeDialog();
+  };
+  const content = <TransactionDialogContent key={openRevision} amountInputRef={amountInputRef} />;
+
+  if (isDesktop) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent
+          ref={popupRef}
+          showCloseButton={false}
+          initialFocus={isCreating ? amountInputRef : popupRef}
+          className="sm:max-w-[30rem]"
+        >
+          {content}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Focusing the amount input while the drawer animates in opens the keyboard mid-measure,
+  // before the keyboard provider is listening, so the drawer can settle at the wrong height.
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && closeDialog()}>
-      <DialogContent showCloseButton={false} initialFocus={amountInputRef} className="sm:max-w-[30rem]">
-        <TransactionDialogContent key={openRevision} amountInputRef={amountInputRef} />
-      </DialogContent>
-    </Dialog>
+    <Drawer
+      open={isOpen}
+      onOpenChange={onOpenChange}
+      onOpenChangeComplete={(open) => {
+        if (open && isCreating && document.activeElement === popupRef.current) amountInputRef.current?.focus();
+      }}
+      showSwipeHandle
+    >
+      <DrawerVirtualKeyboardProvider>
+        <DrawerContent ref={popupRef} initialFocus={popupRef}>
+          <div className="min-h-0 overflow-y-auto px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] [scrollbar-width:none]">
+            {content}
+          </div>
+        </DrawerContent>
+      </DrawerVirtualKeyboardProvider>
+    </Drawer>
   );
 }

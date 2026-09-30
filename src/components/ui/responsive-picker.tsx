@@ -2,8 +2,8 @@ import type * as React from "react";
 
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
+import { Drawer, DrawerContent, DrawerTitle, DrawerTrigger, DrawerVirtualKeyboardProvider } from "./drawer";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "./sheet";
 
 type ResponsivePickerProps = {
   open: boolean;
@@ -38,13 +38,14 @@ export function ResponsivePicker({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetTrigger render={trigger}>{triggerContent}</SheetTrigger>
-      <SheetContent side="bottom" className="rounded-t-2xl px-3 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto mb-2 h-1 w-10 shrink-0 rounded-full bg-border" />
-        <SheetTitle className="px-1 pb-2 text-muted-foreground text-sm">{title}</SheetTitle>
-        <div className="min-h-0 overflow-y-auto">{children}</div>
-      </SheetContent>
-    </Sheet>
+    <Drawer open={open} onOpenChange={onOpenChange} showSwipeHandle>
+      <DrawerTrigger render={trigger}>{triggerContent}</DrawerTrigger>
+      <DrawerVirtualKeyboardProvider>
+        <DrawerContent>
+          <DrawerTitle className="px-4 py-2 font-normal text-muted-foreground text-sm">{title}</DrawerTitle>
+          <div className="min-h-0 overflow-y-auto px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
+        </DrawerContent>
+      </DrawerVirtualKeyboardProvider>
+    </Drawer>
   );
 }

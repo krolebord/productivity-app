@@ -102,11 +102,15 @@ export function useInlineConfirm({
     }
   }, [disarmOnBlur, pending, reset]);
 
-  const handlePointerLeave = useCallback(() => {
-    if (disarmOnPointerLeave && !pending) {
-      reset();
-    }
-  }, [disarmOnPointerLeave, pending, reset]);
+  const handlePointerLeave = useCallback(
+    (event: PointerEvent) => {
+      // Touch fires pointerleave right before click on every tap, which would disarm the confirm.
+      if (disarmOnPointerLeave && !pending && event.pointerType === "mouse") {
+        reset();
+      }
+    },
+    [disarmOnPointerLeave, pending, reset],
+  );
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
