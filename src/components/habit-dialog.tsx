@@ -278,7 +278,7 @@ function HabitDialogContent() {
         <form.AppField name="scheduleType">
           {(field) => (
             <field.FieldContainer labelText="Schedule">
-              <field.FormSelect placeholder="Select schedule">
+              <field.FormSelect placeholder="Select schedule" items={SCHEDULE_TYPES}>
                 {SCHEDULE_TYPES.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}

@@ -44,10 +44,8 @@ function FinanceActionsMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button type="button" size="icon" variant="ghost" aria-label="More actions">
-          <MoreHorizontalIcon className="size-4" />
-        </Button>
+      <DropdownMenuTrigger render={<Button type="button" size="icon" variant="ghost" aria-label="More actions" />}>
+        <MoreHorizontalIcon className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={createAccount}>

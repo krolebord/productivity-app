@@ -1,4 +1,5 @@
-import { Slot } from "@radix-ui/react-slot";
+import { mergeProps } from "@base-ui/react/merge-props";
+import { useRender } from "@base-ui/react/use-render";
 import { createFormHook, createFormHookContexts, useStore } from "@tanstack/react-form";
 import { AsteriskIcon } from "lucide-react";
 import * as React from "react";
@@ -92,7 +93,7 @@ export function FormItem({ className, id, ...props }: React.ComponentProps<"div"
 }
 
 type FieldContainerProps = {
-  children: React.ReactNode;
+  children: React.ReactElement;
   className?: string;
   description?: React.ReactNode;
   id?: string;
@@ -137,20 +138,26 @@ export function FormLabel({
   );
 }
 
-export function FormControl(props: React.ComponentProps<typeof Slot>) {
+export function FormControl({
+  children,
+  ...props
+}: Omit<useRender.ComponentProps<"div">, "render"> & { children: React.ReactElement }) {
   const { controlId, labelId, messageId } = useFormItemContext();
   const { showError } = useFieldMessageState();
 
-  return (
-    <Slot
-      data-slot="form-control"
-      id={controlId}
-      aria-describedby={messageId}
-      aria-invalid={showError || undefined}
-      aria-labelledby={labelId}
-      {...props}
-    />
-  );
+  return useRender({
+    render: children,
+    props: mergeProps<"div">(
+      {
+        "data-slot": "form-control",
+        id: controlId,
+        "aria-describedby": messageId,
+        "aria-invalid": showError || undefined,
+        "aria-labelledby": labelId,
+      } as React.ComponentProps<"div">,
+      props,
+    ),
+  });
 }
 
 export function FormMessage({ children, className, ...props }: React.ComponentProps<"p">) {
@@ -195,8 +202,9 @@ export function FormInput({ onBlur, onChange, value, ...props }: React.Component
   );
 }
 
-type FormSelectProps = React.ComponentProps<typeof Select> &
+type FormSelectProps = Omit<React.ComponentProps<typeof Select<string>>, "value" | "defaultValue" | "onValueChange"> &
   ControlA11yProps & {
+    onValueChange?: (value: string) => void;
     placeholder?: string;
   };
 
@@ -214,10 +222,11 @@ export function FormSelect({
 
   return (
     <Select
-      value={field.state.value === "" ? undefined : field.state.value}
+      value={field.state.value || null}
       onValueChange={(nextValue) => {
-        field.handleChange(nextValue);
-        onValueChange?.(nextValue);
+        const value = nextValue ?? "";
+        field.handleChange(value);
+        onValueChange?.(value);
       }}
       {...props}
     >
@@ -281,7 +290,7 @@ export function FormRadioGroup({
       aria-describedby={ariaDescribedBy}
       aria-invalid={ariaInvalid}
       aria-labelledby={ariaLabelledBy}
-      onValueChange={field.handleChange}
+      onValueChange={(value) => field.handleChange(value as string)}
       onBlur={(event) => {
         field.handleBlur();
         onBlur?.(event);

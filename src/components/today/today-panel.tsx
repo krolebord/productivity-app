@@ -14,35 +14,39 @@ export function TodayPanel() {
       <div className="flex h-14 shrink-0 items-center gap-1 border-b px-2">
         <span className="min-w-0 flex-1 truncate px-1.5 font-semibold text-sm">Today</span>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              aria-label="Open as page"
-              onClick={() => {
-                closePanel();
-                navigate({ to: "/today", viewTransition: true });
-              }}
-            >
-              <Maximize2 className="size-4" />
-            </Button>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label="Open as page"
+                onClick={() => {
+                  closePanel();
+                  navigate({ to: "/today", viewTransition: true });
+                }}
+              />
+            }
+          >
+            <Maximize2 className="size-4" />
           </TooltipTrigger>
           <TooltipContent side="bottom">Open as page</TooltipContent>
         </Tooltip>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              aria-label="Close today panel"
-              onClick={closePanel}
-            >
-              <X className="size-4" />
-            </Button>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label="Close today panel"
+                onClick={closePanel}
+              />
+            }
+          >
+            <X className="size-4" />
           </TooltipTrigger>
           <TooltipContent side="bottom">Close</TooltipContent>
         </Tooltip>

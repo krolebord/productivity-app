@@ -39,23 +39,25 @@ export function AccountVisibilityToggle({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          aria-label={label}
-          className={cn(
-            "shrink-0 rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground",
-            className,
-          )}
-          onClick={(event) => {
-            event.stopPropagation();
-            db.db.executeKysely((q) =>
-              q.updateTable("account").set({ excludeFromDashboard: !excluded }).where("id", "=", account.id),
-            );
-          }}
-        >
-          <Icon className={cn("size-4", iconClassName)} />
-        </button>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className={cn(
+              "shrink-0 rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground",
+              className,
+            )}
+            onClick={(event) => {
+              event.stopPropagation();
+              db.db.executeKysely((q) =>
+                q.updateTable("account").set({ excludeFromDashboard: !excluded }).where("id", "=", account.id),
+              );
+            }}
+          />
+        }
+      >
+        <Icon className={cn("size-4", iconClassName)} />
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>

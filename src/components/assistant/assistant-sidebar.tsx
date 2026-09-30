@@ -145,11 +145,9 @@ function ModelIntelligenceScore({ score }: { score: number | undefined }) {
   if (score == null) return null;
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="flex shrink-0 items-center gap-0.5 tabular-nums">
-          <Gauge className="size-3 shrink-0" />
-          {score}
-        </span>
+      <TooltipTrigger render={<span className="flex shrink-0 items-center gap-0.5 tabular-nums" />}>
+        <Gauge className="size-3 shrink-0" />
+        {score}
       </TooltipTrigger>
       <TooltipContent side="bottom">Artificial Analysis intelligence index</TooltipContent>
     </Tooltip>
@@ -596,10 +594,12 @@ function ModelModalityIcons({ modalities }: { modalities: AssistantModelInputMod
         const { label, Icon } = MODEL_MODALITY_META[modality];
         return (
           <Tooltip key={modality}>
-            <TooltipTrigger asChild>
-              <span aria-label={label} className="flex size-4 items-center justify-center" role="img" title={label}>
-                <Icon className="size-3.5" />
-              </span>
+            <TooltipTrigger
+              render={
+                <span aria-label={label} className="flex size-4 items-center justify-center" role="img" title={label} />
+              }
+            >
+              <Icon className="size-3.5" />
             </TooltipTrigger>
             <TooltipContent side="top">{label}</TooltipContent>
           </Tooltip>
@@ -623,12 +623,14 @@ function ModelSelect({
   if (locked) {
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs">
-            <Cpu className="size-3.5 shrink-0" />
-            <span className="truncate">{active.label}</span>
-            <ModelModalityIcons modalities={active.inputModalities} />
-          </span>
+        <TooltipTrigger
+          render={
+            <span className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs" />
+          }
+        >
+          <Cpu className="size-3.5 shrink-0" />
+          <span className="truncate">{active.label}</span>
+          <ModelModalityIcons modalities={active.inputModalities} />
         </TooltipTrigger>
         <TooltipContent side="bottom">Model is fixed once the conversation starts</TooltipContent>
       </Tooltip>
@@ -638,19 +640,23 @@ function ModelSelect({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-              aria-label="Select model"
-            >
-              <Cpu className="size-3.5 shrink-0" />
-              <span className="truncate">{active.label}</span>
-              <ModelModalityIcons modalities={active.inputModalities} />
-              <ChevronDown className="size-3 shrink-0" />
-            </button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+                  aria-label="Select model"
+                />
+              }
+            />
+          }
+        >
+          <Cpu className="size-3.5 shrink-0" />
+          <span className="truncate">{active.label}</span>
+          <ModelModalityIcons modalities={active.inputModalities} />
+          <ChevronDown className="size-3 shrink-0" />
         </TooltipTrigger>
         <TooltipContent side="bottom">{formatModelPricing(active)}</TooltipContent>
       </Tooltip>
@@ -690,11 +696,13 @@ function ReasoningEffortSelect({
   if (locked) {
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs">
-            <Brain className="size-3.5 shrink-0" />
-            <span className="truncate">{formatReasoningEffortLabel(effort)}</span>
-          </span>
+        <TooltipTrigger
+          render={
+            <span className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs" />
+          }
+        >
+          <Brain className="size-3.5 shrink-0" />
+          <span className="truncate">{formatReasoningEffortLabel(effort)}</span>
         </TooltipTrigger>
         <TooltipContent side="bottom">Reasoning effort is fixed once the conversation starts</TooltipContent>
       </Tooltip>
@@ -704,18 +712,22 @@ function ReasoningEffortSelect({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-              aria-label="Select reasoning effort"
-            >
-              <Brain className="size-3.5 shrink-0" />
-              <span className="truncate">{formatReasoningEffortLabel(effort)}</span>
-              <ChevronDown className="size-3 shrink-0" />
-            </button>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+                  aria-label="Select reasoning effort"
+                />
+              }
+            />
+          }
+        >
+          <Brain className="size-3.5 shrink-0" />
+          <span className="truncate">{formatReasoningEffortLabel(effort)}</span>
+          <ChevronDown className="size-3 shrink-0" />
         </TooltipTrigger>
         <TooltipContent side="bottom">Reasoning effort</TooltipContent>
       </Tooltip>
@@ -736,10 +748,8 @@ function ConversationCost({ conversation }: { conversation: ConversationRow }) {
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="shrink-0 px-1.5 py-0.5 text-muted-foreground text-xs tabular-nums">
-          {formatCost(conversation.totalCost)}
-        </span>
+      <TooltipTrigger render={<span className="shrink-0 px-1.5 py-0.5 text-muted-foreground text-xs tabular-nums" />}>
+        {formatCost(conversation.totalCost)}
       </TooltipTrigger>
       <TooltipContent side="top">
         {conversation.totalTokens.toLocaleString()} tokens · {formatCost(conversation.totalCost)} this conversation
@@ -765,6 +775,8 @@ function ConversationView({
   const { openConversation } = useAssistantNavigation();
   const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agentIdCopied, setAgentIdCopied] = useState(false);
+  const [copyTooltipOpen, setCopyTooltipOpen] = useState(false);
+  const [deleteTooltipOpen, setDeleteTooltipOpen] = useState(false);
   const conversation = target.kind === "persisted" ? target.conversation : null;
   const conversationId = target.kind === "persisted" ? target.conversation.id : target.conversationId;
   const active = conversation ?? ({ id: conversationId, title: "" } satisfies ConversationIdentity);
@@ -800,50 +812,56 @@ function ConversationView({
           <span className="truncate font-semibold text-sm">{conversationTitle(active)}</span>
         </div>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              aria-label="New conversation"
-              onClick={() => openConversation(generateId())}
-            >
-              <PlusIcon className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">New conversation</TooltipContent>
-        </Tooltip>
-        {conversation && auth.userRole === "admin" && (
-          <Tooltip open={agentIdCopied || undefined}>
-            <TooltipTrigger asChild>
+          <TooltipTrigger
+            render={
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="size-8 text-muted-foreground"
-                aria-label="Copy agent id"
-                onClick={copyAgentId}
-              >
-                {agentIdCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
-              </Button>
+                aria-label="New conversation"
+                onClick={() => openConversation(generateId())}
+              />
+            }
+          >
+            <PlusIcon className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent side="bottom">New conversation</TooltipContent>
+        </Tooltip>
+        {conversation && auth.userRole === "admin" && (
+          <Tooltip open={agentIdCopied || copyTooltipOpen} onOpenChange={setCopyTooltipOpen}>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground"
+                  aria-label="Copy agent id"
+                  onClick={copyAgentId}
+                />
+              }
+            >
+              {agentIdCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
             </TooltipTrigger>
             <TooltipContent side="bottom">{agentIdCopied ? "Copied agent id" : "Copy agent id"}</TooltipContent>
           </Tooltip>
         )}
         {conversation && (
-          <Tooltip open={deleteActive.armed || undefined}>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant={deleteActive.armed ? "destructive" : "ghost"}
-                size="icon"
-                className={cn("size-8", !deleteActive.armed && "text-muted-foreground")}
-                aria-label={deleteActive.armed ? "Confirm delete conversation" : "Delete conversation"}
-                {...deleteActive.getButtonProps()}
-              >
-                {deleteActive.pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-              </Button>
+          <Tooltip open={deleteActive.armed || deleteTooltipOpen} onOpenChange={setDeleteTooltipOpen}>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant={deleteActive.armed ? "destructive" : "ghost"}
+                  size="icon"
+                  className={cn("size-8", !deleteActive.armed && "text-muted-foreground")}
+                  aria-label={deleteActive.armed ? "Confirm delete conversation" : "Delete conversation"}
+                  {...deleteActive.getButtonProps()}
+                />
+              }
+            >
+              {deleteActive.pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
             </TooltipTrigger>
             <TooltipContent side="bottom">
               {deleteActive.armed ? "Click again to delete" : "Delete conversation"}

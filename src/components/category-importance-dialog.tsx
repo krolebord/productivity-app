@@ -560,7 +560,7 @@ export function CategoryImportanceDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeDialog()}>
-      <DialogContent className="sm:max-w-3xl" onOpenAutoFocus={(event) => event.preventDefault()}>
+      <DialogContent className="sm:max-w-3xl" initialFocus={false}>
         {isOpen && <CategoryImportanceDialogContent key={openRevision} />}
       </DialogContent>
     </Dialog>

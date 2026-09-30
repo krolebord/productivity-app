@@ -36,7 +36,7 @@ if (rootElement) {
   root.render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider delayDuration={700}>
+        <TooltipProvider delay={700}>
           <RouterProvider router={router} />
         </TooltipProvider>
       </QueryClientProvider>

@@ -79,7 +79,7 @@ export function ComboboxInput({
     setInputValue(value);
   }, [value]);
 
-  // Close on outside mousedown (works correctly inside Radix Dialog)
+  // Close on outside mousedown (works correctly inside Dialog)
   React.useEffect(() => {
     if (!open) return;
     function handleMouseDown(e: MouseEvent) {
@@ -105,6 +105,9 @@ export function ComboboxInput({
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape" && open) {
+      e.stopPropagation();
+    }
     if (e.key === "Escape" || e.key === "Tab") {
       setOpen(false);
     }

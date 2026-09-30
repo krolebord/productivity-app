@@ -56,10 +56,11 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { useDb, useDbState } from "@/user-db/user-db";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import { Button } from "./ui/button";
+import { Button, buttonVariants } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -85,17 +86,19 @@ function RemoteStateIndicator() {
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={cn("h-8 w-8", status.className)}
-          aria-label={`Sync status: ${status.label}`}
-          onClick={() => (remoteState === "online" ? state.goOffline() : state.goOnline())}
-        >
-          {status.icon}
-        </Button>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", status.className)}
+            aria-label={`Sync status: ${status.label}`}
+            onClick={() => (remoteState === "online" ? state.goOffline() : state.goOnline())}
+          />
+        }
+      >
+        {status.icon}
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={6}>
         {status.label}
@@ -155,10 +158,8 @@ function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
       <div className="hidden flex-col items-center gap-1 p-2 md:flex">
         <DropdownMenu>
           <SidebarTooltip label="New" collapsed>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" size="icon" aria-label="New">
-                <PlusIcon className="size-4" />
-              </Button>
+            <DropdownMenuTrigger render={<Button type="button" size="icon" aria-label="New" />}>
+              <PlusIcon className="size-4" />
             </DropdownMenuTrigger>
           </SidebarTooltip>
           {menuContent}
@@ -182,10 +183,8 @@ function SidebarActionRow({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="hidden gap-1.5 p-2 md:flex">
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" size="icon-sm" aria-label="New">
-            <PlusIcon className="size-4 shrink-0" />
-          </Button>
+        <DropdownMenuTrigger render={<Button type="button" size="icon-sm" aria-label="New" />}>
+          <PlusIcon className="size-4 shrink-0" />
         </DropdownMenuTrigger>
         {menuContent}
       </DropdownMenu>
@@ -277,43 +276,47 @@ function SidebarUserMenu({ collapsed }: { collapsed: boolean }) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex items-center rounded-md transition-colors hover:bg-sidebar-accent",
-            collapsed ? "justify-center p-2" : "w-full gap-2 p-3 text-left",
-          )}
-        >
-          <Avatar className="size-8 shrink-0">
-            <AvatarFallback className="text-xs">{auth.userName.slice(0, 2)}</AvatarFallback>
-          </Avatar>
-          {!collapsed && (
-            <>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-medium text-sm">{auth.userName}</span>
-                <span className="truncate text-muted-foreground text-xs">{auth.userEmail}</span>
-              </div>
-              <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/50" />
-            </>
-          )}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side={collapsed ? "right" : "top"} align="start" className="w-56">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex items-center gap-2">
-            <Avatar className="size-8">
-              <AvatarFallback className="text-xs">{auth.userName.slice(0, 2)}</AvatarFallback>
-            </Avatar>
-            <div className="flex min-w-0 flex-col">
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              "flex items-center rounded-md transition-colors hover:bg-sidebar-accent",
+              collapsed ? "justify-center p-2" : "w-full gap-2 p-3 text-left",
+            )}
+          />
+        }
+      >
+        <Avatar className="size-8 shrink-0">
+          <AvatarFallback className="text-xs">{auth.userName.slice(0, 2)}</AvatarFallback>
+        </Avatar>
+        {!collapsed && (
+          <>
+            <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-medium text-sm">{auth.userName}</span>
               <span className="truncate text-muted-foreground text-xs">{auth.userEmail}</span>
             </div>
-          </div>
-        </DropdownMenuLabel>
+            <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/50" />
+          </>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side={collapsed ? "right" : "top"} align="start" className="w-56">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex items-center gap-2">
+              <Avatar className="size-8">
+                <AvatarFallback className="text-xs">{auth.userName.slice(0, 2)}</AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate font-medium text-sm">{auth.userName}</span>
+                <span className="truncate text-muted-foreground text-xs">{auth.userEmail}</span>
+              </div>
+            </div>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-muted-foreground text-xs">Default home</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={defaultHome} onValueChange={(value) => setDefaultHome(value as DefaultHome)}>
+          <DropdownMenuLabel className="text-muted-foreground text-xs">Default home</DropdownMenuLabel>
           <DropdownMenuRadioItem value="finances">
             <ChartPie className="size-4" />
             Finances
@@ -324,8 +327,8 @@ function SidebarUserMenu({ collapsed }: { collapsed: boolean }) {
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-muted-foreground text-xs">Theme</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>
+          <DropdownMenuLabel className="text-muted-foreground text-xs">Theme</DropdownMenuLabel>
           <DropdownMenuRadioItem value="light">
             <Sun className="size-4" />
             Light
@@ -454,21 +457,23 @@ function MobileSidebar() {
   return (
     <>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          <Button
-            variant="secondary"
-            size="icon"
-            className={cn("!rounded-full fixed left-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM)}
-            aria-label={hasIntegrationError ? "Open menu (integrations error)" : "Open menu"}
-          >
-            <Menu className="size-5" />
-            {hasIntegrationError ? (
-              <span
-                className="absolute top-1.5 right-1.5 size-2.5 rounded-full bg-rose-500 ring-2 ring-background"
-                aria-hidden="true"
-              />
-            ) : null}
-          </Button>
+        <SheetTrigger
+          render={
+            <Button
+              variant="secondary"
+              size="icon"
+              className={cn("!rounded-full fixed left-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM)}
+              aria-label={hasIntegrationError ? "Open menu (integrations error)" : "Open menu"}
+            />
+          }
+        >
+          <Menu className="size-5" />
+          {hasIntegrationError ? (
+            <span
+              className="absolute top-1.5 right-1.5 size-2.5 rounded-full bg-rose-500 ring-2 ring-background"
+              aria-hidden="true"
+            />
+          ) : null}
         </SheetTrigger>
         <SheetContent className="bg-sidebar text-sidebar-foreground">
           <SheetHeader className="sr-only">
@@ -479,17 +484,18 @@ function MobileSidebar() {
         </SheetContent>
       </Sheet>
 
-      <Button
-        variant="secondary"
-        size="icon"
-        className={cn("!rounded-full fixed right-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM_STACKED)}
+      <Link
+        to={stackedToAssistant ? "/assistant" : "/today"}
+        viewTransition
+        className={buttonVariants({
+          variant: "secondary",
+          size: "icon",
+          className: cn("!rounded-full fixed right-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM_STACKED),
+        })}
         aria-label={stackedToAssistant ? "Open assistant" : "Open today"}
-        asChild
       >
-        <Link to={stackedToAssistant ? "/assistant" : "/today"} viewTransition>
-          {stackedToAssistant ? <Sparkles className="size-5" /> : <CalendarCheck className="size-5" />}
-        </Link>
-      </Button>
+        {stackedToAssistant ? <Sparkles className="size-5" /> : <CalendarCheck className="size-5" />}
+      </Link>
 
       <Button
         variant="default"

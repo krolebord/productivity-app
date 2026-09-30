@@ -607,7 +607,11 @@ function TransactionsPage() {
           />
         </div>
 
-        <Select value={sort} onValueChange={(value) => patchSearch({ sort: value as TransactionSort })}>
+        <Select
+          items={SORT_LABELS}
+          value={sort}
+          onValueChange={(value) => patchSearch({ sort: value as TransactionSort })}
+        >
           <SelectTrigger id="transactions-sort" className="w-[11.5rem]">
             <ArrowUpDownIcon className="size-4 text-muted-foreground" />
             <SelectValue placeholder="Sort transactions" />
@@ -631,16 +635,18 @@ function TransactionsPage() {
             className="inline-flex h-8 items-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-sm dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300"
           >
             <Popover open={openFilter === key} onOpenChange={(open) => setOpenFilter(open ? key : null)}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={`Edit ${filterMeta[key].label} filter`}
-                  className="inline-flex h-full max-w-[14rem] items-center rounded-l-full pr-1.5 pl-3 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"
-                >
-                  <span className="truncate">
-                    {filterMeta[key].label}: <span className="font-semibold">{filterMeta[key].value}</span>
-                  </span>
-                </button>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`Edit ${filterMeta[key].label} filter`}
+                    className="inline-flex h-full max-w-[14rem] items-center rounded-l-full pr-1.5 pl-3 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                  />
+                }
+              >
+                <span className="truncate">
+                  {filterMeta[key].label}: <span className="font-semibold">{filterMeta[key].value}</span>
+                </span>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-auto p-0">
                 {renderFilterEditor(key)}
@@ -667,14 +673,16 @@ function TransactionsPage() {
               }
             }}
           >
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <PlusIcon className="size-3.5" />
-                Add filter
-              </button>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground"
+                />
+              }
+            >
+              <PlusIcon className="size-3.5" />
+              Add filter
             </PopoverTrigger>
             <PopoverContent align="start" className="w-auto p-0">
               {addPage === null ? (

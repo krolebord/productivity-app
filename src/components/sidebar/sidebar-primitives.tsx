@@ -1,7 +1,7 @@
 import { formatForDisplay } from "@tanstack/hotkeys";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { ChevronDown, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSidebarStore } from "@/lib/sidebar-store";
@@ -23,13 +23,13 @@ export function SidebarTooltip({
 }: {
   label: string;
   collapsed: boolean;
-  children: ReactNode;
+  children: ReactElement;
 }) {
   if (!collapsed) return children;
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipTrigger render={children} />
       <TooltipContent side="right" sideOffset={6}>
         {label}
       </TooltipContent>
@@ -182,14 +182,16 @@ export function SidebarNavGroup({
           <Icon className="size-4 shrink-0" />
           {label}
         </Link>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
-            aria-label={`Toggle ${label.toLowerCase()} list`}
-          >
-            <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
-          </button>
+        <CollapsibleTrigger
+          render={
+            <button
+              type="button"
+              className="mr-2 rounded-sm p-0.5 opacity-60 transition-opacity hover:opacity-100"
+              aria-label={`Toggle ${label.toLowerCase()} list`}
+            />
+          }
+        >
+          <ChevronDown className="size-3.5 transition-transform [[data-closed]_&]:-rotate-90" />
         </CollapsibleTrigger>
       </div>
       <CollapsibleContent>

@@ -208,10 +208,8 @@ function FinancesPage() {
         </div>
         <div className="@xl:hidden">
           <Popover>
-            <PopoverTrigger asChild>
-              <Button size="icon" variant="ghost" aria-label="Overview settings">
-                <SettingsIcon className="size-4" />
-              </Button>
+            <PopoverTrigger render={<Button size="icon" variant="ghost" aria-label="Overview settings" />}>
+              <SettingsIcon className="size-4" />
             </PopoverTrigger>
             <PopoverContent align="end" className="flex w-64 flex-col gap-3">
               <DashboardRangeSelect className="w-full" />

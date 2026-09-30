@@ -109,21 +109,23 @@ export function ChatsBackButton({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="relative size-8 text-muted-foreground"
-          aria-label={activityLabel ? `Back to chats, ${activityLabel}` : "Back to chats"}
-          onClick={() => openConversationList()}
-        >
-          <ChevronLeft className="size-4" />
-          {activity.otherRunningCount > 0 && (
-            <Loader2 className="absolute right-0.5 bottom-0.5 size-3 animate-spin text-primary" aria-hidden="true" />
-          )}
-          {unseenCount > 0 && <UnseenCompletionBadge activity={activity} count={unseenCount} />}
-        </Button>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="relative size-8 text-muted-foreground"
+            aria-label={activityLabel ? `Back to chats, ${activityLabel}` : "Back to chats"}
+            onClick={() => openConversationList()}
+          />
+        }
+      >
+        <ChevronLeft className="size-4" />
+        {activity.otherRunningCount > 0 && (
+          <Loader2 className="absolute right-0.5 bottom-0.5 size-3 animate-spin text-primary" aria-hidden="true" />
+        )}
+        {unseenCount > 0 && <UnseenCompletionBadge activity={activity} count={unseenCount} />}
       </TooltipTrigger>
       <TooltipContent side="bottom">{activityLabel ?? "All chats"}</TooltipContent>
     </Tooltip>
@@ -328,17 +330,19 @@ export function ConversationList({
           <h2 className="truncate font-semibold text-sm">Chats</h2>
         </div>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              aria-label="New conversation"
-              onClick={() => openConversation(generateId())}
-            >
-              <PlusIcon className="size-4" />
-            </Button>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label="New conversation"
+                onClick={() => openConversation(generateId())}
+              />
+            }
+          >
+            <PlusIcon className="size-4" />
           </TooltipTrigger>
           <TooltipContent side="bottom">New conversation</TooltipContent>
         </Tooltip>

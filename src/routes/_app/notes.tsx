@@ -12,7 +12,7 @@ import { NoteCard, NoteCardContent } from "@/components/note-card";
 import { useCreateNote, useNoteDialogStore } from "@/components/note-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NEW_NOTE_HOTKEY } from "@/lib/hotkeys";
 import { effectiveMatch, noteViewSearch, viewMatchesSearch } from "@/lib/note-views";
 import { parseTags, UNTAGGED } from "@/lib/tags";
@@ -552,14 +552,16 @@ function NotesPage() {
 
           {hasTagFilter && activeViewId === null && (
             <Popover open={saveViewOpen} onOpenChange={setSaveViewOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-3 font-medium text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  <PlusIcon className="size-3" />
-                  Save view
-                </button>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-3 font-medium text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
+                  />
+                }
+              >
+                <PlusIcon className="size-3" />
+                Save view
               </PopoverTrigger>
               <PopoverContent align="start" className="w-64 p-2">
                 <form
@@ -600,91 +602,100 @@ function NotesPage() {
 
           <span className="hidden h-6 w-px self-center bg-border sm:block" />
 
-          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-            <PopoverAnchor asChild>
-              <div ref={filterAnchorRef} className="flex flex-wrap items-center gap-2">
-                {include.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterOpen((open) => !open)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 py-0 pr-1 pl-3 text-blue-700 text-sm transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                  >
-                    <span className="max-w-[16rem] truncate">
-                      Tags{include.length >= 2 ? ` (${matchMode})` : ""}:{" "}
-                      <span className="font-semibold">{include.map(tagFilterLabel).join(", ")}</span>
-                    </span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label="Clear tag filter"
-                      className="flex size-5 items-center justify-center rounded-full hover:bg-blue-200/70 dark:hover:bg-blue-800/70"
-                      onClick={(event) => {
+          <Popover
+            open={filterOpen}
+            onOpenChange={(open, details) => {
+              const target =
+                details.reason === "focus-out" && details.event instanceof FocusEvent
+                  ? details.event.relatedTarget
+                  : details.event.target;
+              if (
+                (details.reason === "outside-press" || details.reason === "focus-out") &&
+                target instanceof Node &&
+                filterAnchorRef.current?.contains(target)
+              ) {
+                details.cancel();
+                return;
+              }
+              setFilterOpen(open);
+            }}
+          >
+            <div ref={filterAnchorRef} className="flex flex-wrap items-center gap-2">
+              {include.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilterOpen((open) => !open)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 py-0 pr-1 pl-3 text-blue-700 text-sm transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                >
+                  <span className="max-w-[16rem] truncate">
+                    Tags{include.length >= 2 ? ` (${matchMode})` : ""}:{" "}
+                    <span className="font-semibold">{include.map(tagFilterLabel).join(", ")}</span>
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Clear tag filter"
+                    className="flex size-5 items-center justify-center rounded-full hover:bg-blue-200/70 dark:hover:bg-blue-800/70"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      patchSearch({ tags: undefined, match: undefined });
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
                         event.stopPropagation();
                         patchSearch({ tags: undefined, match: undefined });
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          patchSearch({ tags: undefined, match: undefined });
-                        }
-                      }}
-                    >
-                      <XIcon className="size-3.5" />
-                    </span>
-                  </button>
-                )}
-
-                {exclude.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterOpen((open) => !open)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-red-200 bg-red-50 py-0 pr-1 pl-3 text-red-700 text-sm transition-colors hover:bg-red-100 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/50"
+                      }
+                    }}
                   >
-                    <span className="max-w-[16rem] truncate">
-                      Not: <span className="font-semibold">{exclude.map(tagFilterLabel).join(", ")}</span>
-                    </span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label="Clear excluded tags"
-                      className="flex size-5 items-center justify-center rounded-full hover:bg-red-200/70 dark:hover:bg-red-800/70"
-                      onClick={(event) => {
+                    <XIcon className="size-3.5" />
+                  </span>
+                </button>
+              )}
+
+              {exclude.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilterOpen((open) => !open)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-red-200 bg-red-50 py-0 pr-1 pl-3 text-red-700 text-sm transition-colors hover:bg-red-100 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/50"
+                >
+                  <span className="max-w-[16rem] truncate">
+                    Not: <span className="font-semibold">{exclude.map(tagFilterLabel).join(", ")}</span>
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Clear excluded tags"
+                    className="flex size-5 items-center justify-center rounded-full hover:bg-red-200/70 dark:hover:bg-red-800/70"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      patchSearch({ not: undefined });
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
                         event.stopPropagation();
                         patchSearch({ not: undefined });
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          patchSearch({ not: undefined });
-                        }
-                      }}
-                    >
-                      <XIcon className="size-3.5" />
-                    </span>
-                  </button>
-                )}
-
-                {include.length === 0 && exclude.length === 0 && allFilterTags.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFilterOpen((open) => !open)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground"
+                      }
+                    }}
                   >
-                    <PlusIcon className="size-3.5" />
-                    Add filter
-                  </button>
-                )}
-              </div>
-            </PopoverAnchor>
-            <PopoverContent
-              align="start"
-              className="w-auto p-0"
-              onInteractOutside={(event) => {
-                if (filterAnchorRef.current?.contains(event.target as Node)) event.preventDefault();
-              }}
-            >
+                    <XIcon className="size-3.5" />
+                  </span>
+                </button>
+              )}
+
+              {include.length === 0 && exclude.length === 0 && allFilterTags.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilterOpen((open) => !open)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-dashed px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <PlusIcon className="size-3.5" />
+                  Add filter
+                </button>
+              )}
+            </div>
+            <PopoverContent align="start" className="w-auto p-0" anchor={filterAnchorRef}>
               <TagFilterEditor
                 allTags={allFilterTags}
                 include={include}

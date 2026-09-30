@@ -74,20 +74,22 @@ export function DateTimeInput({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          variant="outline"
-          aria-describedby={ariaDescribedBy}
-          aria-invalid={ariaInvalid || undefined}
-          aria-labelledby={ariaLabelledBy}
-          onBlur={onBlur}
-          className={cn("h-9 w-full justify-start px-3 font-normal", !selected && "text-muted-foreground")}
-        >
-          <CalendarIcon className="size-4 text-muted-foreground" />
-          <span className="truncate">{displayDate}</span>
-          <span className="ml-auto font-mono text-muted-foreground text-xs tabular-nums">{time}</span>
-        </Button>
+      <PopoverTrigger
+        render={
+          <Button
+            id={id}
+            variant="outline"
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={ariaInvalid || undefined}
+            aria-labelledby={ariaLabelledBy}
+            onBlur={onBlur}
+            className={cn("h-9 w-full justify-start px-3 font-normal", !selected && "text-muted-foreground")}
+          />
+        }
+      >
+        <CalendarIcon className="size-4 text-muted-foreground" />
+        <span className="truncate">{displayDate}</span>
+        <span className="ml-auto font-mono text-muted-foreground text-xs tabular-nums">{time}</span>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar

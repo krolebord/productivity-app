@@ -66,20 +66,22 @@ export function TaskScheduleControl({ dueAt, hasDueTime, onChange }: TaskSchedul
   return (
     <div className="flex items-center gap-1">
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={selected ? `Scheduled ${display}` : "Schedule task"}
-            className={cn(
-              "h-8 gap-1.5 px-2 font-normal text-muted-foreground",
-              selected ? "text-foreground" : "border border-dashed",
-            )}
-          >
-            <CalendarIcon className="size-3.5" />
-            <span className="text-xs">{display ?? "Inbox"}</span>
-          </Button>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={selected ? `Scheduled ${display}` : "Schedule task"}
+              className={cn(
+                "h-8 gap-1.5 px-2 font-normal text-muted-foreground",
+                selected ? "text-foreground" : "border border-dashed",
+              )}
+            />
+          }
+        >
+          <CalendarIcon className="size-3.5" />
+          <span className="text-xs">{display ?? "Inbox"}</span>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
           <Calendar

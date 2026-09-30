@@ -19,14 +19,14 @@ export function DashboardRangeSelect({ className }: { className?: string }) {
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className={cn("justify-between gap-2 font-normal", className)}>
-          <span className="flex items-center gap-1.5">
-            <CalendarRangeIcon className="size-4" />
-            {label}
-          </span>
-          <ChevronsUpDownIcon className="size-4 opacity-50" />
-        </Button>
+      <PopoverTrigger
+        render={<Button variant="outline" className={cn("justify-between gap-2 font-normal", className)} />}
+      >
+        <span className="flex items-center gap-1.5">
+          <CalendarRangeIcon className="size-4" />
+          {label}
+        </span>
+        <ChevronsUpDownIcon className="size-4 opacity-50" />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 space-y-3">
         <div className="inline-flex w-full rounded-md border bg-muted/50 p-0.5">

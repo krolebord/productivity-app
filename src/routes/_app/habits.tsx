@@ -312,7 +312,7 @@ function HabitsPage() {
       {archivedHabits.length > 0 && (
         <Collapsible className="mt-8">
           <CollapsibleTrigger className="flex items-center gap-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground">
-            <ChevronDown className="size-3.5 transition-transform [[data-state=closed]_&]:-rotate-90" />
+            <ChevronDown className="size-3.5 transition-transform [[data-closed]_&]:-rotate-90" />
             Archived ({archivedHabits.length})
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-3">

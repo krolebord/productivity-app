@@ -173,7 +173,7 @@ export function InlineConfirmButton({
 
   return (
     <Tooltip open={armed}>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipTrigger render={button} />
       <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>
   );

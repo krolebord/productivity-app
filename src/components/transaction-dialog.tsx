@@ -298,6 +298,10 @@ function TransactionDialogContent() {
   const hasOrphanSourceAccount = currentAccountId !== "" && !sourceAccount;
   const hasOrphanCounterpartyAccount = currentCounterpartyId !== "" && !destinationAccount;
   const canRenderTransfer = currentType === "transfer" && accounts.length >= 2;
+  const accountItems = accounts.map((account) => ({
+    value: account.id,
+    label: `${account.labelText || "Untitled"} (${account.currency})`,
+  }));
 
   function openAccountCreator() {
     closeDialog();
@@ -386,11 +390,18 @@ function TransactionDialogContent() {
               <form.AppField name="accountId">
                 {(field) => (
                   <field.FieldContainer labelText={currentType === "transfer" ? "Source account" : "Account"}>
-                    <field.FormSelect placeholder="Select account">
+                    <field.FormSelect
+                      placeholder="Select account"
+                      items={
+                        hasOrphanSourceAccount
+                          ? [{ value: currentAccountId, label: "No account" }, ...accountItems]
+                          : accountItems
+                      }
+                    >
                       {hasOrphanSourceAccount && <SelectItem value={currentAccountId}>No account</SelectItem>}
-                      {accounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id}>
-                          {account.labelText || "Untitled"} ({account.currency})
+                      {accountItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
                         </SelectItem>
                       ))}
                     </field.FormSelect>
@@ -406,13 +417,20 @@ function TransactionDialogContent() {
                   <form.AppField name="counterpartyAccountId">
                     {(field) => (
                       <field.FieldContainer labelText="Destination account">
-                        <field.FormSelect placeholder="Select destination">
+                        <field.FormSelect
+                          placeholder="Select destination"
+                          items={
+                            hasOrphanCounterpartyAccount
+                              ? [{ value: currentCounterpartyId, label: "No account" }, ...accountItems]
+                              : accountItems
+                          }
+                        >
                           {hasOrphanCounterpartyAccount && (
                             <SelectItem value={currentCounterpartyId}>No account</SelectItem>
                           )}
-                          {accounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {account.labelText || "Untitled"} ({account.currency})
+                          {accountItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
                             </SelectItem>
                           ))}
                         </field.FormSelect>

@@ -4,7 +4,7 @@ import { AlertTriangle, FileQuestion } from "lucide-react";
 import { AppUpdateProvider } from "@/components/app-update-provider";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Devtools } from "@/components/devtools";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 
 export const Route = createRootRouteWithContext<{
@@ -26,9 +26,9 @@ function NotFound() {
           <h1 className="font-bold text-5xl tabular-nums">404</h1>
           <p className="mt-1 text-muted-foreground">Page not found</p>
         </div>
-        <Button asChild className="mt-2">
-          <Link to="/">Go home</Link>
-        </Button>
+        <Link to="/" className={buttonVariants({ className: "mt-2" })}>
+          Go home
+        </Link>
       </div>
     </div>
   );
@@ -47,9 +47,9 @@ function ErrorPage({ error, reset }: ErrorComponentProps) {
         </div>
         <div className="flex gap-2">
           <Button onClick={reset}>Try again</Button>
-          <Button asChild variant="outline">
-            <Link to="/">Go home</Link>
-          </Button>
+          <Link to="/" className={buttonVariants({ variant: "outline" })}>
+            Go home
+          </Link>
         </div>
       </div>
       <Devtools />

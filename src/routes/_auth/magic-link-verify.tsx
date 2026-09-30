@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,9 +96,9 @@ function RouteComponent() {
           <Button disabled={isPending || code.length !== 6 || !email} className="gap-2" onClick={handleSubmit}>
             {isPending ? <Loader2 size={16} className="animate-spin" /> : "Verify Code"}
           </Button>
-          <Button variant="secondary" asChild>
-            <Link to="/sign-in">Sign In</Link>
-          </Button>
+          <Link to="/sign-in" className={buttonVariants({ variant: "secondary" })}>
+            Sign In
+          </Link>
         </div>
       </CardContent>
     </Card>

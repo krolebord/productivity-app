@@ -274,61 +274,59 @@ export function GoogleCalendarSection({
   const errorCount = connections.filter((connection) => connection.status === "error").length;
 
   return (
-    <Collapsible asChild>
-      <section className="rounded-xl border bg-card">
-        <div className="flex @2xl:flex-row flex-col @2xl:items-center @2xl:justify-between gap-3 p-4">
-          <CollapsibleTrigger className="flex min-w-0 flex-1 items-start gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform [[data-state=closed]_&]:-rotate-90" />
-            <div className="min-w-0">
-              <h2 className="font-semibold">Google Calendar</h2>
-              <p
-                className={cn(
-                  "mt-0.5 text-xs",
-                  errorCount > 0 ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground",
-                )}
-              >
-                {connections.length === 0
-                  ? "Not connected"
-                  : errorCount > 0
-                    ? `${errorCount} ${errorCount === 1 ? "account needs" : "accounts need"} reconnection`
-                    : `${connections.length} ${connections.length === 1 ? "account" : "accounts"} connected`}
-              </p>
-            </div>
-          </CollapsibleTrigger>
-
-          <div className="flex flex-wrap gap-2 pl-6 @2xl:pl-0">
-            <Button
-              size="sm"
-              variant={connections.length === 0 ? "default" : "outline"}
-              onClick={() => connect.mutate({})}
-              disabled={connect.isPending}
+    <Collapsible render={<section className="rounded-xl border bg-card" />}>
+      <div className="flex @2xl:flex-row flex-col @2xl:items-center @2xl:justify-between gap-3 p-4">
+        <CollapsibleTrigger className="flex min-w-0 flex-1 items-start gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform [[data-closed]_&]:-rotate-90" />
+          <div className="min-w-0">
+            <h2 className="font-semibold">Google Calendar</h2>
+            <p
+              className={cn(
+                "mt-0.5 text-xs",
+                errorCount > 0 ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground",
+              )}
             >
-              <PlusIcon />
-              {connections.length === 0 ? "Connect" : "Connect another account"}
-            </Button>
-          </div>
-        </div>
-
-        <CollapsibleContent>
-          <div className="flex flex-col gap-3 border-t p-4">
-            <p className="text-muted-foreground text-sm">
-              Events from the calendars you pick appear as tasks in Today, refreshed every 15 minutes. Read-only:
-              completing or editing a task here never changes anything in Google.
+              {connections.length === 0
+                ? "Not connected"
+                : errorCount > 0
+                  ? `${errorCount} ${errorCount === 1 ? "account needs" : "accounts need"} reconnection`
+                  : `${connections.length} ${connections.length === 1 ? "account" : "accounts"} connected`}
             </p>
-            {connections.map((connection) => (
-              <GoogleCalendarAccountCard
-                key={connection.id}
-                connection={connection}
-                sources={sourcesByConnection.get(connection.providerConnectionId) ?? []}
-                syncStatus={statusByConnectionId.get(connection.providerConnectionId)}
-                reconnectPending={connect.isPending}
-                onReconnect={() => connect.mutate({ loginHint: connection.email || undefined })}
-                onSyncStatusStale={invalidateSyncStatus}
-              />
-            ))}
           </div>
-        </CollapsibleContent>
-      </section>
+        </CollapsibleTrigger>
+
+        <div className="flex flex-wrap gap-2 pl-6 @2xl:pl-0">
+          <Button
+            size="sm"
+            variant={connections.length === 0 ? "default" : "outline"}
+            onClick={() => connect.mutate({})}
+            disabled={connect.isPending}
+          >
+            <PlusIcon />
+            {connections.length === 0 ? "Connect" : "Connect another account"}
+          </Button>
+        </div>
+      </div>
+
+      <CollapsibleContent>
+        <div className="flex flex-col gap-3 border-t p-4">
+          <p className="text-muted-foreground text-sm">
+            Events from the calendars you pick appear as tasks in Today, refreshed every 15 minutes. Read-only:
+            completing or editing a task here never changes anything in Google.
+          </p>
+          {connections.map((connection) => (
+            <GoogleCalendarAccountCard
+              key={connection.id}
+              connection={connection}
+              sources={sourcesByConnection.get(connection.providerConnectionId) ?? []}
+              syncStatus={statusByConnectionId.get(connection.providerConnectionId)}
+              reconnectPending={connect.isPending}
+              onReconnect={() => connect.mutate({ loginHint: connection.email || undefined })}
+              onSyncStatusStale={invalidateSyncStatus}
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
     </Collapsible>
   );
 }

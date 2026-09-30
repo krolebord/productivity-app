@@ -18,7 +18,7 @@ Auth uses magic links (sent via the Cloudflare Email binding) and Google OAuth (
 src/server.ts              # Worker entry (serves SPA, API, RPC, user-db sync)
 src/main.tsx               # Client entry (TanStack Router)
 src/routes/                # File-based routes (_app = authed app, _auth = sign-in flow)
-src/components/            # App components + ui/ (shadcn-style Radix components)
+src/components/            # App components + ui/ (shadcn-style Base UI components)
 src/orpc/                  # oRPC client/router (auth endpoints)
 src/api/handlers/          # Plain HTTP handlers (OAuth callbacks)
 src/user-db/               # Per-user synced DB: schema/migrations, web worker, Durable Object server, jobs
@@ -30,7 +30,7 @@ wrangler.jsonc             # Cloudflare config (D1, Durable Objects, email, asse
 ## Technology Stack
 
 - **Runtime**: Cloudflare Workers + Durable Objects (UserDbServer), D1 (central auth DB)
-- **Frontend**: React 19, TanStack Router/Query/Form, Tailwind v4, Radix UI, zustand
+- **Frontend**: React 19, TanStack Router/Query/Form, Tailwind v4, Base UI, zustand
 - **Data**: @sqlite-sync (per-user CRDT-synced SQLite), kysely + kysely-d1 (central DB)
 - **API**: oRPC (`/rpc/*`), plain handlers (`/api/*`), WebSocket sync (`/user-db/*`)
 - **Tooling**: pnpm, Biome (format/lint), tsc (typecheck), Vite + @cloudflare/vite-plugin

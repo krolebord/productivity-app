@@ -89,22 +89,28 @@ export function CurrencySelect({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          aria-describedby={ariaDescribedBy}
-          aria-invalid={ariaInvalid}
-          aria-labelledby={ariaLabelledBy}
-          className={cn("h-9 w-full justify-between px-3 font-normal", !selected && "text-muted-foreground", className)}
-        >
-          <span className="truncate">{selected?.currency ?? (value || placeholder)}</span>
-          <ChevronsUpDownIcon className="size-4 opacity-50" />
-        </Button>
+      <PopoverTrigger
+        render={
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={ariaInvalid}
+            aria-labelledby={ariaLabelledBy}
+            className={cn(
+              "h-9 w-full justify-between px-3 font-normal",
+              !selected && "text-muted-foreground",
+              className,
+            )}
+          />
+        }
+      >
+        <span className="truncate">{selected?.currency ?? (value || placeholder)}</span>
+        <ChevronsUpDownIcon className="size-4 opacity-50" />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
+      <PopoverContent align="start" className="w-(--anchor-width) p-0">
         <Command shouldFilter={false}>
           <CommandInput value={search} onValueChange={setSearch} placeholder="Search currency..." />
           <CommandList>

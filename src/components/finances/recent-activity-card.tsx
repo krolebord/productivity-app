@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { SectionCard } from "@/components/page-shell";
 import { useTransactionDialogStore } from "@/components/transaction-dialog";
 import { TransactionRow } from "@/components/transaction-row";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import type { AmountConverter } from "@/lib/finance/overview";
 import { getDisplayAmountForAccount, type TransactionRow as TransactionRecord } from "@/lib/transactions";
 import type { AccountItem } from "@/user-db/migrations";
@@ -27,11 +27,13 @@ export function RecentActivityCard({
     <SectionCard
       title="Recent activity"
       actions={
-        <Button asChild size="sm" variant="ghost">
-          <Link to="/finances/transactions" search={rangeSearch}>
-            View all
-          </Link>
-        </Button>
+        <Link
+          to="/finances/transactions"
+          search={rangeSearch}
+          className={buttonVariants({ size: "sm", variant: "ghost" })}
+        >
+          View all
+        </Link>
       }
     >
       {transactions.length === 0 ? (
