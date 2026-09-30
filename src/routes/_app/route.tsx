@@ -22,6 +22,7 @@ import { useAssistantStore } from "@/lib/assistant-store";
 import { clearCachedAuth, readCachedAuth, writeCachedAuth } from "@/lib/auth-cache";
 import { useIsAssistantPage } from "@/lib/use-assistant-surface";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useVisualViewport } from "@/lib/use-visual-viewport";
 import { cn } from "@/lib/utils";
 import { orpc } from "@/orpc/orpc-client";
 import { DbProvider, initUserDb } from "@/user-db/user-db";
@@ -79,6 +80,7 @@ function RouteComponent() {
   const isAssistantPage = useIsAssistantPage();
   const showRightPanel = resolvedPanel !== null && isDesktop && !isAssistantPage;
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "assistant-layout" });
+  const shellRef = useVisualViewport<HTMLDivElement>();
 
   return (
     <DbProvider db={db}>
@@ -90,7 +92,7 @@ function RouteComponent() {
       ) : null}
       <AppDndProvider>
         <SyncStatusMonitor />
-        <div className="flex h-dvh overflow-hidden">
+        <div ref={shellRef} className="fixed inset-x-0 top-(--viewport-top) flex h-(--viewport-height) overflow-hidden">
           <AppSidebar />
           <Group
             orientation="horizontal"

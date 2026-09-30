@@ -115,6 +115,9 @@
   /* Height of whatever a page pins to the bottom edge (the assistant composer).
      The mobile floating buttons sit above it. See useBottomInset. */
   --bottom-inset: 0px;
+  /* The visible area once the mobile keyboard is open. See useVisualViewport. */
+  --viewport-height: 100dvh;
+  --viewport-top: 0px;
 }
 
 @theme inline {
