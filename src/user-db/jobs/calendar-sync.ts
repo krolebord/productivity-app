@@ -171,10 +171,12 @@ export const calendarSyncJob = defineJob({ type: "calendar-sync" })
             lastError: "",
             syncToken: result.syncToken,
           };
-          console.log("[calendar-sync] synced calendar", {
-            calendarId: source.providerCalendarId,
-            ...result.counts,
-          });
+          if (result.counts.created + result.counts.updated + result.counts.removed > 0) {
+            console.log("[calendar-sync] synced calendar", {
+              calendarId: source.providerCalendarId,
+              ...result.counts,
+            });
+          }
         } catch (error) {
           const message = describeApiError(error);
           connectionError = message;
@@ -196,12 +198,18 @@ export const calendarSyncJob = defineJob({ type: "calendar-sync" })
 
       setSyncedStatus(context, connection, connectionError === "" ? "connected" : "error");
 
-      // D1 keeps a coarse record for support/debugging; it is not read by the UI.
+      // D1 keeps a coarse record for support/debugging; it is not read by the UI, so it is only
+      // written when the status changes.
+      const d1Status = connectionError === "" ? "connected" : "error";
+      const d1LastError = connectionError || null;
+      if (stored.status === d1Status && stored.lastError === d1LastError) {
+        continue;
+      }
       await db
         .updateTable("google_calendar_connection")
         .set({
-          status: connectionError === "" ? "connected" : "error",
-          lastError: connectionError || null,
+          status: d1Status,
+          lastError: d1LastError,
           lastSyncedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })
