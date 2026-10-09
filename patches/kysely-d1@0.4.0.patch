@@ -1,0 +1,26 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 906657a37eeb39f7d452d7b35357de86a96f0791..d22600fe2f5083985fbca639bf75da60bdcb2c56 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -92,8 +92,6 @@ class D1Connection {
+                 : BigInt(results.meta.last_row_id),
+             rows: results?.results || [],
+             numAffectedRows,
+-            // @ts-ignore deprecated in kysely >= 0.23, keep for backward compatibility.
+-            numUpdatedOrDeletedRows: numAffectedRows,
+         };
+     }
+     async beginTransaction() {
+diff --git a/dist/index.js b/dist/index.js
+index 644f6b9aa33817dc7fe1893a9a84d91433dae064..2187bb0758bf10a7b60c6b2759e33a7e09d7afaf 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -88,8 +88,6 @@ class D1Connection {
+                 : BigInt(results.meta.last_row_id),
+             rows: results?.results || [],
+             numAffectedRows,
+-            // @ts-ignore deprecated in kysely >= 0.23, keep for backward compatibility.
+-            numUpdatedOrDeletedRows: numAffectedRows,
+         };
+     }
+     async beginTransaction() {
