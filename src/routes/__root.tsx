@@ -35,6 +35,8 @@ function NotFound() {
 }
 
 function ErrorPage({ error, reset }: ErrorComponentProps) {
+  const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+
   return (
     <div className="flex min-h-dvh items-center justify-center">
       <div className="flex flex-col items-center gap-4 text-center">
@@ -43,7 +45,7 @@ function ErrorPage({ error, reset }: ErrorComponentProps) {
         </div>
         <div>
           <h1 className="font-bold text-2xl">Something went wrong</h1>
-          <p className="mt-1 max-w-sm text-muted-foreground text-sm">{error.message}</p>
+          <p className="mt-1 max-w-sm text-muted-foreground text-sm">{message}</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={reset}>Try again</Button>

@@ -165,14 +165,16 @@ export type Todo = typeof syncDbSchema.tables.todo.$row;
 ```
 
 Column builders: `t.text()`, `t.integer()`, `t.real()`, `t.boolean()` (stored as INTEGER 0/1),
-and `t.enum(["a", "b"])` (TEXT, validated against the values at runtime — no SQL CHECK
-constraint). JSON values are stored as serialized TEXT via `t.text()` — parse at the call site.
+and `t.enum(["a", "b"])` (TEXT, validated against the values at runtime, no SQL CHECK
+constraint). JSON values are stored as serialized TEXT via `t.text()`. Parse at the call site.
 Each column builder chains `.nullable()`, `.default(value)`,
 `.$type<Narrowed>()` (type-only narrowing, e.g. `t.text().$type<"a" | (string & {})>()`), and
-`.describe(text)` for generated schema docs. Table options cover `baseName`, `description`, `ai`,
-`writes`, and `exportImport`. Their defaults are `ai: "read-write"`, `writes: "any"`, and
-`exportImport: "include"`. See [AI access control](#limiting-what-an-agent-may-touch) and
-[Server-only tables](#server-only-tables). `.describe()` is equivalent to `{ description }`.
+`.describe(text)` for generated schema docs.
+
+Table options cover `baseName`, `description`, `ai`, `writes`, and `exportImport`.
+Defaults are `ai: "read-write"`, `writes: "any"`, and `exportImport: "include"`. See
+[AI access control](#limiting-what-an-agent-may-touch) and
+[Server-only tables](#server-only-tables). `.describe()` is the same as `{ description }`.
 
 The table builders also expose runtime metadata: `syncDbSchema.tables.todo.columns` (per-column
 kind, nullability, defaults) and `validatePayload(payload, { event })` for checking CRDT event
@@ -197,9 +199,9 @@ In the browser, pass `verifySchema: import.meta.env.DEV` to `startDbWorker` — 
 worker throws with the full issue list and refuses to start.
 
 The schema carries three phantom types used for type inference:
-- `~clientSchema` — Used by React hooks. Includes both base tables (read-only) and CRDT views (read-write).
-- `~serverSchema` — Used by server-side `executeKysely`. Includes both base tables and read-only CRDT views.
-- `~mutationsSchema` — Used by `enqueueEvent` for typed CRDT payloads.
+- `~clientSchema` — Used by React hooks and client `executeKysely`. Base tables are read-only. CRDT views are read-write, except tables with `{ writes: "server" }`, which are read-only.
+- `~serverSchema` — Used by server-side `executeKysely`. CRDT views are read-write, including server-only tables. Base tables are read-only.
+- `~mutationsSchema` — Used by `enqueueEvent` for typed CRDT payloads. Server-only tables stay writable.
 
 ---
 
@@ -479,6 +481,7 @@ db.executeKysely((db) =>
 ```
 
 You must always provide an `id` (UUID) for new items. The `tombstone` column is managed automatically — do not set it.
+A NOT NULL column left out of the insert is left out of the event too, and each replica fills it with its table default, so defaults must be constants.
 
 ### Update
 
@@ -580,9 +583,9 @@ to export a subset — the filter accepts either the public or the base table
 name. The data is read from the local in-memory database — the state the current
 tab sees.
 
-Pass `{ exportImport: "ignore" }` as a table option for data that should stay out of backups and
-restores. Ignored tables remain excluded when selected explicitly, and imports skip their matching
-rows.
+Pass `{ exportImport: "ignore" }` as a table option for data that must stay out
+of backup and restore. Ignored tables are omitted even when selected explicitly,
+and matching rows in an imported dump are skipped.
 
 ```ts
 const syncDbSchema = defineSyncSchema({
@@ -610,8 +613,9 @@ defaults are filled, rows in dropped tables are discarded). A dump from a **newe
 version cannot be down-migrated and is rejected; pass `{ validate: false }` to
 author it as-is at the current version anyway (footgun — payloads are not
 down-migrated). Row payloads are always validated against the schema and the
-import is atomic — an invalid row throws `CrdtEventValidationError` and applies
-nothing.
+import is atomic — an invalid row rejects the call and applies nothing. The
+validation runs in the worker, so `syncedDb.importData` rejects with a plain
+`Error` carrying the validation message, not a `CrdtEventValidationError`.
 
 ---
 
@@ -636,9 +640,15 @@ function Root({ children }: { children: React.ReactNode }) {
 }
 ```
 
-The component renders a floating `SQLite Sync` button. Clicking it opens a dialog with:
-- a left sidebar for navigation and database selection
-- a main pane for the active tool
+A `SQLite Sync` button floats over the app. Click it and you get a dialog: sidebar on the left, the active tool on the right. The UI is isolated in a shadow root, so Tailwind (or any other host CSS) does not restyle the launcher or dialog. `className` styles the light-DOM host element only. It cannot reach internals.
+
+If your app has its own toggle, pass `hidden` and `onHiddenChange`:
+
+```tsx
+<SQLiteSyncDevtools hidden={devtoolsHidden} onHiddenChange={setDevtoolsHidden} />
+```
+
+Leave those off if the button should manage itself. `Ctrl+Alt+S` (⌘⌥S on macOS) toggles it and the choice sticks in `localStorage`. Hide in the dialog does the same.
 
 ### Instance Discovery
 
@@ -648,9 +658,13 @@ You do not need to pass instances manually to the devtools component. Mounting `
 
 ### Current Tools
 
-The current devtools prototype includes:
-- an overview tab for selecting a detected database
-- a query runner tab for executing SQL against the selected instance
+Tabs:
+
+- Overview: instance details, memory and worker DB sizes, CRDT event counts by status, backup and reset
+- Schema: declared tables (columns, descriptions, write/AI/export policy) and the applied migration version
+- Live queries
+- Event log: filters plus the matching total
+- Query runner
 
 ### Query Runner Rules
 
@@ -692,7 +706,7 @@ function SyncStatus() {
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `remoteState` | `"online" \| "offline" \| "pending"` | Current remote connection state. |
+| `remoteState` | `"online" \| "offline" \| "pending"` | Current remote connection state. `pending` means a connection attempt is in progress. |
 | `deSynced` | `boolean` | `true` after the worker detects that local applied events and remote applied events diverged. |
 | `schemaVersionMismatched` | `boolean` | `true` after the worker receives an event from a newer schema version than the local code can apply. |
 
@@ -700,7 +714,7 @@ function SyncStatus() {
 
 sqlite-sync detects two recovery conditions while syncing:
 
-- **De-sync detected** — the local worker is caught up to the remote sync ID and no local events are waiting to push, but the local and remote HLC checksums differ. This means the applied event sets have diverged. It can also be raised if applying a remote event fails.
+- **De-sync detected** — the local worker is caught up to the remote sync ID and no local events are waiting to push, but the local and remote HLC checksums differ. This means the applied event sets have diverged, for example because the server rejected some of this client's pushed events (see [Client push validation](#client-push-validation)). It can also be raised if applying a remote event fails.
 - **Schema version mismatch** — the remote sends an event with a `schema_version` greater than the local migrator's current schema version. This usually means another client has already written data with newer app code.
 
 You can react to these conditions through `useDbState()` for UI state, or subscribe to the underlying worker notifications with `useDbEvent()`:
@@ -735,7 +749,7 @@ Prompt the user before calling `requestReload`. Both recovery paths can reload e
 
 Use `requestReload({ clean: false })` for schema mismatch first: it reloads all tabs for the `dbId` without wiping the persisted worker DB, letting the app load newer code and migrations. If the user is already on the latest code and the mismatch persists, deploy compatibility migrations or treat it as a recovery incident.
 
-Use `requestReload({ clean: true })` for de-sync recovery: it records a reset request, reloads all tabs for the `dbId`, wipes the persisted worker DB on the next worker startup, and rehydrates from the remote event log. This is destructive to pending in-memory tab events and any local-only durable events that had not reached the remote.
+sqlite-sync only reports de-sync; it does not recover on its own. Apps need a `de-sync-detected` handler like the one above. Use `requestReload({ clean: true })` for de-sync recovery: it records a reset request, reloads all tabs for the `dbId`, wipes the persisted worker DB on the next worker startup, and rehydrates from the remote event log. This is destructive to pending in-memory tab events and any local-only durable events that had not reached the remote.
 
 ### Controlling Sync
 
@@ -780,6 +794,7 @@ Notes:
 - This is a recovery/reload flow, not a hot runtime reset — pending in-memory tab events are not preserved.
 - The returned promise may never settle in the caller: the page typically unloads first.
 - For `clean: true`, the worker durably records a reset request epoch (in IndexedDB) before broadcasting. Whichever worker wins the post-reload election applies the wipe exactly once; the request expires after 10 minutes if the reload never happens.
+- Each persisted worker DB has a storage generation id, and a wiped DB gets a new one. A tab that sees a different id from the worker serving it reloads, because its in-memory copy came from a DB that no longer exists. This handles the case where a newly elected worker wiped the DB on startup.
 
 ### Breaking Storage Changes
 
@@ -793,7 +808,7 @@ await startDbWorker({
 });
 ```
 
-The worker durably stores the combined version (app version + internal library storage version). When the elected worker starts with a version that does not match the stored one, it wipes the local DB during initialization and records the new version after a successful init. Clients on the old version are unaffected until they load the new code.
+The worker durably stores the combined version (app version + internal library storage version). When the elected worker starts with a version that does not match the stored one, it wipes the local DB during initialization and records the new version after a successful init. Clients on the old version are unaffected until they load the new code. Once a worker running the new code is elected and wipes the DB, tabs still open on the previous DB reload (see [Reload and Recovery](#reload-and-recovery)).
 
 ---
 
@@ -1005,10 +1020,15 @@ syncDb.enqueueSnapshot({
 ```
 
 `enqueueSnapshot` reads the current row when present, applies the patch, and immediately writes an `item-created` event
-containing the resulting complete row. Existing rows treat that create as an update. Every older event for the same
-dataset and item remains in the event log with its non-empty payload replaced by sqlite-sync's no-op marker. This
-preserves sync cursors and consistency checks while removing superseded payload data. Fresh replicas replay the no-ops
-followed by the latest full-row snapshot.
+containing the resulting complete row with `tombstone: false`. Existing rows treat that create as an update, and a
+deleted row is restored. When no event for the same dataset and item has a newer timestamp than the snapshot, every
+older event remains in the event log with its non-empty payload replaced by sqlite-sync's no-op marker. This preserves
+sync cursors and consistency checks while removing superseded payload data. Fresh replicas replay the no-ops followed by
+the latest full-row snapshot.
+
+When a newer event exists, for example a pending client edit stamped by a clock running ahead of the server's, the
+row's history is left intact. That event still wins last-write-wins for its fields, and fresh replicas need the
+original history to replay it on. The next snapshot that is newer than every event for the row compacts the history.
 
 If the row does not exist, the patch creates it and must supply every required column. The TypeScript API prevents patches
 from changing `id` or `tombstone`, but this path does not run runtime schema validation. SQLite rejects an incomplete
@@ -1029,8 +1049,8 @@ Events enqueued on the server are applied immediately and broadcast to all conne
 
 ### Server-only tables
 
-By default any replica can author events for a table. Set `writes: "server"` when only the Durable
-Object should originate those events:
+By default any replica can author events for a table. Pass `writes: "server"` when only
+the Durable Object should originate those events:
 
 ```ts
 const syncDbSchema = defineSyncSchema({
@@ -1042,15 +1062,41 @@ const syncDbSchema = defineSyncSchema({
 });
 ```
 
-Clients still receive and query the table. On push, the Durable Object drops events for
-server-only datasets, accepts the rest of the batch, and still returns `ok: true`. Server
+Clients still receive and query the table. On push, the Durable Object drops client events for
+server-only tables (see [Client push validation](#client-push-validation)). Server
 `enqueueEvent`, `applyOwnEvents`, and SQL writes are not filtered.
 
-This is independent of the `ai` option. A server-side agent can still mutate a server-only table
-unless you also set `ai: "read-only"`.
+`writes` and `ai` are separate knobs. A server-side agent can still mutate a server-only table
+unless you also pass `ai: "read-only"`.
 
 A client that already applied the event locally keeps that row. Other replicas never see it.
-Client types and write triggers are not restricted yet.
+Client types treat server-only CRDT views as read-only. Raw SQL still runs if types are ignored;
+write triggers are not restricted.
+
+### Client push validation
+
+The Durable Object checks every pushed event with
+[`admitClientPush`](#admitclientpushoptions) before persisting it. Rejected events are dropped
+and logged with `console.warn`, grouped by reason. The rest of the batch is persisted, and the
+push still returns `ok: true`. An event is rejected when:
+
+- its `timestamp` is not a canonical HLC string, or is more than 6 hours ahead of the server clock
+- its `schema_version` is not a non-negative integer, or is newer than the server's latest version
+- its payload is not a JSON object
+- migrating it to the server's latest version throws
+- after migration, its dataset is not the base table name of a declared table that clients can
+  write. Server-only tables, CRDT view names, and other spellings such as `_TODO` or
+  `main._todo` are rejected.
+- after migration, its payload does not match the table schema: unknown or missing columns,
+  values of the wrong type, an `id` that differs from `item_id`, an `id` in an update, or an update
+  that sets `tombstone` to `true`/`1` (deletes must use `item-deleted`)
+
+Older-version events are migrated before they are checked. Events whose table was dropped by a
+migration, and events with a no-op payload, are stored as no-ops.
+
+The client that pushed a rejected event keeps its local copy. Its checksum no longer matches the
+server's, so it reports a [de-sync](#de-sync-and-schema-mismatch) once it is caught up. A device
+whose clock runs more than 6 hours fast cannot sync until its clock is corrected.
 
 ### Listening to Events
 
@@ -1069,7 +1115,7 @@ syncDb.addEventListener("event-applied", (event) => {
 
 ## AI Agent Tools
 
-`@sqlite-sync/ai` exposes a synced database to an AI SDK (v6) agent. Create the access object where the CRDT storage lives (e.g. a Durable Object's `onStart`, after migrations), then hand the agent a `ToolSet`:
+`@sqlite-sync/ai` exposes a synced database to an AI SDK (v6) agent. Create the access object where the CRDT storage lives (for example a Durable Object's `onStart`, after migrations), then hand the agent a `ToolSet`:
 
 ```ts
 import { createAiDbAccess, createDbTools } from "@sqlite-sync/ai";
@@ -1087,7 +1133,7 @@ const aiDbAccess = createAiDbAccess({
 const tools = createDbTools({ access: () => aiDbAccess });
 ```
 
-The schema doc is generated from the declared sync schema's table builders (including table/column `.describe()` descriptions and enum values) plus the app-provided `context.overview` — no database access involved. For cross-Durable-Object setups, `AiDbAccess` method names double as the RPC contract — a stub proxying `getSchemaDoc()` and `query()` satisfies `createDbTools`. The default `ToolSet` contains `getDbSchema` and `queryDb`.
+The schema doc is built from the declared sync schema's table builders (including table/column `.describe()` text and enum values) plus `context.overview`. No database access. For cross-Durable-Object setups, `AiDbAccess` method names are the RPC contract: a stub that proxies `getSchemaDoc()` and `query()` satisfies `createDbTools`. The default `ToolSet` contains `getDbSchema` and `queryDb`.
 
 To allow AI writes, pass the CRDT storage to `createAiDbAccess` and opt in when creating tools:
 
@@ -1106,14 +1152,14 @@ This adds `mutateDb`, which accepts `item-created`, `item-updated`, and `item-de
 ### Limiting what an agent may touch
 
 By default the agent can read every table in the database file and mutate every table in the sync
-schema. Narrow that with the table's `ai` option:
+schema. Narrow that with the `ai` table option:
 
 ```ts
 const syncDbSchema = defineSyncSchema({
   tables: {
     todo: t.table({ title: t.text() }),
-    audit: t.table({ note: t.text() }, { ai: "read-only" }), // documented, queryable, AI writes rejected
-    billing: t.table({ card_last4: t.text() }, { ai: "hidden" }), // undocumented, AI reads rejected
+    audit: t.table({ note: t.text() }, { ai: "read-only" }), // in the doc; mutateDb rejects writes
+    billing: t.table({ card_last4: t.text() }, { ai: "hidden" }), // omitted from the doc; reads rejected
   },
   migrations,
 });
@@ -1129,10 +1175,9 @@ What is enforced:
 Hiding is enforced against the root pages a compiled statement opens, so views, aliases, CTEs,
 subqueries and quoting variants all resolve to the same check.
 
-Access is table-level, with no per-column setting. Columns could not be hidden from reads anyway
-(SQLite bytecode identifies tables, not columns), and blocking writes to a column that is required
-on insert would leave the agent unable to create rows at all. Keep data the agent must not touch in
-its own table.
+Access is table-level. There is no per-column setting. SQLite bytecode names tables, not columns,
+so a column cannot be hidden from reads. Blocking writes to a required column would also stop the
+agent from creating rows. Put data the agent must not touch in its own table.
 
 Hiding a table also changes two things globally:
 
@@ -1200,8 +1245,9 @@ function createSyncedDb<Database, Props = undefined>(
 | `db.getSharedLiveQuery(query)` | `(query) => SharedLiveQuery<T>` | Get or create a shared reactive query |
 | `state.getState()` | `() => WorkerState` | Get current sync state |
 | `state.subscribe(onChange)` | `(fn) => () => void` | Subscribe to state changes |
-| `state.goOnline()` | `() => Promise<void>` | Connect to remote server |
-| `state.goOffline()` | `() => Promise<void>` | Disconnect from remote server |
+| `state.goOnline()` | `() => Promise<void>` | Connect to remote server. Resolves once the connection attempt connects, fails, or is cancelled; the initial sync continues in the background |
+| `state.goOffline()` | `() => Promise<void>` | Disconnect from remote server. Goes offline immediately and cancels a pending connection attempt |
+| `state.sync()` | `() => void` | Start pulling new remote events and pushing pending local events in the background. Returns immediately: new data reaches the tab like any other remote change, and failures show up as `remoteState` going `offline` via `state.subscribe`. If a connection error took the remote offline, reconnects instead; does nothing after `goOffline()` or a schema version mismatch (call `goOnline()` to connect). Also runs automatically whenever the page becomes visible or the browser comes back online |
 | `subscribe(type, handler)` | `(type, handler) => { unsubscribe: () => void }` | Subscribe to worker notifications such as `de-sync-detected` and `remote-schema-version-mismatch` |
 | `requestReload(options)` | `(options: { clean: boolean }) => Promise<void>` | Reload all tabs for this `dbId`; `clean: true` also wipes the persisted worker DB on next startup |
 | `exportData(options?)` | `(options?) => SyncedDbExport` | Export the current active rows |
@@ -1240,9 +1286,10 @@ function createMigrations(
 
 #### `admitClientEvents(options)`
 
-Splits a client push into events the hub should persist and events for tables with
-`writes: "server"`. The Durable Object adapter calls this on `push-events`. Unknown datasets stay
-admitted.
+Splits events into those whose dataset clients may write and those to drop. Only datasets that
+exactly match the base table name of a declared table without `{ writes: "server" }` are admitted.
+Server-only tables, CRDT view names, undeclared datasets, and other spellings such as `_JOB` or
+`main._job` are skipped. [`admitClientPush`](#admitclientpushoptions) uses the same rule.
 
 ```ts
 function admitClientEvents<T extends { dataset: string }>(options: {
@@ -1303,6 +1350,63 @@ function createWsRemoteSource(options: {
 }): CreateRemoteSourceFactory
 ```
 
+Requests made while the socket is closed (for example, while PartySocket is reconnecting) wait for it to reopen before they are sent, and their response timeout starts only then.
+
+#### Custom remote sources
+
+`createRemoteSource` accepts any `CreateRemoteSourceFactory`. The library calls it once per connection attempt:
+
+```ts
+type CreateRemoteSourceFactory = (opts: {
+  onEventsAvailable: (event: { newSyncId: number; remoteEventHlcSum: string | null }) => void;
+  onReconnected: () => void;
+  signal: AbortSignal;
+}) => RemoteSource | Promise<RemoteSource>;
+
+type RemoteSource = {
+  pullEvents: (request: EventsPullRequest) => Promise<EventsPullResponse>;
+  pushEvents: (request: EventsPushRequest) => Promise<EventsPushResponse>;
+  disconnect?: () => void | Promise<void>;
+};
+```
+
+- Each call must return an independent source. Do not return the same source object from multiple calls.
+- The library calls `disconnect` on every returned source exactly once, including a source that resolves after the attempt was cancelled. It does not wait for `disconnect` to finish.
+- `signal` aborts when the attempt is cancelled (`goOffline()` or `dispose()` while connecting) or when the connection closes. Factories can use it to stop opening a connection early.
+- Call `onReconnected` when the transport reconnects on its own without a new source (as PartySocket does). Broadcasts sent while it was down are lost, so the library pulls and pushes to catch up. `createWsRemoteSource` calls it on every `open` after the first.
+
+### `@sqlite-sync/core/server`
+
+#### `admitClientPush(options)`
+
+Checks a client push before a server persists it; see
+[Client push validation](#client-push-validation) for the rules. The Durable Object adapter calls
+this on `push-events`. Admitted events are migrated to the latest schema version and keep their
+push order. Pass the server's current time as `now`.
+
+```ts
+function admitClientPush<T extends PushedCrdtEvent>(options: {
+  syncDbSchema: Pick<SyncDbSchema, "tables" | "tablesConfig">;
+  migrator: Pick<SyncDbMigrator, "migrateEvent" | "latestSchemaVersion">;
+  events: readonly T[];
+  now: number;
+}): {
+  admitted: T[];
+  rejected: { event: T; reason: PushRejectionReason; errors?: string[] }[];
+}
+
+type PushRejectionReason =
+  | "invalid-timestamp"
+  | "timestamp-too-far-in-future"
+  | "invalid-schema-version"
+  | "schema-version-too-new"
+  | "invalid-payload"
+  | "migration-failed"
+  | "server-only-dataset"
+  | "undeclared-dataset"
+  | "schema-validation-failed";
+```
+
 ### `@sqlite-sync/react`
 
 #### `createDbContext(schema)`
@@ -1329,17 +1433,21 @@ function createDbContext<Schema extends SyncDbSchema>(schema: Schema): {
 
 #### `SQLiteSyncDevtools`
 
-Renders a floating browser devtools button and dialog for databases created with `createSyncedDb()`.
+Floating button and dialog for databases created with `createSyncedDb()`.
 
 ```tsx
-function SQLiteSyncDevtools(props?: { className?: string }): React.ReactElement
+function SQLiteSyncDevtools(props?: {
+  className?: string;
+  hidden?: boolean;
+  onHiddenChange?: (hidden: boolean) => void;
+}): React.ReactElement
 ```
 
-Behavior:
-- auto-discovers currently registered `SyncedDb` instances
-- updates when instances are created or disposed
-- provides a sidebar-based dialog UI
-- includes the prototype query runner described above
+The dialog and launcher render inside a shadow root. `className` is for the host wrapper in the light DOM, not for restyling tabs, buttons, or the overlay.
+
+`SyncedDb` instances show up as they initialize and drop off on `dispose()`. Overview shows memory and worker DB sizes plus remaining CRDT event counts (pending, applied, failed, deduped). Event log shows the filtered total, not just the loaded page.
+
+Set `hidden` to hide the button. `Ctrl+Alt+S` (⌘⌥S on macOS) works when you pass `onHiddenChange`, and when you pass neither prop.
 
 ### `@sqlite-sync/cloudflare`
 
@@ -1376,7 +1484,7 @@ function createCrdtStorage<Schema extends SyncDbSchema>(options: {
 | `unsafe.transaction(callback)` | Run a direct SQLite transaction without draining intents |
 | `enqueueEvent(event)` | Write a single CRDT event |
 | `enqueueEvents(events)` | Write multiple CRDT events |
-| `enqueueSnapshot(snapshot)` | Patch a row, replace its older non-empty event payloads with no-ops, and write a full create snapshot |
+| `enqueueSnapshot(snapshot)` | Patch a row and write a full create snapshot; older event payloads become no-ops unless a newer event exists |
 | `applyOwnEvents(events)` | Validate, persist, and immediately apply own CRDT events |
 | `createEvent(event)` | Type helper — returns the event as-is |
 | `addEventListener("event-applied", handler)` | Listen for applied events |
@@ -1391,7 +1499,7 @@ function createCrdtStorage<Schema extends SyncDbSchema>(options: {
 
 #### `createAiDbAccess(options)`
 
-Creates AI access to a synced database. Query access is read-only; mutation access is present only when a CRDT storage is provided. Lives where the storage lives; the schema doc is generated once from the declared schema.
+Creates AI access to a synced database. Query access is read-only. Mutation access is present only when a CRDT storage is provided. Lives where the storage lives. The schema doc is generated once from the declared schema.
 
 ```ts
 function createAiDbAccess(options: {
@@ -1420,7 +1528,8 @@ Lower-level helper that generates the markdown schema doc directly from a `syncD
 
 #### `resolveAiPolicy(options)`
 
-Flattens the `ai` options declared on the schema's table builders into the effective access per table. Exposed for inspection and testing; `createAiDbAccess` calls it for you.
+Reads each table's `ai` option and returns the effective access per table name. Useful for
+inspection and tests. `createAiDbAccess` calls it for you.
 
 ```ts
 function resolveAiPolicy(options: { syncDbSchema: SyncDbSchema }): ResolvedAiPolicy
