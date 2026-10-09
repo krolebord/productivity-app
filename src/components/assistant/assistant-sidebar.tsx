@@ -887,7 +887,8 @@ function ConversationView({
 const AGENT_WARM_INTERVAL_MS = 60_000;
 
 // Composer activity means a send is likely soon: wake the agent so its cold start overlaps
-// typing instead of delaying the submit. Pass null when there is no agent to wake.
+// typing instead of delaying the submit. Drafts benefit most, since their first call creates
+// the agent's Durable Object. Pass null to skip warming.
 function useWarmAgent(conversationId: string | null) {
   const lastWarmAtRef = useRef(0);
   return useCallback(() => {
@@ -992,7 +993,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   const canStop = isRunning || (lockHolding && conversation !== null);
   const locked = conversation !== null || submitLock != null;
   const turnError = conversation?.turnStatus === "error" ? conversation.turnError : "";
-  const warmAgent = useWarmAgent(conversation && !isWorking ? conversation.id : null);
+  const warmAgent = useWarmAgent(isWorking ? null : conversationId);
 
   function releaseOwnedLock(owned: SubmitLock) {
     if (
