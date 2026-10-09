@@ -41,6 +41,7 @@ import { userDbSchemaDocContext } from "./schema-doc";
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const CALENDAR_SYNC_DEDUPE_KEY = "calendar-sync";
 const CODEMODE_QUERY_LIMITS = {
   maxRows: 1000,
   maxCellChars: 4000,
@@ -103,13 +104,16 @@ export class UserDbServer extends Server<Env> {
       everyMs: TWELVE_HOURS_MS,
     });
 
-    // Cheap when nothing is connected: the job exits immediately if the user has no calendar
-    // connection rows.
-    await this.jobRuntime.scheduleInterval(calendarSyncJob, {
-      input: { providerConnectionId: null },
-      dedupeKey: "calendar-sync",
-      everyMs: FIFTEEN_MINUTES_MS,
-    });
+    // Only users with a calendar get the interval: `enqueueCalendarSync` registers it on connect,
+    // and a later start drops it once no connection remains.
+    const [calendarConnection] = syncDb.executeKysely((q) =>
+      q.selectFrom("calendar_connection").select(["id"]).where("status", "!=", "disconnected").limit(1),
+    ).rows;
+    if (calendarConnection) {
+      await this.scheduleCalendarSyncInterval();
+    } else {
+      await this.jobRuntime.cancelInterval(calendarSyncJob, { dedupeKey: CALENDAR_SYNC_DEDUPE_KEY });
+    }
 
     syncDb.addEventListener("event-applied", (event) => {
       this.onEventApplied(event.payload).catch((error) => {
@@ -163,6 +167,15 @@ export class UserDbServer extends Server<Env> {
 
   async enqueueCalendarSync(input: CalendarSyncInput): Promise<void> {
     await this.jobRuntime.schedule(calendarSyncJob, { input, at: Date.now() });
+    await this.scheduleCalendarSyncInterval();
+  }
+
+  private async scheduleCalendarSyncInterval(): Promise<void> {
+    await this.jobRuntime.scheduleInterval(calendarSyncJob, {
+      input: { providerConnectionId: null },
+      dedupeKey: CALENDAR_SYNC_DEDUPE_KEY,
+      everyMs: FIFTEEN_MINUTES_MS,
+    });
   }
 
   async enqueueCalendarCleanup(input: CalendarCleanupInput): Promise<void> {
