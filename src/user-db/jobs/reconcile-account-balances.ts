@@ -24,13 +24,11 @@ export const reconcileAccountBalancesJob = defineJob({ type: "reconcile-account-
         continue;
       }
 
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-updated",
-          dataset: "_account",
-          item_id: account.id,
-          payload: { balance: Number(account.nextBalance) },
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-updated",
+        dataset: "_account",
+        item_id: account.id,
+        payload: { balance: Number(account.nextBalance) },
+      });
     }
   });

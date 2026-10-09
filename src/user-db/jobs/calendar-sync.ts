@@ -231,14 +231,12 @@ function setSyncedStatus(
 ): void {
   if (connection.status === status) return;
 
-  context.syncDb.enqueueEvent(
-    context.syncDb.createEvent({
-      type: "item-updated",
-      dataset: "_calendar_connection",
-      item_id: connection.id,
-      payload: { status, updatedAt: Date.now() },
-    }),
-  );
+  context.syncDb.applyEvent({
+    type: "item-updated",
+    dataset: "_calendar_connection",
+    item_id: connection.id,
+    payload: { status, updatedAt: Date.now() },
+  });
 }
 
 async function syncCalendarSource(args: {
@@ -301,49 +299,45 @@ async function syncCalendarSource(args: {
 
     if (decision.action === "create") {
       const id = generateId();
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-created",
-          dataset: "_item",
-          item_id: id,
-          payload: {
-            id,
-            type: "task",
-            title: decision.fields.title,
-            content: decision.fields.content,
-            tags: "[]",
-            dueAt: decision.fields.dueAt,
-            hasDueTime: decision.fields.hasDueTime,
-            completedAt: null,
-            order: 0,
-            createdAt: now,
-            providerType: GOOGLE_CALENDAR_PROVIDER_TYPE,
-            providerId,
-            providerUpdatedAt: decision.fields.providerUpdatedAt,
-          },
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-created",
+        dataset: "_item",
+        item_id: id,
+        payload: {
+          id,
+          type: "task",
+          title: decision.fields.title,
+          content: decision.fields.content,
+          tags: "[]",
+          dueAt: decision.fields.dueAt,
+          hasDueTime: decision.fields.hasDueTime,
+          completedAt: null,
+          order: 0,
+          createdAt: now,
+          providerType: GOOGLE_CALENDAR_PROVIDER_TYPE,
+          providerId,
+          providerUpdatedAt: decision.fields.providerUpdatedAt,
+        },
+      });
       counts.created += 1;
       continue;
     }
 
     if (decision.action === "update") {
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-updated",
-          dataset: "_item",
-          item_id: decision.itemId,
-          payload: {
-            // `completedAt`, `order` and `tags` are intentionally absent: sync never overwrites
-            // what the user did with the task, only what the event says about itself.
-            title: decision.fields.title,
-            content: decision.fields.content,
-            dueAt: decision.fields.dueAt,
-            hasDueTime: decision.fields.hasDueTime,
-            providerUpdatedAt: decision.fields.providerUpdatedAt,
-          },
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-updated",
+        dataset: "_item",
+        item_id: decision.itemId,
+        payload: {
+          // `completedAt`, `order` and `tags` are intentionally absent: sync never overwrites
+          // what the user did with the task, only what the event says about itself.
+          title: decision.fields.title,
+          content: decision.fields.content,
+          dueAt: decision.fields.dueAt,
+          hasDueTime: decision.fields.hasDueTime,
+          providerUpdatedAt: decision.fields.providerUpdatedAt,
+        },
+      });
       counts.updated += 1;
       continue;
     }
@@ -360,46 +354,38 @@ async function syncCalendarSource(args: {
         hasDueTime: decision.fields.hasDueTime,
         providerUpdatedAt: decision.fields.providerUpdatedAt,
       };
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-updated",
-          dataset: "_item",
-          item_id: decision.itemId,
-          payload: restorePayload,
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-updated",
+        dataset: "_item",
+        item_id: decision.itemId,
+        payload: restorePayload,
+      });
       counts.created += 1;
       continue;
     }
 
     if (decision.action === "remove") {
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-updated",
-          dataset: "_item",
-          item_id: decision.itemId,
-          payload: { providerType: CALENDAR_CLEANUP_PROVIDER_TYPE },
-        }),
-      );
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-deleted",
-          dataset: "_item",
-          item_id: decision.itemId,
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-updated",
+        dataset: "_item",
+        item_id: decision.itemId,
+        payload: { providerType: CALENDAR_CLEANUP_PROVIDER_TYPE },
+      });
+      context.syncDb.applyEvent({
+        type: "item-deleted",
+        dataset: "_item",
+        item_id: decision.itemId,
+      });
       counts.removed += 1;
       continue;
     }
 
     if (decision.action === "tombstone") {
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-deleted",
-          dataset: "_item",
-          item_id: decision.itemId,
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-deleted",
+        dataset: "_item",
+        item_id: decision.itemId,
+      });
       counts.removed += 1;
     }
   }

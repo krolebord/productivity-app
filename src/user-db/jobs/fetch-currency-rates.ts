@@ -20,7 +20,7 @@ export async function fetchAndPersistCurrencyRates(
     APP_CURRENCIES.map((currency) => [currency, rates[currency] ?? (currency === base ? 1 : null)]),
   ) as Record<AppCurrencyCode, number | null>;
 
-  syncDb.enqueueSnapshot({
+  syncDb.applySnapshot({
     dataset: "_currency_rate",
     id,
     patch: {

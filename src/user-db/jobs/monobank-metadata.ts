@@ -42,42 +42,38 @@ export const monobankMetadataJob = defineJob({ type: "monobank-metadata" })
     ).rows;
 
     if (existingConnection) {
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-updated",
-          dataset: "_monobank_connection",
-          item_id: existingConnection.id,
-          payload: {
-            status: connection.status,
-            webhookStatus: connection.webhookStatus,
-            // Empty input displayName means "leave as-is" (e.g. on disconnect, which has no name).
-            displayName: connection.displayName || existingConnection.displayName,
-            lastError: connection.lastError,
-            connectedAt: existingConnection.connectedAt > 0 ? existingConnection.connectedAt : connection.connectedAt,
-            updatedAt: now,
-          },
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-updated",
+        dataset: "_monobank_connection",
+        item_id: existingConnection.id,
+        payload: {
+          status: connection.status,
+          webhookStatus: connection.webhookStatus,
+          // Empty input displayName means "leave as-is" (e.g. on disconnect, which has no name).
+          displayName: connection.displayName || existingConnection.displayName,
+          lastError: connection.lastError,
+          connectedAt: existingConnection.connectedAt > 0 ? existingConnection.connectedAt : connection.connectedAt,
+          updatedAt: now,
+        },
+      });
     } else {
       const id = generateId();
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-created",
-          dataset: "_monobank_connection",
-          item_id: id,
-          payload: {
-            id,
-            providerConnectionId,
-            status: connection.status,
-            webhookStatus: connection.webhookStatus,
-            displayName: connection.displayName,
-            lastError: connection.lastError,
-            connectedAt: connection.connectedAt,
-            createdAt: now,
-            updatedAt: now,
-          },
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-created",
+        dataset: "_monobank_connection",
+        item_id: id,
+        payload: {
+          id,
+          providerConnectionId,
+          status: connection.status,
+          webhookStatus: connection.webhookStatus,
+          displayName: connection.displayName,
+          lastError: connection.lastError,
+          connectedAt: connection.connectedAt,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
     }
 
     if (!accounts) {
@@ -94,45 +90,41 @@ export const monobankMetadataJob = defineJob({ type: "monobank-metadata" })
       ).rows;
 
       if (existingAccount) {
-        context.syncDb.enqueueEvent(
-          context.syncDb.createEvent({
-            type: "item-updated",
-            dataset: "_monobank_account",
-            item_id: existingAccount.id,
-            payload: {
-              displayName: account.displayName,
-              accountType: account.accountType,
-              currency: account.currency,
-              maskedPan: account.maskedPan,
-              updatedAt: now,
-            },
-          }),
-        );
+        context.syncDb.applyEvent({
+          type: "item-updated",
+          dataset: "_monobank_account",
+          item_id: existingAccount.id,
+          payload: {
+            displayName: account.displayName,
+            accountType: account.accountType,
+            currency: account.currency,
+            maskedPan: account.maskedPan,
+            updatedAt: now,
+          },
+        });
       } else {
         const id = generateId();
-        context.syncDb.enqueueEvent(
-          context.syncDb.createEvent({
-            type: "item-created",
-            dataset: "_monobank_account",
-            item_id: id,
-            payload: {
-              id,
-              providerConnectionId,
-              providerAccountId: account.providerAccountId,
-              displayName: account.displayName,
-              accountType: account.accountType,
-              currency: account.currency,
-              maskedPan: account.maskedPan,
-              linkedAccountId: "",
-              enabled: true,
-              lastWebhookAt: null,
-              lastImportAt: null,
-              lastError: "",
-              createdAt: now,
-              updatedAt: now,
-            },
-          }),
-        );
+        context.syncDb.applyEvent({
+          type: "item-created",
+          dataset: "_monobank_account",
+          item_id: id,
+          payload: {
+            id,
+            providerConnectionId,
+            providerAccountId: account.providerAccountId,
+            displayName: account.displayName,
+            accountType: account.accountType,
+            currency: account.currency,
+            maskedPan: account.maskedPan,
+            linkedAccountId: "",
+            enabled: true,
+            lastWebhookAt: null,
+            lastImportAt: null,
+            lastError: "",
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
       }
     }
   });

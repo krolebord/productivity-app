@@ -186,7 +186,7 @@ export class UserDbServer extends Server<Env> {
    * Apply calendar enablement in the server replica before scheduling work that reads it.
    *
    * A browser write followed by a separate RPC has no cross-channel ordering guarantee, whereas a
-   * server-authored event is applied by `enqueueEvent` before this DO handles further I/O.
+   * server-authored event is applied synchronously by `applyEvent`.
    */
   async setCalendarSourceEnabled(input: {
     sourceId: string;
@@ -204,14 +204,12 @@ export class UserDbServer extends Server<Env> {
     ).rows;
     if (!source) return false;
 
-    this.syncDb.enqueueEvent(
-      this.syncDb.createEvent({
-        type: "item-updated",
-        dataset: "_calendar_source",
-        item_id: source.id,
-        payload: { enabled: input.enabled, updatedAt: Date.now() },
-      }),
-    );
+    this.syncDb.applyEvent({
+      type: "item-updated",
+      dataset: "_calendar_source",
+      item_id: source.id,
+      payload: { enabled: input.enabled, updatedAt: Date.now() },
+    });
 
     if (input.enabled) {
       await this.enqueueCalendarSync({ providerConnectionId: input.providerConnectionId });
@@ -284,15 +282,12 @@ export class UserDbServer extends Server<Env> {
       turnStatus: "running",
       turnError: "",
     };
-    this.syncDb.enqueueEvent(
-      this.syncDb.createEvent({
-        type: "item-created",
-        dataset: "_conversation",
-        item_id: input.id,
-        payload: conversation,
-      }),
-    );
-    // enqueueEvent applies the event asynchronously, so reading the row back here would miss it.
+    this.syncDb.applyEvent({
+      type: "item-created",
+      dataset: "_conversation",
+      item_id: input.id,
+      payload: conversation,
+    });
     return conversation;
   }
 
@@ -327,7 +322,7 @@ export class UserDbServer extends Server<Env> {
   async upsertConversationMessages(messages: ConversationMessageSnapshot[]): Promise<void> {
     for (const message of messages) {
       const { id, ...patch } = message;
-      this.syncDb.enqueueSnapshot({
+      this.syncDb.applySnapshot({
         dataset: "_conversation_message",
         id,
         patch,
@@ -339,25 +334,21 @@ export class UserDbServer extends Server<Env> {
     id: string,
     payload: Partial<Omit<ConversationItem, "id" | "tombstone" | "lastReadAt">> & { updatedAt?: number },
   ): Promise<void> {
-    this.syncDb.enqueueEvent(
-      this.syncDb.createEvent({
-        type: "item-updated",
-        dataset: "_conversation",
-        item_id: id,
-        payload: { updatedAt: Date.now(), ...payload },
-      }),
-    );
+    this.syncDb.applyEvent({
+      type: "item-updated",
+      dataset: "_conversation",
+      item_id: id,
+      payload: { updatedAt: Date.now(), ...payload },
+    });
   }
 
   async deleteConversation(id: string): Promise<boolean> {
     if (!(await this.getConversation(id))) return false;
-    this.syncDb.enqueueEvent(
-      this.syncDb.createEvent({
-        type: "item-deleted",
-        dataset: "_conversation",
-        item_id: id,
-      }),
-    );
+    this.syncDb.applyEvent({
+      type: "item-deleted",
+      dataset: "_conversation",
+      item_id: id,
+    });
     return true;
   }
 

@@ -44,38 +44,34 @@ export const calendarMetadataJob = defineJob({ type: "calendar-metadata" })
     ).rows;
 
     if (existingConnection) {
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-updated",
-          dataset: "_calendar_connection",
-          item_id: existingConnection.id,
-          payload: {
-            status: connection.status,
-            // Empty input email means "leave as-is" (e.g. on disconnect, which has no account info).
-            email: connection.email || existingConnection.email,
-            connectedAt: existingConnection.connectedAt > 0 ? existingConnection.connectedAt : connection.connectedAt,
-            updatedAt: now,
-          },
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-updated",
+        dataset: "_calendar_connection",
+        item_id: existingConnection.id,
+        payload: {
+          status: connection.status,
+          // Empty input email means "leave as-is" (e.g. on disconnect, which has no account info).
+          email: connection.email || existingConnection.email,
+          connectedAt: existingConnection.connectedAt > 0 ? existingConnection.connectedAt : connection.connectedAt,
+          updatedAt: now,
+        },
+      });
     } else {
       const id = generateId();
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-created",
-          dataset: "_calendar_connection",
-          item_id: id,
-          payload: {
-            id,
-            providerConnectionId,
-            status: connection.status,
-            email: connection.email,
-            connectedAt: connection.connectedAt,
-            createdAt: now,
-            updatedAt: now,
-          },
-        }),
-      );
+      context.syncDb.applyEvent({
+        type: "item-created",
+        dataset: "_calendar_connection",
+        item_id: id,
+        payload: {
+          id,
+          providerConnectionId,
+          status: connection.status,
+          email: connection.email,
+          connectedAt: connection.connectedAt,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
     }
 
     if (!sources) {
@@ -92,42 +88,38 @@ export const calendarMetadataJob = defineJob({ type: "calendar-metadata" })
       ).rows;
 
       if (existingSource) {
-        context.syncDb.enqueueEvent(
-          context.syncDb.createEvent({
-            type: "item-updated",
-            dataset: "_calendar_source",
-            item_id: existingSource.id,
-            payload: {
-              displayName: source.displayName,
-              color: source.color,
-              isPrimary: source.isPrimary,
-              timeZone: source.timeZone,
-              updatedAt: now,
-            },
-          }),
-        );
-        continue;
-      }
-
-      const id = generateId();
-      context.syncDb.enqueueEvent(
-        context.syncDb.createEvent({
-          type: "item-created",
+        context.syncDb.applyEvent({
+          type: "item-updated",
           dataset: "_calendar_source",
-          item_id: id,
+          item_id: existingSource.id,
           payload: {
-            id,
-            providerConnectionId,
-            providerCalendarId: source.providerCalendarId,
             displayName: source.displayName,
             color: source.color,
             isPrimary: source.isPrimary,
             timeZone: source.timeZone,
-            enabled: source.enabledByDefault,
-            createdAt: now,
             updatedAt: now,
           },
-        }),
-      );
+        });
+        continue;
+      }
+
+      const id = generateId();
+      context.syncDb.applyEvent({
+        type: "item-created",
+        dataset: "_calendar_source",
+        item_id: id,
+        payload: {
+          id,
+          providerConnectionId,
+          providerCalendarId: source.providerCalendarId,
+          displayName: source.displayName,
+          color: source.color,
+          isPrimary: source.isPrimary,
+          timeZone: source.timeZone,
+          enabled: source.enabledByDefault,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
     }
   });

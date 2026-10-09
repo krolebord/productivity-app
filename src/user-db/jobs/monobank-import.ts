@@ -53,14 +53,12 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
     }
 
     // Record the webhook on the account row regardless of whether the event ends up imported.
-    context.syncDb.enqueueEvent(
-      context.syncDb.createEvent({
-        type: "item-updated",
-        dataset: "_monobank_account",
-        item_id: monoAccount.id,
-        payload: { lastWebhookAt: now, updatedAt: now },
-      }),
-    );
+    context.syncDb.applyEvent({
+      type: "item-updated",
+      dataset: "_monobank_account",
+      item_id: monoAccount.id,
+      payload: { lastWebhookAt: now, updatedAt: now },
+    });
 
     const mapped = mapStatementItemToTransaction(statementItem);
     const hasLink = monoAccount.linkedAccountId !== "";
@@ -104,14 +102,12 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
         reason: decision.reason,
       });
       if (decision.setError) {
-        context.syncDb.enqueueEvent(
-          context.syncDb.createEvent({
-            type: "item-updated",
-            dataset: "_monobank_account",
-            item_id: monoAccount.id,
-            payload: { lastError: skipReasonMessage(decision.reason), updatedAt: now },
-          }),
-        );
+        context.syncDb.applyEvent({
+          type: "item-updated",
+          dataset: "_monobank_account",
+          item_id: monoAccount.id,
+          payload: { lastError: skipReasonMessage(decision.reason), updatedAt: now },
+        });
       }
       return;
     }
@@ -123,52 +119,46 @@ export const monobankImportJob = defineJob({ type: "monobank-import" })
 
     const transactionId = generateId();
     const classification = await inferServerMonobankClassification(context.syncDb, context.env, mapped);
-    context.syncDb.enqueueEvent(
-      context.syncDb.createEvent({
-        type: "item-created",
-        dataset: "_transaction_entry",
-        item_id: transactionId,
-        payload: {
-          id: transactionId,
-          type: mapped.type,
-          accountId: linkedAccount.id,
-          accountCurrency: linkedAccount.currency,
-          amount: mapped.amount,
-          counterpartyAccountId: "",
-          counterpartyCurrency: "",
-          counterpartyAmount: null,
-          title: mapped.title,
-          category: classification.category,
-          importance: classification.importance,
-          notes: mapped.notes,
-          effectiveAt: mapped.effectiveAt,
-          createdAt: now,
-          updatedAt: now,
-          providerType: MONOBANK_PROVIDER_TYPE,
-          providerId: statementItem.id,
-        },
-      }),
-    );
+    context.syncDb.applyEvent({
+      type: "item-created",
+      dataset: "_transaction_entry",
+      item_id: transactionId,
+      payload: {
+        id: transactionId,
+        type: mapped.type,
+        accountId: linkedAccount.id,
+        accountCurrency: linkedAccount.currency,
+        amount: mapped.amount,
+        counterpartyAccountId: "",
+        counterpartyCurrency: "",
+        counterpartyAmount: null,
+        title: mapped.title,
+        category: classification.category,
+        importance: classification.importance,
+        notes: mapped.notes,
+        effectiveAt: mapped.effectiveAt,
+        createdAt: now,
+        updatedAt: now,
+        providerType: MONOBANK_PROVIDER_TYPE,
+        providerId: statementItem.id,
+      },
+    });
 
     // Mirror `applyAccountDelta`: read-modify-write the balance by the signed imported amount.
     // Safe without locks because the DO is single-threaded and jobs serialize.
-    context.syncDb.enqueueEvent(
-      context.syncDb.createEvent({
-        type: "item-updated",
-        dataset: "_account",
-        item_id: linkedAccount.id,
-        payload: { balance: Number(linkedAccount.balance) + mapped.amount },
-      }),
-    );
+    context.syncDb.applyEvent({
+      type: "item-updated",
+      dataset: "_account",
+      item_id: linkedAccount.id,
+      payload: { balance: Number(linkedAccount.balance) + mapped.amount },
+    });
 
-    context.syncDb.enqueueEvent(
-      context.syncDb.createEvent({
-        type: "item-updated",
-        dataset: "_monobank_account",
-        item_id: monoAccount.id,
-        payload: { lastImportAt: now, lastError: "", updatedAt: now },
-      }),
-    );
+    context.syncDb.applyEvent({
+      type: "item-updated",
+      dataset: "_monobank_account",
+      item_id: monoAccount.id,
+      payload: { lastImportAt: now, lastError: "", updatedAt: now },
+    });
 
     console.log("[monobank-import] imported", {
       providerAccountId,
