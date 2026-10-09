@@ -274,9 +274,25 @@ export class UserDbServer extends Server<Env> {
     );
   }
 
+  /** Appends the user message at the next seq and marks the turn running. An empty title leaves it unchanged. */
+  async appendUserTurn(input: {
+    message: Omit<ConversationMessageSnapshot, "seq">;
+    title: string;
+  }): Promise<{ seq: number }> {
+    const { conversationId } = input.message;
+    const seq = this.getMaxConversationMessageSeq(conversationId) + 1;
+    await this.upsertConversationMessages([{ ...input.message, seq }]);
+    await this.updateConversation(conversationId, {
+      turnStatus: "running",
+      turnError: "",
+      ...(input.title ? { title: input.title } : {}),
+    });
+    return { seq };
+  }
+
   // Raw base table, not the CRDT view: tombstones keep their seq, so a deleted message
   // cannot hand its number to a new one.
-  async getMaxConversationMessageSeq(conversationId: string): Promise<number> {
+  private getMaxConversationMessageSeq(conversationId: string): number {
     const [row] = this.syncDb.unsafe.executeKysely((q) =>
       q
         .selectFrom("_conversation_message")

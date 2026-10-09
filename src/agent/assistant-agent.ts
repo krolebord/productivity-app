@@ -21,6 +21,7 @@ import { PostHog } from "posthog-node";
 import { z } from "zod";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from "../lib/assistant-files";
 import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
+import type { UserDbServer } from "../user-db/user-db-server";
 import { BUILTIN_SKILLS, type BuiltinSkill } from "./builtin-skills";
 import { RenderChartInputSchema } from "./chart-spec";
 import {
@@ -413,7 +414,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     });
 
     try {
-      return await this.enqueueTurn({ turnId: input.turnId, text: input.text, files: input.files ?? [] }, true);
+      return await this.enqueueTurn(stub, { turnId: input.turnId, text: input.text, files: input.files ?? [] }, true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await stub.updateConversation(conversationId, { turnStatus: "error", turnError: message });
@@ -426,15 +427,15 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     text: string;
     files?: WorkspaceUploadInput[];
   }): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
-    return this.enqueueTurn({ ...input, files: input.files ?? [] }, false);
+    return this.enqueueTurn(await this.getUserDbStub(), { ...input, files: input.files ?? [] }, false);
   }
 
   private async enqueueTurn(
+    stub: DurableObjectStub<UserDbServer>,
     input: { turnId: string; text: string; files: WorkspaceUploadInput[] },
     allowRunning: boolean,
   ): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
     const conversationId = this.getConversationId();
-    const stub = await this.getUserDbStub();
     const conversation = await stub.getConversation(conversationId);
     if (!conversation) {
       return { error: { code: "NOT_FOUND", message: "Conversation not found." } };
@@ -461,18 +462,20 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     const storedText = prompt;
     const modelText = userTurnModelText(prompt, uploaded);
 
-    const seq = (await stub.getMaxConversationMessageSeq(conversationId)) + 1;
-    this.turnNextSeq = seq + 1;
-    this.setState({ ...this.state, nextSeq: this.turnNextSeq });
+    const title = conversation.title.trim()
+      ? ""
+      : conversationTitleFromTurnText(
+          storedText,
+          uploaded.map((file) => file.filename),
+        );
 
     // Persist the user row and turnStatus before submitMessages. That call commits the
     // submission and may drain it from a schedule(0) alarm that interleaves with these
     // cross-DO writes. Re-submitting the same turnId upserts the row.
-    await stub.upsertConversationMessages([
-      {
+    const { seq } = await stub.appendUserTurn({
+      message: {
         id: input.turnId,
         conversationId,
-        seq,
         role: "user",
         kind: "text",
         text: storedText,
@@ -482,19 +485,10 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
         data: conversationTurnFilesData(uploaded),
         createdAt: Date.now(),
       },
-    ]);
-
-    const title = conversation.title.trim()
-      ? ""
-      : conversationTitleFromTurnText(
-          storedText,
-          uploaded.map((file) => file.filename),
-        );
-    await stub.updateConversation(conversationId, {
-      turnStatus: "running",
-      turnError: "",
-      ...(title ? { title } : {}),
+      title,
     });
+    this.turnNextSeq = seq + 1;
+    this.setState({ ...this.state, nextSeq: this.turnNextSeq });
 
     try {
       const submission = await this.submitMessages(
@@ -906,7 +900,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     }
 
     const stat = await workspace.stat(sourcePath);
-    if (!stat || stat.type !== "file") {
+    if (stat?.type !== "file") {
       throw new Error(
         `No file found at ${input.path}. Create it first (e.g. with the execute tool's state.* API) before saving it for download.`,
       );
