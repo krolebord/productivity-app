@@ -1,12 +1,11 @@
 import { randomInt } from "node:crypto";
 import * as arctic from "arctic";
-import { addSeconds } from "date-fns";
 import * as z from "zod";
 import { isAssistantAllowed } from "@/lib/assistant-access";
 import { getContext } from "@/lib/context";
 import { db } from "@/lib/db";
 import { emailService } from "@/lib/emails/emails";
-import { authCookieSession, createCookieSession } from "../common/auth";
+import { authCookieSession, createCookieSession, createSession, deleteSession } from "../common/auth";
 import type { ORPCContext } from "../common/os";
 import { procedure, protectedProcedure } from "../common/procedure";
 
@@ -92,7 +91,7 @@ export const verifyMagicLink = procedure
     await db.deleteFrom("verification").where("target", "=", input.email).where("value", "=", input.code).execute();
 
     const user = await findOrCreateUser({ email: input.email });
-    await createSession(context, { userId: user.id });
+    await createSession(context, user);
 
     return { success: true, userId: user.id };
   });
@@ -105,7 +104,7 @@ export const getAuth = protectedProcedure.handler(async ({ context }) => {
 });
 
 export const signOut = protectedProcedure.handler(async ({ context }) => {
-  await db.deleteFrom("session").where("session.id", "=", context.auth.sessionId).execute();
+  await deleteSession(context.auth.sessionId);
   await authCookieSession.clear(context);
   return { success: true };
 });
@@ -144,26 +143,6 @@ const findOrCreateUser = async (data: { email: string; name?: string }) => {
   }
 
   return user;
-};
-
-const createSession = async (context: ORPCContext, data: { userId: string }) => {
-  const now = new Date().toISOString();
-  const sessionId = crypto.randomUUID();
-
-  await db
-    .insertInto("session")
-    .values({
-      id: sessionId,
-      createdAt: now,
-      updatedAt: now,
-      expiresAt: addSeconds(now, authCookieSession.maxAge).toISOString(),
-      userId: data.userId,
-    })
-    .execute();
-
-  await authCookieSession.set(context, { sessionId });
-
-  return sessionId;
 };
 
 export const handleGoogleCallback = async (context: ORPCContext, data: { code: string; state: string }) => {
@@ -211,7 +190,7 @@ export const handleGoogleCallback = async (context: ORPCContext, data: { code: s
   }
 
   const user = await findOrCreateUser({ email: claims.email, name: claims.name });
-  await createSession(context, { userId: user.id });
+  await createSession(context, user);
 
   return { success: true, userId: user.id };
 };

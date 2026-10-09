@@ -40,6 +40,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "255b61a4e97c4d438d31727317514735"
+    }
+  ],
   "send_email": [
     {
       "name": "EMAIL",

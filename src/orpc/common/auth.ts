@@ -1,9 +1,11 @@
 import { deleteCookie, getCookie, setCookie, sign, unsign } from "@orpc/server/helpers";
+import { addSeconds } from "date-fns";
 import { getContext } from "@/lib/context";
-import { db, type UserRole } from "@/lib/db";
+import type { UserRole } from "@/lib/db";
 import { type ORPCContext, osBase } from "./os";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 180; // 180 days
+const SESSION_CACHE_TTL_SECONDS = 60 * 30;
 
 type SessionData = {
   sessionId: string;
@@ -18,52 +20,61 @@ export type AuthSession = {
   sessionExpiresAt: string;
 };
 
+type StoredSession = Omit<AuthSession, "sessionId">;
+
 export const authCookieSession = createCookieSession<SessionData>({
   name: "session",
   maxAge: SESSION_MAX_AGE_SECONDS,
 });
 
-async function checkAuthFromHeaders(
-  headers: Headers | undefined,
-): Promise<{ auth: AuthSession | null; shouldClearCookie: boolean }> {
+export async function createSession(
+  context: ORPCContext,
+  user: { id: string; name: string; email: string; role: UserRole },
+): Promise<void> {
+  const sessionId = crypto.randomUUID();
+  const expiresAt = addSeconds(new Date(), SESSION_MAX_AGE_SECONDS);
+  const stored: StoredSession = {
+    userId: user.id,
+    userName: user.name,
+    userEmail: user.email,
+    userRole: user.role,
+    sessionExpiresAt: expiresAt.toISOString(),
+  };
+
+  await getContext().SESSIONS.put(sessionId, JSON.stringify(stored), {
+    expiration: Math.floor(expiresAt.getTime() / 1000),
+  });
+  await authCookieSession.set(context, { sessionId });
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  await getContext().SESSIONS.delete(sessionId);
+}
+
+// A KV miss leaves the cookie alone: a just-written session may not be visible yet.
+export async function getAuthFromHeaders(headers: Headers | undefined): Promise<AuthSession | null> {
   const session = await authCookieSession.getFromHeaders(headers);
 
   if (!session?.sessionId) {
-    return { auth: null, shouldClearCookie: false };
+    return null;
   }
 
-  const authSession = await db
-    .selectFrom("session as s")
-    .where("s.id", "=", session.sessionId)
-    .innerJoin("user as u", "s.userId", "u.id")
-    .select([
-      "u.id as userId",
-      "s.id as sessionId",
-      "u.name as userName",
-      "u.email as userEmail",
-      "u.role as userRole",
-      "s.expiresAt as sessionExpiresAt",
-    ])
-    .executeTakeFirst();
+  const stored = await getContext().SESSIONS.get<StoredSession>(session.sessionId, {
+    type: "json",
+    cacheTtl: SESSION_CACHE_TTL_SECONDS,
+  });
 
-  if (!authSession || new Date(authSession.sessionExpiresAt) < new Date()) {
-    return { auth: null, shouldClearCookie: true };
+  if (!stored || new Date(stored.sessionExpiresAt) < new Date()) {
+    return null;
   }
 
-  return { auth: authSession, shouldClearCookie: false };
-}
-
-export async function getAuthFromHeaders(headers: Headers | undefined): Promise<AuthSession | null> {
-  return (await checkAuthFromHeaders(headers)).auth;
+  return { ...stored, sessionId: session.sessionId };
 }
 
 export const authMiddleware = osBase.middleware(async ({ context, next, errors }) => {
-  const { auth, shouldClearCookie } = await checkAuthFromHeaders(context.reqHeaders);
+  const auth = await getAuthFromHeaders(context.reqHeaders);
 
   if (!auth) {
-    if (shouldClearCookie) {
-      await authCookieSession.clear(context);
-    }
     throw errors.UNAUTHORIZED();
   }
 

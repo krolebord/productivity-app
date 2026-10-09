@@ -49,14 +49,6 @@ export interface MonobankConnection {
   webhookStatus: Generated<string>;
 }
 
-export interface Session {
-  createdAt: string;
-  expiresAt: string;
-  id: string;
-  updatedAt: string;
-  userId: string;
-}
-
 export interface User {
   createdAt: string;
   email: string;
@@ -77,7 +69,6 @@ export interface DB {
   d1_migrations: D1Migrations;
   google_calendar_connection: GoogleCalendarConnection;
   monobank_connection: MonobankConnection;
-  session: Session;
   user: User;
   verification: Verification;
 }
