@@ -414,12 +414,16 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     });
 
     try {
-      return await this.enqueueTurn(
+      const result = await this.enqueueTurn(
         stub,
         conversation,
         { turnId: input.turnId, text: input.text, files: input.files ?? [] },
         true,
       );
+      if (result.error) {
+        await stub.updateConversation(conversationId, { turnStatus: "error", turnError: result.error.message });
+      }
+      return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await stub.updateConversation(conversationId, { turnStatus: "error", turnError: message });

@@ -186,7 +186,7 @@ export class UserDbServer extends Server<Env> {
    * Apply calendar enablement in the server replica before scheduling work that reads it.
    *
    * A browser write followed by a separate RPC has no cross-channel ordering guarantee, whereas a
-   * server-authored event is applied synchronously by `enqueueEvent`.
+   * server-authored event is applied by `enqueueEvent` before this DO handles further I/O.
    */
   async setCalendarSourceEnabled(input: {
     sourceId: string;
@@ -266,32 +266,34 @@ export class UserDbServer extends Server<Env> {
     id: string;
     model: string;
     reasoningEffort: string | null;
-  }): Promise<ConversationItem | null> {
+  }): Promise<ConversationItem> {
     const existing = await this.getConversation(input.id);
     if (existing) return existing;
 
     const now = Date.now();
+    const conversation: ConversationItem = {
+      id: input.id,
+      title: "",
+      createdAt: now,
+      updatedAt: now,
+      lastReadAt: 0,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
+      totalCost: 0,
+      totalTokens: 0,
+      turnStatus: "running",
+      turnError: "",
+    };
     this.syncDb.enqueueEvent(
       this.syncDb.createEvent({
         type: "item-created",
         dataset: "_conversation",
         item_id: input.id,
-        payload: {
-          id: input.id,
-          title: "",
-          createdAt: now,
-          updatedAt: now,
-          lastReadAt: 0,
-          model: input.model,
-          reasoningEffort: input.reasoningEffort,
-          totalCost: 0,
-          totalTokens: 0,
-          turnStatus: "running",
-          turnError: "",
-        },
+        payload: conversation,
       }),
     );
-    return this.getConversation(input.id);
+    // enqueueEvent applies the event asynchronously, so reading the row back here would miss it.
+    return conversation;
   }
 
   /** Appends the user message at the next seq and marks the turn running. An empty title leaves it unchanged. */
