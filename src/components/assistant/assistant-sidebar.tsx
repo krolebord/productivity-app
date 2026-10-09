@@ -884,6 +884,23 @@ function ConversationView({
   );
 }
 
+const AGENT_WARM_INTERVAL_MS = 60_000;
+
+// Composer activity means a send is likely soon: wake the agent so its cold start overlaps
+// typing instead of delaying the submit. Pass null when there is no agent to wake.
+function useWarmAgent(conversationId: string | null) {
+  const lastWarmAtRef = useRef(0);
+  return useCallback(() => {
+    if (!conversationId) return;
+    const now = Date.now();
+    if (now - lastWarmAtRef.current < AGENT_WARM_INTERVAL_MS) return;
+    lastWarmAtRef.current = now;
+    orpc.assistant.ensureProjection.call({ conversationId }).catch(() => {
+      lastWarmAtRef.current = 0;
+    });
+  }, [conversationId]);
+}
+
 function ConversationChat({ target }: { target: ConversationTarget }) {
   const conversation = target.kind === "persisted" ? target.conversation : null;
   const conversationId = target.kind === "persisted" ? target.conversation.id : target.conversationId;
@@ -975,6 +992,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   const canStop = isRunning || (lockHolding && conversation !== null);
   const locked = conversation !== null || submitLock != null;
   const turnError = conversation?.turnStatus === "error" ? conversation.turnError : "";
+  const warmAgent = useWarmAgent(conversation && !isWorking ? conversation.id : null);
 
   function releaseOwnedLock(owned: SubmitLock) {
     if (
@@ -1062,6 +1080,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
     event.preventDefault();
     setUploadError(null);
     setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
+    warmAgent();
   }
 
   return (
@@ -1124,6 +1143,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
             const files = Array.from(event.target.files ?? []);
             setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
             event.target.value = "";
+            warmAgent();
           }}
         />
         {selectedFiles.length > 0 && (
@@ -1177,7 +1197,10 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
             ref={textareaRef}
             autoFocus
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              warmAgent();
+            }}
             onPaste={pasteImages}
             onKeyDown={(e) => {
               if (isDesktop && e.key === "Enter" && !e.shiftKey) {
