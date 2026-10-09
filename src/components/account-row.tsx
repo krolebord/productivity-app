@@ -107,7 +107,7 @@ export function AccountBalanceRow({
       </Link>
       <AccountVisibilityToggle
         account={account}
-        className="mr-2 ml-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+        className="mr-2 ml-1 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
       />
     </div>
   );
