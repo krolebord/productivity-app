@@ -36,11 +36,15 @@ export default {
       prefix: "user-db",
       locationHint: "weur",
       onBeforeConnect: async (req, lobby) => {
+        if (lobby.className !== "UserDbServer") {
+          return new Response("Not found", { status: 404 });
+        }
         const userId = await getUserIdFromRequest(req);
         if (!userId || lobby.name !== `user-${userId}`) {
           return new Response("Unauthorized", { status: 401 });
         }
       },
+      onBeforeRequest: () => new Response("Not found", { status: 404 }),
     });
     if (partykitRequest) {
       return partykitRequest;
