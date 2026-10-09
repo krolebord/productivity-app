@@ -11,7 +11,6 @@ import {
 import { isAssistantAllowed } from "@/lib/assistant-access";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@/lib/assistant-files";
 import { getContext } from "@/lib/context";
-import { getUserDbStub } from "@/lib/user-db-stub";
 import { protectedProcedure } from "../common/procedure";
 
 const conversationIdInput = z.object({
@@ -149,15 +148,9 @@ const ensureProjection = assistantProcedure.input(conversationIdInput).handler(a
   return { ok: true as const };
 });
 
-const deleteConversation = assistantProcedure.input(conversationIdInput).handler(async ({ input, context }) => {
-  const stub = await getUserDbStub(context.auth.userId);
-  return { deleted: await stub.deleteConversation(input.conversationId) };
-});
-
 export const assistantRouter = {
   startConversation,
   submitTurn,
   cancelTurn,
   ensureProjection,
-  deleteConversation,
 };

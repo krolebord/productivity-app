@@ -770,7 +770,7 @@ function ConversationView({
 }: {
   target: ConversationTarget;
   conversations: ConversationRow[];
-  onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
+  onDeleteConversation: (conversation: { id: string }) => void;
 }) {
   const auth = useAuth();
   const { openNewConversation } = useAssistantNavigation();
@@ -862,7 +862,7 @@ function ConversationView({
                 />
               }
             >
-              {deleteActive.pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              <Trash2 className="size-4" />
             </TooltipTrigger>
             <TooltipContent side="bottom">
               {deleteActive.armed ? "Click again to delete" : "Delete conversation"}
@@ -1231,6 +1231,7 @@ export function useNewConversation() {
 }
 
 export function AssistantSidebar() {
+  const db = useDb();
   const catchUp = useCatchUpConversationLastReadAt();
   const activeConversationId = useAssistantStore((s) => s.activeConversationId);
   const setActiveConversation = useAssistantStore((s) => s.setActiveConversation);
@@ -1251,8 +1252,8 @@ export function AssistantSidebar() {
     ? { kind: "persisted", conversation: active }
     : { kind: "draft", conversationId: selectedConversationId };
 
-  async function deleteConversation(conversation: { id: string }) {
-    await orpc.assistant.deleteConversation.call({ conversationId: conversation.id });
+  function deleteConversation(conversation: { id: string }) {
+    db.db.executeKysely((q) => q.deleteFrom("conversation").where("id", "=", conversation.id));
     useAssistantStore.getState().clearSubmitLock(conversation.id);
     if (conversation.id === selectedConversationId) {
       const next = conversations.find((row) => row.id !== conversation.id);

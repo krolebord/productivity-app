@@ -342,16 +342,6 @@ export class UserDbServer extends Server<Env> {
     });
   }
 
-  async deleteConversation(id: string): Promise<boolean> {
-    if (!(await this.getConversation(id))) return false;
-    this.syncDb.applyEvent({
-      type: "item-deleted",
-      dataset: "_conversation",
-      item_id: id,
-    });
-    return true;
-  }
-
   // Synced schema has no FKs; delete through the CRDT view so each row emits item-deleted.
   private deleteConversationMessages(conversationId: string): void {
     this.syncDb.executeKysely((q) => q.deleteFrom("conversation_message").where("conversationId", "=", conversationId));

@@ -260,7 +260,7 @@ export function ConversationList({
 }: {
   conversations: ConversationListItem[];
   activeId: string;
-  onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
+  onDeleteConversation: (conversation: { id: string }) => void;
 }) {
   const { openConversation, openNewConversation } = useAssistantNavigation();
   const isPage = useIsAssistantPage();
