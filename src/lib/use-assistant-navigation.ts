@@ -1,7 +1,9 @@
+import { generateId } from "@sqlite-sync/core";
 import { useCallback } from "react";
 import { type RightPanel, useAssistantStore } from "@/lib/assistant-store";
 import { viewingConversationId } from "@/lib/conversation-list";
 import { useCatchUpConversationLastReadAt } from "@/lib/use-catch-up-conversation-last-read";
+import { warmAssistantAgent } from "@/lib/warm-assistant-agent";
 
 /**
  * Store panel/chat moves plus lastReadAt catch-up on leave and arrive.
@@ -24,6 +26,12 @@ export function useAssistantNavigation() {
     },
     [catchUp, storeOpenConversation],
   );
+
+  const openNewConversation = useCallback(() => {
+    const id = generateId();
+    openConversation(id);
+    warmAssistantAgent(id);
+  }, [openConversation]);
 
   const openConversationList = useCallback(() => {
     catchUp(viewingConversationId(useAssistantStore.getState()));
@@ -63,5 +71,5 @@ export function useAssistantNavigation() {
     [catchUp, storeTogglePanel],
   );
 
-  return { openConversation, openConversationList, closePanel, openPanel, togglePanel };
+  return { openConversation, openNewConversation, openConversationList, closePanel, openPanel, togglePanel };
 }

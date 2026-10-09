@@ -1,4 +1,3 @@
-import { generateId } from "@sqlite-sync/core";
 import { ChevronLeft, CircleAlert, Loader2, PlusIcon, Sparkles, Trash2 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { AssistantHeaderActions } from "@/components/assistant/assistant-header-actions";
@@ -263,7 +262,7 @@ export function ConversationList({
   activeId: string;
   onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
 }) {
-  const { openConversation } = useAssistantNavigation();
+  const { openConversation, openNewConversation } = useAssistantNavigation();
   const isPage = useIsAssistantPage();
   const confirm = useConfirmDialogStore((s) => s.confirm);
   const listRef = useRef<HTMLDivElement>(null);
@@ -338,7 +337,7 @@ export function ConversationList({
                 size="icon"
                 className="size-8 text-muted-foreground"
                 aria-label="New conversation"
-                onClick={() => openConversation(generateId())}
+                onClick={openNewConversation}
               />
             }
           >
@@ -361,7 +360,7 @@ export function ConversationList({
             <p className="font-medium text-sm">No chats yet</p>
             <p className="text-muted-foreground text-sm">Start one and it will show up here.</p>
           </div>
-          <Button type="button" size="sm" onClick={() => openConversation(generateId())}>
+          <Button type="button" size="sm" onClick={openNewConversation}>
             New conversation
           </Button>
         </div>

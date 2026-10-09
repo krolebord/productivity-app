@@ -66,6 +66,7 @@ import { useBottomInset } from "@/lib/use-bottom-inset";
 import { useCatchUpConversationLastReadAt } from "@/lib/use-catch-up-conversation-last-read";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
+import { warmAssistantAgent } from "@/lib/warm-assistant-agent";
 import { orpc } from "@/orpc/orpc-client";
 import type { ConversationItem, ConversationMessageItem } from "@/user-db/migrations";
 import { useDb, useDbQuery } from "@/user-db/user-db";
@@ -772,7 +773,7 @@ function ConversationView({
   onDeleteConversation: (conversation: { id: string }) => Promise<void> | void;
 }) {
   const auth = useAuth();
-  const { openConversation } = useAssistantNavigation();
+  const { openNewConversation } = useAssistantNavigation();
   const copyAgentIdResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [agentIdCopied, setAgentIdCopied] = useState(false);
   const [copyTooltipOpen, setCopyTooltipOpen] = useState(false);
@@ -820,7 +821,7 @@ function ConversationView({
                 size="icon"
                 className="size-8 text-muted-foreground"
                 aria-label="New conversation"
-                onClick={() => openConversation(generateId())}
+                onClick={openNewConversation}
               />
             }
           >
@@ -882,24 +883,6 @@ function ConversationView({
       </Suspense>
     </div>
   );
-}
-
-const AGENT_WARM_INTERVAL_MS = 60_000;
-
-// Composer activity means a send is likely soon: wake the agent so its cold start overlaps
-// typing instead of delaying the submit. Drafts benefit most, since their first call creates
-// the agent's Durable Object. Pass null to skip warming.
-function useWarmAgent(conversationId: string | null) {
-  const lastWarmAtRef = useRef(0);
-  return useCallback(() => {
-    if (!conversationId) return;
-    const now = Date.now();
-    if (now - lastWarmAtRef.current < AGENT_WARM_INTERVAL_MS) return;
-    lastWarmAtRef.current = now;
-    orpc.assistant.ensureProjection.call({ conversationId }).catch(() => {
-      lastWarmAtRef.current = 0;
-    });
-  }, [conversationId]);
 }
 
 function ConversationChat({ target }: { target: ConversationTarget }) {
@@ -993,7 +976,9 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   const canStop = isRunning || (lockHolding && conversation !== null);
   const locked = conversation !== null || submitLock != null;
   const turnError = conversation?.turnStatus === "error" ? conversation.turnError : "";
-  const warmAgent = useWarmAgent(isWorking ? null : conversationId);
+  function warmAgent() {
+    if (!isWorking) warmAssistantAgent(conversationId);
+  }
 
   function releaseOwnedLock(owned: SubmitLock) {
     if (
@@ -1236,13 +1221,13 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
 
 /** Opens the assistant with an unpersisted conversation draft. */
 export function useNewConversation() {
-  const { openConversation } = useAssistantNavigation();
+  const { openNewConversation } = useAssistantNavigation();
   const { open } = useAssistantSurface();
 
   return useCallback(() => {
     open();
-    openConversation(generateId());
-  }, [open, openConversation]);
+    openNewConversation();
+  }, [open, openNewConversation]);
 }
 
 export function AssistantSidebar() {

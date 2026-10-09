@@ -135,7 +135,13 @@ type AssistantUsageState = {
   // Absent on legacy DO state. Skip backfill only when this is exactly true —
   // never default it in initialState, which would mark old chats as done.
   projectionReady?: boolean;
+  // Keep this write first in startConversation: draft cleanup relies on it, and on a destroyed
+  // agent it throws before the user DB is touched. Absent on legacy state, so draft cleanup
+  // also checks the user DB before destroying anything.
+  started?: boolean;
 };
+
+const DRAFT_AGENT_TTL_SECONDS = 6 * 60 * 60;
 
 export type AssistantTurnError = { code: "NOT_FOUND" | "BAD_REQUEST"; message: string };
 
@@ -405,6 +411,8 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     reasoningEffort: AssistantReasoningEffort | null;
     files?: WorkspaceUploadInput[];
   }): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
+    this.setState({ ...this.state, started: true });
+
     const conversationId = this.getConversationId();
     const stub = await this.getUserDbStub();
     const conversation = await stub.createConversation({
@@ -539,11 +547,36 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   async ensureProjection(): Promise<{ ok: true; error?: undefined } | { ok?: undefined; error: AssistantTurnError }> {
     try {
       await this.ensureProjectionReady();
+      await this.scheduleDraftCleanup();
       return { ok: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { error: { code: "BAD_REQUEST", message } };
     }
+  }
+
+  private async scheduleDraftCleanup(): Promise<void> {
+    if (this.state.started) return;
+    if ((await this.getMessages()).length > 0) {
+      this.setState({ ...this.state, started: true });
+      return;
+    }
+    await this.schedule(DRAFT_AGENT_TTL_SECONDS, "cleanupUnusedDraft", undefined, { idempotent: true });
+  }
+
+  async cleanupUnusedDraft(): Promise<void> {
+    if (this.state.started) return;
+    if ((await this.getMessages()).length > 0) return;
+
+    const stub = await this.getUserDbStub();
+    if (await stub.getConversation(this.getConversationId())) {
+      this.setState({ ...this.state, started: true });
+      return;
+    }
+    // startConversation may have run while the user DB call was in flight.
+    if (this.state.started) return;
+
+    await this.destroy();
   }
 
   private async ensureProjectionReady(): Promise<void> {
