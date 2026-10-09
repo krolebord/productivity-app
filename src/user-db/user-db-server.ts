@@ -261,8 +261,14 @@ export class UserDbServer extends Server<Env> {
     return row ?? null;
   }
 
-  async createConversation(input: { id: string; model: string; reasoningEffort: string | null }): Promise<void> {
-    if (await this.getConversation(input.id)) return;
+  /** Creates the conversation if missing and returns its row. */
+  async createConversation(input: {
+    id: string;
+    model: string;
+    reasoningEffort: string | null;
+  }): Promise<ConversationItem | null> {
+    const existing = await this.getConversation(input.id);
+    if (existing) return existing;
 
     const now = Date.now();
     this.syncDb.enqueueEvent(
@@ -285,6 +291,7 @@ export class UserDbServer extends Server<Env> {
         },
       }),
     );
+    return this.getConversation(input.id);
   }
 
   /** Appends the user message at the next seq and marks the turn running. An empty title leaves it unchanged. */

@@ -20,7 +20,7 @@ import { getServerByName } from "partyserver";
 import { PostHog } from "posthog-node";
 import { z } from "zod";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from "../lib/assistant-files";
-import { MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
+import { type ConversationItem, MEMORY_INJECTION_LIMIT, SKILL_CATALOG_LIMIT } from "../user-db/migrations";
 import type { UserDbServer } from "../user-db/user-db-server";
 import { BUILTIN_SKILLS, type BuiltinSkill } from "./builtin-skills";
 import { RenderChartInputSchema } from "./chart-spec";
@@ -407,14 +407,19 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   }): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
     const conversationId = this.getConversationId();
     const stub = await this.getUserDbStub();
-    await stub.createConversation({
+    const conversation = await stub.createConversation({
       id: conversationId,
       model: input.model,
       reasoningEffort: input.reasoningEffort,
     });
 
     try {
-      return await this.enqueueTurn(stub, { turnId: input.turnId, text: input.text, files: input.files ?? [] }, true);
+      return await this.enqueueTurn(
+        stub,
+        conversation,
+        { turnId: input.turnId, text: input.text, files: input.files ?? [] },
+        true,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await stub.updateConversation(conversationId, { turnStatus: "error", turnError: message });
@@ -427,16 +432,18 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     text: string;
     files?: WorkspaceUploadInput[];
   }): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
-    return this.enqueueTurn(await this.getUserDbStub(), { ...input, files: input.files ?? [] }, false);
+    const stub = await this.getUserDbStub();
+    const conversation = await stub.getConversation(this.getConversationId());
+    return this.enqueueTurn(stub, conversation, { ...input, files: input.files ?? [] }, false);
   }
 
   private async enqueueTurn(
     stub: DurableObjectStub<UserDbServer>,
+    conversation: ConversationItem | null,
     input: { turnId: string; text: string; files: WorkspaceUploadInput[] },
     allowRunning: boolean,
   ): Promise<{ accepted: boolean; error?: undefined } | { accepted?: undefined; error: AssistantTurnError }> {
     const conversationId = this.getConversationId();
-    const conversation = await stub.getConversation(conversationId);
     if (!conversation) {
       return { error: { code: "NOT_FOUND", message: "Conversation not found." } };
     }
