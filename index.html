@@ -24,6 +24,40 @@
 			document.documentElement.classList.toggle("dark", dark);
 		})();
 	</script>
+	<script>
+		// A precached shell can outlive the chunks it references, leaving a blank page on every
+		// launch. When the entry module graph fails to load, drop the service worker and its
+		// caches, then reload from the network. A lazy chunk missing after a service worker
+		// update only needs a reload. The timestamp guard prevents a reload loop.
+		(() => {
+			var key = "productivity-shell-recovery-at";
+			var claimReload = () => {
+				try {
+					if (Date.now() - Number(sessionStorage.getItem(key)) < 60000) return false;
+					sessionStorage.setItem(key, String(Date.now()));
+					return true;
+				} catch (_) {
+					return false;
+				}
+			};
+			window.addEventListener("error", (event) => {
+				var script = event.target;
+				if (!(script instanceof HTMLScriptElement) || script.type !== "module") return;
+				if (!claimReload()) return;
+				Promise.all([
+					navigator.serviceWorker?.getRegistrations().then((registrations) =>
+						Promise.all(registrations.map((registration) => registration.unregister()))
+					),
+					window.caches?.keys().then((names) => Promise.all(names.map((name) => caches.delete(name)))),
+				]).finally(() => location.reload());
+			}, true);
+			window.addEventListener("vite:preloadError", (event) => {
+				if (!claimReload()) return;
+				event.preventDefault();
+				location.reload();
+			});
+		})();
+	</script>
 </head>
 
 <body class="min-h-dvh font-sans scroll-smooth antialiased">
