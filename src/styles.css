@@ -61,6 +61,12 @@
   --shadow-2xl: 0px 1px 4px 0px hsl(0 0% 0% / 0.13);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
+  /* Height of whatever a page pins to the bottom edge (the assistant composer).
+     The mobile floating buttons sit above it. See useBottomInset. */
+  --bottom-inset: 0px;
+  /* The visible area once the mobile keyboard is open. See useVisualViewport. */
+  --viewport-height: 100dvh;
+  --viewport-top: 0px;
 }
 
 .dark {
@@ -112,12 +118,6 @@
   --shadow-lg: 0px 4px 8px 0px hsl(0 0% 0% / 0.3), 0px 4px 6px -1px hsl(0 0% 0% / 0.3);
   --shadow-xl: 0px 4px 8px 0px hsl(0 0% 0% / 0.3), 0px 8px 10px -1px hsl(0 0% 0% / 0.3);
   --shadow-2xl: 0px 4px 8px 0px hsl(0 0% 0% / 0.75);
-  /* Height of whatever a page pins to the bottom edge (the assistant composer).
-     The mobile floating buttons sit above it. See useBottomInset. */
-  --bottom-inset: 0px;
-  /* The visible area once the mobile keyboard is open. See useVisualViewport. */
-  --viewport-height: 100dvh;
-  --viewport-top: 0px;
 }
 
 @theme inline {

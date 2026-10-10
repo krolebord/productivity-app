@@ -8,6 +8,8 @@ minimumReleaseAgeExclude:
   - "@sqlite-sync/react"
   - "@cloudflare/think"
   - agents
+  - "@base-ui/react"
+  - "@base-ui/utils"
 trustPolicy: no-downgrade
 trustPolicyExclude:
   - "@trickfilm400/rollup-plugin-off-main-thread"

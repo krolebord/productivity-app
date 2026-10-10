@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.303",
-    "@base-ui/react": "^1.8.0",
+    "@base-ui/react": "^1.9.0",
     "@cloudflare/codemode": "^0.5.2",
     "@cloudflare/shell": "^0.4.3",
     "@cloudflare/think": "^0.16.0",

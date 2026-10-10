@@ -14,6 +14,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { Devtools } from "@/components/devtools";
 import { HabitDialog } from "@/components/habit-dialog";
 import { NoteDialog } from "@/components/note-dialog";
+import { OfflineBanner } from "@/components/offline-banner";
 import { SyncStatusMonitor } from "@/components/sync-status-monitor";
 import { TaskDialog } from "@/components/task-dialog";
 import { TodayPanel } from "@/components/today/today-panel";
@@ -93,6 +94,7 @@ function RouteComponent() {
       <AppDndProvider>
         <SyncStatusMonitor />
         <div ref={shellRef} className="fixed inset-x-0 top-(--viewport-top) flex h-(--viewport-height) overflow-hidden">
+          <OfflineBanner />
           <AppSidebar />
           <Group
             orientation="horizontal"
