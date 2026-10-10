@@ -1,14 +1,17 @@
-import { RefreshCw, WifiOff } from "lucide-react";
+import { RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useDb, useDbState } from "@/user-db/user-db";
 
 const SHOW_DELAY_MS = 1000;
+const BACK_ONLINE_MS = 1000;
+
+type Phase = "hidden" | "offline" | "back-online" | "leaving";
 
 export function OfflineBanner() {
   const { state } = useDb();
   const { remoteState } = useDbState();
-  const [visible, setVisible] = useState(false);
+  const [phase, setPhase] = useState<Phase>("hidden");
 
   const showTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -18,35 +21,66 @@ export function OfflineBanner() {
     if (remoteState === "online") {
       clearTimeout(showTimeout.current);
       showTimeout.current = undefined;
-      setVisible(false);
-    } else if (remoteState === "offline" && !showTimeout.current) {
-      showTimeout.current = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
+      setPhase((current) => (current === "offline" ? "back-online" : current));
+    } else if (remoteState === "offline") {
+      setPhase((current) => (current === "back-online" || current === "leaving" ? "offline" : current));
+      if (!showTimeout.current) {
+        showTimeout.current = setTimeout(() => setPhase("offline"), SHOW_DELAY_MS);
+      }
     }
   }, [remoteState]);
 
   useEffect(() => () => clearTimeout(showTimeout.current), []);
 
-  if (!visible) return null;
+  useEffect(() => {
+    if (phase !== "back-online") return;
+    const timeout = setTimeout(() => setPhase("leaving"), BACK_ONLINE_MS);
+    return () => clearTimeout(timeout);
+  }, [phase]);
 
-  const reconnecting = remoteState === "pending";
+  if (phase === "hidden") return null;
+
+  const offline = phase === "offline";
+  const reconnecting = offline && remoteState === "pending";
 
   return (
     <div role="status" className="pointer-events-none absolute inset-x-0 top-2 z-40 flex justify-center px-4">
       <button
         type="button"
+        disabled={!offline}
         aria-busy={reconnecting}
-        title="Reconnect"
+        title={offline ? "Reconnect" : undefined}
         onClick={() => {
           if (!reconnecting) state.goOnline();
         }}
-        className="fade-in slide-in-from-top-2 pointer-events-auto flex min-w-0 animate-in items-center gap-2 rounded-full border border-rose-500/30 bg-rose-50 py-1.5 pr-3 pl-3.5 text-rose-700 text-sm shadow-md transition-colors hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-300 dark:hover:bg-rose-900"
+        onAnimationEnd={(event) => {
+          if (phase === "leaving" && event.target === event.currentTarget) setPhase("hidden");
+        }}
+        className={cn(
+          "pointer-events-auto flex min-w-0 items-center gap-2 rounded-full border py-1.5 pr-3 pl-3.5 text-sm shadow-md",
+          phase === "leaving"
+            ? "slide-out-to-top-2 fade-out animate-out fill-mode-forwards duration-300"
+            : "fade-in slide-in-from-top-2 animate-in",
+          offline
+            ? "border-rose-500/30 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-300 dark:hover:bg-rose-900"
+            : "border-emerald-500/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+        )}
       >
-        <WifiOff className="size-4 shrink-0" />
-        <span className="min-w-0 truncate">
-          You're offline
-          <span className="hidden sm:inline">. Changes are saved on this device and will sync later.</span>
-        </span>
-        <RefreshCw className={cn("size-3.5 shrink-0 opacity-80", reconnecting && "animate-spin")} />
+        {offline ? (
+          <>
+            <WifiOff className="size-4 shrink-0" />
+            <span className="min-w-0 truncate">
+              You're offline
+              <span className="hidden sm:inline">. Changes are saved on this device and will sync later.</span>
+            </span>
+            <RefreshCw className={cn("size-3.5 shrink-0 opacity-80", reconnecting && "animate-spin")} />
+          </>
+        ) : (
+          <>
+            <Wifi className="size-4 shrink-0" />
+            <span>Back online</span>
+          </>
+        )}
       </button>
     </div>
   );
