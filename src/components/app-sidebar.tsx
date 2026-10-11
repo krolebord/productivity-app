@@ -75,7 +75,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 const remoteStateConfig = {
   online: { label: "Online", icon: <Wifi className="size-4" />, className: "text-emerald-500" },
-  pending: { label: "Connecting", icon: <Loader2 className="size-4 animate-spin" />, className: "text-amber-500" },
+  connecting: { label: "Connecting", icon: <Loader2 className="size-4 animate-spin" />, className: "text-amber-500" },
   offline: { label: "Offline", icon: <WifiOff className="size-4" />, className: "text-rose-500" },
 } as const;
 

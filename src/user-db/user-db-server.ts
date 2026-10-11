@@ -64,6 +64,11 @@ export class UserDbServer extends Server<Env> {
   private syncDb: ServerSyncDb<UserSyncDbSchema> = null!;
   private accountBalanceReconciliationQueued = false;
 
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    durableObjectAdapter.enableHeartbeatAutoResponse(ctx);
+  }
+
   async onStart() {
     const { syncDb, remoteHandler } = await durableObjectAdapter.createCrdtStorage({
       syncDbSchema,

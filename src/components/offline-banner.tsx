@@ -1,5 +1,5 @@
 import { RefreshCw, Wifi, WifiOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useDb, useDbState } from "@/user-db/user-db";
 
@@ -13,24 +13,18 @@ export function OfflineBanner() {
   const { remoteState } = useDbState();
   const [phase, setPhase] = useState<Phase>("hidden");
 
-  const showTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const online = remoteState === "online";
 
-  // The delay starts at the first "offline" and only "online" cancels it, so a slow initial
-  // connect stays quiet while quick reconnect attempts can't keep resetting it.
+  // Keyed on a boolean, so flips between "connecting" and "offline" during retries don't restart the delay.
   useEffect(() => {
-    if (remoteState === "online") {
-      clearTimeout(showTimeout.current);
-      showTimeout.current = undefined;
+    if (online) {
       setPhase((current) => (current === "offline" ? "back-online" : current));
-    } else if (remoteState === "offline") {
-      setPhase((current) => (current === "back-online" || current === "leaving" ? "offline" : current));
-      if (!showTimeout.current) {
-        showTimeout.current = setTimeout(() => setPhase("offline"), SHOW_DELAY_MS);
-      }
+      return;
     }
-  }, [remoteState]);
-
-  useEffect(() => () => clearTimeout(showTimeout.current), []);
+    setPhase((current) => (current === "back-online" || current === "leaving" ? "offline" : current));
+    const timeout = setTimeout(() => setPhase("offline"), SHOW_DELAY_MS);
+    return () => clearTimeout(timeout);
+  }, [online]);
 
   useEffect(() => {
     if (phase !== "back-online") return;
@@ -41,7 +35,7 @@ export function OfflineBanner() {
   if (phase === "hidden") return null;
 
   const offline = phase === "offline";
-  const reconnecting = offline && remoteState === "pending";
+  const reconnecting = offline && remoteState === "connecting";
 
   return (
     <div role="status" className="pointer-events-none absolute inset-x-0 top-2 z-40 flex justify-center px-4">
@@ -50,9 +44,7 @@ export function OfflineBanner() {
         disabled={!offline}
         aria-busy={reconnecting}
         title={offline ? "Reconnect" : undefined}
-        onClick={() => {
-          if (!reconnecting) state.goOnline();
-        }}
+        onClick={() => state.goOnline()}
         onAnimationEnd={(event) => {
           if (phase === "leaving" && event.target === event.currentTarget) setPhase("hidden");
         }}
