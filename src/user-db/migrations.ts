@@ -456,6 +456,15 @@ const migrations = createMigrations((b) => ({
       idx.on("_currency_rate").columns(["date", "baseCurrency"]).where(sql.ref("tombstone"), "=", 0),
     ),
   ],
+  27: [
+    b.addColumn({
+      table: "_dashboard_settings",
+      column: "timeZone",
+      type: "text",
+      defaultValue: "",
+      build: (col) => col.notNull(),
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -722,6 +731,10 @@ export const syncDbSchema = defineSyncSchema({
         rangeDays: t.integer().default(30).describe('Trailing length when rangeMode is "days".'),
         cycleDay: t.integer().default(25).describe("Cycle start day of month."),
         baseCurrency: t.text().default("USD").describe("Dashboard totals currency."),
+        timeZone: t
+          .text()
+          .default("")
+          .describe("The user's IANA timezone, for local dates and times. Empty until a device reports it."),
         createdAt: t.integer(),
         updatedAt: t.integer(),
       },

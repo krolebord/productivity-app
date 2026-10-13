@@ -17,6 +17,7 @@ import { NoteDialog } from "@/components/note-dialog";
 import { OfflineBanner } from "@/components/offline-banner";
 import { SyncStatusMonitor } from "@/components/sync-status-monitor";
 import { TaskDialog } from "@/components/task-dialog";
+import { TimeZoneWatcher } from "@/components/time-zone-watcher";
 import { TodayPanel } from "@/components/today/today-panel";
 import { TransactionDialog } from "@/components/transaction-dialog";
 import { useAssistantStore } from "@/lib/assistant-store";
@@ -93,6 +94,7 @@ function RouteComponent() {
       ) : null}
       <AppDndProvider>
         <SyncStatusMonitor />
+        <TimeZoneWatcher />
         <div ref={shellRef} className="fixed inset-x-0 top-(--viewport-top) flex h-(--viewport-height) overflow-hidden">
           <OfflineBanner />
           <AppSidebar />

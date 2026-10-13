@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   ChartPie,
   ChevronsUpDown,
+  Globe,
   ListTodoIcon,
   Loader2,
   LogOut,
@@ -35,6 +36,7 @@ import { useCreateExpense, useCreateIncome, useCreateTransfer } from "@/componen
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth, useSignOut } from "@/lib/auth-client";
 import { useCommandStore } from "@/lib/command-store";
+import { useDashboardSettings } from "@/lib/dashboard-settings";
 import { type DefaultHome, useDefaultHomeStore } from "@/lib/default-home-store";
 import { TRANSACTION_TYPE_STYLE } from "@/lib/finance-ui";
 import {
@@ -273,6 +275,7 @@ function SidebarUserMenu({ collapsed }: { collapsed: boolean }) {
   const setTheme = useThemeStore((s) => s.setTheme);
   const defaultHome = useDefaultHomeStore((s) => s.defaultHome);
   const setDefaultHome = useDefaultHomeStore((s) => s.setDefaultHome);
+  const { timeZone } = useDashboardSettings();
 
   return (
     <DropdownMenu>
@@ -342,6 +345,14 @@ function SidebarUserMenu({ collapsed }: { collapsed: boolean }) {
             System
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-muted-foreground text-xs">Timezone</DropdownMenuLabel>
+          <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
+            <Globe className="size-4 shrink-0 text-muted-foreground" />
+            <span className="truncate">{timeZone || "Not set yet"}</span>
+          </div>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={logout} disabled={logout.isPending}>
           <LogOut className="size-4" />

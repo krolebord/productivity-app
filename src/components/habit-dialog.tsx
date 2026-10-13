@@ -5,7 +5,7 @@ import { useCallback } from "react";
 import { z } from "zod";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
-import { habitTargetPeriodLabel } from "@/lib/agenda";
+import { habitTargetPeriodLabel, parseScheduleMonthDays, parseScheduleWeekdays } from "@/lib/agenda";
 import { createDynamicValidationLogic, dynamicZodValidators } from "@/lib/form-schemas";
 import { cn } from "@/lib/utils";
 import type { HabitItem } from "@/user-db/migrations";
@@ -95,24 +95,6 @@ const habitFormSchema = z
       });
     }
   });
-
-function parseDayNumbers(raw: string, max: number): number[] {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= max);
-  } catch {
-    return [];
-  }
-}
-
-export function parseScheduleWeekdays(raw: string): number[] {
-  return parseDayNumbers(raw, 7);
-}
-
-export function parseScheduleMonthDays(raw: string): number[] {
-  return parseDayNumbers(raw, 31);
-}
 
 export const useHabitDialogStore = create(
   combine(

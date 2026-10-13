@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { zonedMidnightMs } from "../time-zone";
 import {
   buildEventContent,
   CALENDAR_CLEANUP_PROVIDER_TYPE,
@@ -6,7 +7,6 @@ import {
   decideEventSync,
   type ExistingSyncedTask,
   mapEventToTaskFields,
-  zonedMidnightMs,
 } from "./mapping";
 import { buildEventProviderId, type GoogleCalendarEvent } from "./types";
 

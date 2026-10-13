@@ -19,15 +19,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, PlusIcon, Repeat } from "lucide-react";
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  parseScheduleMonthDays,
-  parseScheduleWeekdays,
-  useCreateHabit,
-  useHabitDialogStore,
-} from "@/components/habit-dialog";
+import { useCreateHabit, useHabitDialogStore } from "@/components/habit-dialog";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { habitTargetPeriodLabel } from "@/lib/agenda";
+import { habitTargetPeriodLabel, parseScheduleMonthDays, parseScheduleWeekdays } from "@/lib/agenda";
 import { cn } from "@/lib/utils";
 import type { HabitItem } from "@/user-db/migrations";
 import { useDb, useDbQuery } from "@/user-db/user-db";

@@ -1,7 +1,6 @@
 import { generateId } from "@sqlite-sync/core";
 import { addMonths, endOfMonth } from "date-fns";
 import { useCallback, useMemo, useState } from "react";
-import { parseScheduleMonthDays, parseScheduleWeekdays } from "@/components/habit-dialog";
 import {
   type AgendaHabit,
   type AgendaSection,
@@ -16,6 +15,8 @@ import {
   type HabitEntryValuesByDate,
   isHabitPeriodSchedule,
   parseDateKey,
+  parseScheduleMonthDays,
+  parseScheduleWeekdays,
   startOfLocalDay,
   toAgendaHabit,
   toDateKey,

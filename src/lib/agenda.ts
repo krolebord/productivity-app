@@ -1,5 +1,6 @@
 import { addDays, endOfMonth, format, getISODay, startOfMonth, startOfWeek } from "date-fns";
 import { localMidnightMs } from "./date-time";
+import { dateKeyInZone, hourInZone, zonedMidnightMs } from "./time-zone";
 
 export type AgendaBucket = "overdue" | "morning" | "afternoon" | "evening" | "night" | "anytime";
 
@@ -93,6 +94,11 @@ export function parseDateKey(dateKey: string): Date {
   return new Date(y, m - 1, d);
 }
 
+/** Calendar day of the instant `ms`: in `timeZone` when given, else in the runtime's zone. */
+function dateKeyOfMs(ms: number, timeZone?: string): string {
+  return timeZone ? dateKeyInZone(ms, timeZone) : toDateKey(new Date(ms));
+}
+
 export function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -132,9 +138,9 @@ export function getEntryValue(entries: HabitEntryValuesByDate | undefined, dateK
  * Archived habits disappear from the archive day onward; days that already
  * have a recorded entry keep showing so history stays intact.
  */
-export function isHabitArchivedOn(habit: Pick<AgendaHabit, "archivedAt">, dateKey: string): boolean {
+export function isHabitArchivedOn(habit: Pick<AgendaHabit, "archivedAt">, dateKey: string, timeZone?: string): boolean {
   if (habit.archivedAt == null) return false;
-  return toDateKey(new Date(habit.archivedAt)) <= dateKey;
+  return dateKeyOfMs(habit.archivedAt, timeZone) <= dateKey;
 }
 
 function lastDoneDateBefore(
@@ -226,9 +232,10 @@ export function isHabitDueOnDay(
   dateKey: string,
   todayKey: string,
   entries: HabitEntryValuesByDate | undefined,
+  timeZone?: string,
 ): boolean {
   const valueOnDay = getEntryValue(entries, dateKey);
-  if (isHabitArchivedOn(habit, dateKey) && valueOnDay <= 0) return false;
+  if (isHabitArchivedOn(habit, dateKey, timeZone) && valueOnDay <= 0) return false;
 
   const doneOnDay = isHabitDoneOnDay(habit.target, valueOnDay);
 
@@ -245,7 +252,7 @@ export function isHabitDueOnDay(
       return isPeriodDueOnDay(habit, habit.scheduleType, dateKey, todayKey, entries, valueOnDay);
 
     case "everyNDays":
-      return isEveryNDaysDueOnDay(habit, dateKey, entries, doneOnDay);
+      return isEveryNDaysDueOnDay(habit, dateKey, entries, doneOnDay, timeZone);
 
     default:
       return false;
@@ -298,14 +305,15 @@ export function getOverdueHabitOccurrence(
   habit: AgendaHabit,
   todayKey: string,
   entries: HabitEntryValuesByDate | undefined,
+  timeZone?: string,
 ): string | null {
   if (!isCalendarSchedule(habit.scheduleType)) return null;
   // Archiving means "stop showing me this", including past misses.
-  if (isHabitArchivedOn(habit, todayKey)) return null;
+  if (isHabitArchivedOn(habit, todayKey, timeZone)) return null;
   // Today's own row supersedes any earlier miss.
   if (isCalendarDueOnDay(habit, todayKey)) return null;
 
-  const createdKey = toDateKey(new Date(habit.createdAt));
+  const createdKey = dateKeyOfMs(habit.createdAt, timeZone);
   const today = parseDateKey(todayKey);
 
   for (let back = 1; back <= OCCURRENCE_LOOKBACK_DAYS[habit.scheduleType]; back += 1) {
@@ -344,13 +352,14 @@ function isEveryNDaysDueOnDay(
   dateKey: string,
   entries: HabitEntryValuesByDate | undefined,
   doneOnDay: boolean,
+  timeZone?: string,
 ): boolean {
   if (doneOnDay) return true;
 
   const n = Math.max(1, habit.scheduleInterval);
   const lastDone = lastDoneDateBefore(habit, entries, dateKey);
   const dueKey =
-    lastDone != null ? toDateKey(addLocalDays(parseDateKey(lastDone), n)) : toDateKey(new Date(habit.createdAt));
+    lastDone != null ? toDateKey(addLocalDays(parseDateKey(lastDone), n)) : dateKeyOfMs(habit.createdAt, timeZone);
 
   if (dateKey < dueKey) return false;
 
@@ -363,22 +372,29 @@ export function habitBucket(timeOfDay: HabitTimeOfDay): Exclude<AgendaBucket, "o
   return timeOfDay ?? "anytime";
 }
 
-export function taskBucket(task: Pick<AgendaTask, "dueAt" | "hasDueTime">): Exclude<AgendaBucket, "overdue"> {
+export function taskBucket(
+  task: Pick<AgendaTask, "dueAt" | "hasDueTime">,
+  timeZone?: string,
+): Exclude<AgendaBucket, "overdue"> {
   if (!task.hasDueTime || task.dueAt == null) return "anytime";
-  const hour = new Date(task.dueAt).getHours();
+  const hour = timeZone ? hourInZone(task.dueAt, timeZone) : new Date(task.dueAt).getHours();
   if (hour >= 5 && hour <= 11) return "morning";
   if (hour >= 12 && hour <= 16) return "afternoon";
   if (hour >= 17 && hour <= 20) return "evening";
   return "night";
 }
 
-export function isTaskOnLocalDay(dueAt: number, dateKey: string): boolean {
-  return toDateKey(new Date(dueAt)) === dateKey;
+export function isTaskOnLocalDay(dueAt: number, dateKey: string, timeZone?: string): boolean {
+  return dateKeyOfMs(dueAt, timeZone) === dateKey;
 }
 
-export function isTaskOverdueForToday(task: Pick<AgendaTask, "dueAt" | "completedAt">, todayKey: string): boolean {
+export function isTaskOverdueForToday(
+  task: Pick<AgendaTask, "dueAt" | "completedAt">,
+  todayKey: string,
+  timeZone?: string,
+): boolean {
   if (task.dueAt == null || task.completedAt != null) return false;
-  const todayStart = localMidnightMs(parseDateKey(todayKey));
+  const todayStart = timeZone ? zonedMidnightMs(todayKey, timeZone) : localMidnightMs(parseDateKey(todayKey));
   return task.dueAt < todayStart;
 }
 
@@ -444,8 +460,10 @@ export function buildAgendaSections(args: {
   tasks: readonly AgendaTask[];
   habits: readonly AgendaHabit[];
   entriesByHabit: ReadonlyMap<string, HabitEntryValuesByDate>;
+  /** IANA zone to read timestamps in; the runtime's own zone when omitted. */
+  timeZone?: string;
 }): AgendaSection[] {
-  const { selectedKey, todayKey, tasks, habits, entriesByHabit } = args;
+  const { selectedKey, todayKey, tasks, habits, entriesByHabit, timeZone } = args;
   const isToday = selectedKey === todayKey;
   const isFuture = selectedKey > todayKey;
 
@@ -461,7 +479,7 @@ export function buildAgendaSections(args: {
   for (const task of tasks) {
     if (task.dueAt == null) continue;
 
-    if (isToday && isTaskOverdueForToday(task, todayKey)) {
+    if (isToday && isTaskOverdueForToday(task, todayKey, timeZone)) {
       rowsByBucket.overdue.push({
         kind: "task",
         id: task.id,
@@ -473,9 +491,9 @@ export function buildAgendaSections(args: {
       continue;
     }
 
-    if (!isTaskOnLocalDay(task.dueAt, selectedKey)) continue;
+    if (!isTaskOnLocalDay(task.dueAt, selectedKey, timeZone)) continue;
 
-    const bucket = taskBucket(task);
+    const bucket = taskBucket(task, timeZone);
     rowsByBucket[bucket].push({
       kind: "task",
       id: task.id,
@@ -491,7 +509,7 @@ export function buildAgendaSections(args: {
 
     // Like overdue tasks, a missed occurrence only surfaces on today, and stays
     // pinned to the day it was scheduled for so checking it off records there.
-    const missedKey = isToday ? getOverdueHabitOccurrence(habit, todayKey, entries) : null;
+    const missedKey = isToday ? getOverdueHabitOccurrence(habit, todayKey, entries, timeZone) : null;
     if (missedKey != null) {
       const missedValue = getEntryValue(entries, missedKey);
       rowsByBucket.overdue.push({
@@ -507,7 +525,7 @@ export function buildAgendaSections(args: {
       });
     }
 
-    if (!isHabitDueOnDay(habit, selectedKey, todayKey, entries)) continue;
+    if (!isHabitDueOnDay(habit, selectedKey, todayKey, entries, timeZone)) continue;
 
     const value = getHabitProgressValue(habit, selectedKey, entries);
     const done = isHabitDoneOnDay(habit.target, value);
@@ -537,6 +555,24 @@ export function buildAgendaSections(args: {
     });
   }
   return sections;
+}
+
+function parseDayNumbers(raw: string, max: number): number[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= max);
+  } catch {
+    return [];
+  }
+}
+
+export function parseScheduleWeekdays(raw: string): number[] {
+  return parseDayNumbers(raw, 7);
+}
+
+export function parseScheduleMonthDays(raw: string): number[] {
+  return parseDayNumbers(raw, 31);
 }
 
 export function toAgendaHabit(

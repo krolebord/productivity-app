@@ -352,6 +352,57 @@ describe("getDayHabitProgress", () => {
 });
 
 describe("buildAgendaSections", () => {
+  it("reads task times in the given zone instead of the runtime's", () => {
+    // 21:30 UTC on Aug 3 is 00:30 on Aug 4 in Kyiv and 17:30 on Aug 3 in New York.
+    const dueAt = Date.parse("2026-08-03T21:30:00Z");
+    const tasks = [
+      { id: "t", title: "Late", content: "", dueAt, hasDueTime: true, completedAt: null, order: 0, providerType: null },
+    ];
+    const sectionsFor = (selectedKey: string, timeZone: string) =>
+      buildAgendaSections({
+        selectedKey,
+        todayKey: "2026-08-01",
+        tasks,
+        habits: [],
+        entriesByHabit: new Map(),
+        timeZone,
+      }).map((section) => [section.bucket, section.rows.map((row) => row.id)]);
+
+    expect(sectionsFor("2026-08-04", "Europe/Kyiv")).toEqual([["night", ["t"]]]);
+    expect(sectionsFor("2026-08-03", "Europe/Kyiv")).toEqual([]);
+    expect(sectionsFor("2026-08-03", "America/New_York")).toEqual([["evening", ["t"]]]);
+  });
+
+  it("marks tasks before midnight of today in the given zone as overdue", () => {
+    // 22:00 UTC on Aug 3 is already Aug 4 in Kyiv, so it is not overdue on Kyiv's Aug 4.
+    const tasks = [
+      {
+        id: "t",
+        title: "Edge",
+        content: "",
+        dueAt: Date.parse("2026-08-03T22:00:00Z"),
+        hasDueTime: false,
+        completedAt: null,
+        order: 0,
+        providerType: null,
+      },
+    ];
+    const overdueIds = (timeZone: string) =>
+      buildAgendaSections({
+        selectedKey: "2026-08-04",
+        todayKey: "2026-08-04",
+        tasks,
+        habits: [],
+        entriesByHabit: new Map(),
+        timeZone,
+      })
+        .filter((section) => section.bucket === "overdue")
+        .flatMap((section) => section.rows.map((row) => row.id));
+
+    expect(overdueIds("Europe/Kyiv")).toEqual([]);
+    expect(overdueIds("America/New_York")).toEqual(["t"]);
+  });
+
   it("puts overdue tasks only on today and buckets the rest", () => {
     const today = "2026-07-09";
     const tasks = [

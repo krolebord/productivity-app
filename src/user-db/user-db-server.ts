@@ -16,6 +16,7 @@ import { type JobRuntime, setupJobs } from "do-jobs";
 import { type Connection, Server } from "partyserver";
 import type { ConversationMessageSnapshot } from "@/agent/conversation-projection";
 import type { BaseCurrencyCode } from "@/lib/currency/current-rates";
+import { DASHBOARD_SETTINGS_DEFAULTS, DASHBOARD_SETTINGS_ID } from "@/lib/dashboard-settings-defaults";
 import {
   type CalendarSyncStatusReport,
   deleteConnectionSyncStatus,
@@ -38,6 +39,15 @@ import {
 } from "./jobs/reconcile-account-balances";
 import { type ConversationItem, syncDbSchema, type UserSyncDbSchema } from "./migrations";
 import { userDbSchemaDocContext } from "./schema-doc";
+import {
+  type CreateTaskInput,
+  createTask,
+  type GetAgendaInput,
+  getAgenda,
+  runTaskOperation,
+  type UpdateTaskInput,
+  updateTask,
+} from "./task-operations";
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
@@ -149,6 +159,49 @@ export class UserDbServer extends Server<Env> {
 
   queryForCode(input: AiQueryInput): AiQueryResult {
     return this.codeAiDbAccess.query(input);
+  }
+
+  initTimeZone(timeZone: string): { timeZone: string } {
+    const [row] = this.syncDb.executeKysely((q) =>
+      q.selectFrom("dashboard_settings").select("timeZone").where("id", "=", DASHBOARD_SETTINGS_ID),
+    ).rows;
+    if (row?.timeZone) return { timeZone: row.timeZone };
+
+    const now = Date.now();
+    if (row) {
+      this.syncDb.applyEvent({
+        type: "item-updated",
+        dataset: "_dashboard_settings",
+        item_id: DASHBOARD_SETTINGS_ID,
+        payload: { timeZone, updatedAt: now },
+      });
+    } else {
+      this.syncDb.applyEvent({
+        type: "item-created",
+        dataset: "_dashboard_settings",
+        item_id: DASHBOARD_SETTINGS_ID,
+        payload: {
+          id: DASHBOARD_SETTINGS_ID,
+          ...DASHBOARD_SETTINGS_DEFAULTS,
+          timeZone,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+    }
+    return { timeZone };
+  }
+
+  getAgenda(input: GetAgendaInput) {
+    return runTaskOperation(() => getAgenda(this.syncDb, input));
+  }
+
+  createTask(input: CreateTaskInput) {
+    return runTaskOperation(() => createTask(this.syncDb, input));
+  }
+
+  updateTask(input: UpdateTaskInput) {
+    return runTaskOperation(() => updateTask(this.syncDb, input));
   }
 
   /** Manual refresh: same write path as the interval job, awaited so the client can toast the date. */

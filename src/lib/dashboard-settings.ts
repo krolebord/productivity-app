@@ -6,23 +6,26 @@ import {
   type DashboardRangeConfig,
   type DashboardRangeMode,
 } from "@/lib/dashboard-range-store";
+import { DASHBOARD_SETTINGS_DEFAULTS, DASHBOARD_SETTINGS_ID } from "@/lib/dashboard-settings-defaults";
 import type { DashboardSettingsItem } from "@/user-db/migrations";
 import { useDb, useDbQuery } from "@/user-db/user-db";
 
-const DASHBOARD_SETTINGS_ID = "dashboard";
 const LEGACY_DASHBOARD_RANGE_KEY = "productivity-dashboard-range";
 const LEGACY_BASE_CURRENCY_KEY = "productivity-base-currency";
 const appCurrencySet = new Set<string>(APP_CURRENCIES);
 
 export interface DashboardSettings extends DashboardRangeConfig {
   baseCurrency: AppCurrencyCode;
+  /** IANA zone; empty until a device reports it. */
+  timeZone: string;
 }
 
 export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {
-  mode: "days",
-  days: 30,
-  cycleDay: 25,
-  baseCurrency: "USD",
+  mode: DASHBOARD_SETTINGS_DEFAULTS.rangeMode,
+  days: DASHBOARD_SETTINGS_DEFAULTS.rangeDays,
+  cycleDay: DASHBOARD_SETTINGS_DEFAULTS.cycleDay,
+  baseCurrency: DASHBOARD_SETTINGS_DEFAULTS.baseCurrency,
+  timeZone: DASHBOARD_SETTINGS_DEFAULTS.timeZone,
 };
 
 function isRangeMode(value: string): value is DashboardRangeMode {
@@ -41,6 +44,7 @@ function normalizeDashboardSettings(row?: DashboardSettingsItem): DashboardSetti
     days: clampDashboardRangeValue(row.rangeDays),
     cycleDay: clampDashboardRangeValue(row.cycleDay),
     baseCurrency: isAppCurrency(row.baseCurrency) ? row.baseCurrency : DEFAULT_DASHBOARD_SETTINGS.baseCurrency,
+    timeZone: row.timeZone,
   };
 }
 
@@ -87,7 +91,9 @@ function readLegacyDashboardSettings(): SettingsPatch | null {
 }
 
 function toStoredPatch(patch: SettingsPatch) {
-  const stored: Partial<Pick<DashboardSettingsItem, "rangeMode" | "rangeDays" | "cycleDay" | "baseCurrency">> = {};
+  const stored: Partial<
+    Pick<DashboardSettingsItem, "rangeMode" | "rangeDays" | "cycleDay" | "baseCurrency" | "timeZone">
+  > = {};
 
   if (patch.mode) {
     stored.rangeMode = patch.mode;
@@ -100,6 +106,9 @@ function toStoredPatch(patch: SettingsPatch) {
   }
   if (patch.baseCurrency) {
     stored.baseCurrency = patch.baseCurrency;
+  }
+  if (patch.timeZone) {
+    stored.timeZone = patch.timeZone;
   }
 
   return stored;
@@ -142,6 +151,7 @@ export function useDashboardSettings() {
             rangeDays: storedPatch.rangeDays ?? DEFAULT_DASHBOARD_SETTINGS.days,
             cycleDay: storedPatch.cycleDay ?? DEFAULT_DASHBOARD_SETTINGS.cycleDay,
             baseCurrency: storedPatch.baseCurrency ?? DEFAULT_DASHBOARD_SETTINGS.baseCurrency,
+            timeZone: storedPatch.timeZone ?? DEFAULT_DASHBOARD_SETTINGS.timeZone,
             createdAt: now,
             updatedAt: now,
           }),
@@ -168,8 +178,11 @@ export function useDashboardSettings() {
     [updateSettings],
   );
 
+  const setTimeZone = useCallback((timeZone: string) => updateSettings({ timeZone }), [updateSettings]);
+
   return {
     ...settings,
+    setTimeZone,
     setMode,
     setDays,
     setCycleDay,

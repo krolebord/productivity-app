@@ -4,14 +4,19 @@ import type { DbToolsAccess } from "@sqlite-sync/ai";
 import { createDbMcpInstructions, registerDbTools } from "@sqlite-sync/ai/mcp";
 import { getMcpTokenAuth, type McpTokenAuth } from "@/lib/mcp-token";
 import { getUserDbStub } from "@/lib/user-db-stub";
+import { registerTaskTools } from "./task-tools";
 
 export const MCP_PATH = "/mcp";
 
 const MCP_OVERVIEW = [
   "This server holds the signed-in user's personal productivity data: notes, tasks, habits, financial accounts, and transactions.",
   "Use it when the user asks about their own notes, plans, schedule, spending, or balances.",
+  "For what is planned on a day or week, use getAgenda: it matches the app's Today view and resolves dates in the user's timezone.",
 ].join("\n");
-const MCP_WRITE_NOTE = "Writes sync to the user's devices immediately.";
+const MCP_WRITE_NOTE = [
+  "Create and change tasks with createTask and updateTask; use mutateDb only for changes they do not cover.",
+  "Writes sync to the user's devices immediately.",
+].join("\n");
 
 function createMcpServer(auth: McpTokenAuth): McpServer {
   const mutations = auth.access === "read-write";
@@ -36,6 +41,7 @@ function createMcpServer(auth: McpTokenAuth): McpServer {
       };
     },
   });
+  registerTaskTools(server, { userId: auth.userId, mutations });
 
   return server;
 }

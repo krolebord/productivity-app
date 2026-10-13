@@ -1,11 +1,10 @@
+import { shiftDateKey, todayDateKeyInZone, zonedMidnightMs } from "@/lib/time-zone";
 import {
   GOOGLE_CALENDAR_PROVIDER_TYPE,
   type GoogleCalendarEvent,
   SYNC_WINDOW_FUTURE_DAYS,
   SYNC_WINDOW_PAST_DAYS,
 } from "./types";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * `providerType` of a task the user unlinked from its calendar event.
@@ -30,76 +29,6 @@ export type MappedEventFields = {
   hasDueTime: boolean;
   providerUpdatedAt: number | null;
 };
-
-/**
- * Offset of `timeZone` from UTC at `instant`, in ms.
- *
- * Derived through `Intl` rather than a date library: the worker runtime has full ICU, and the
- * alternative is another dependency for one conversion.
- */
-function timeZoneOffsetMs(instant: Date, timeZone: string): number {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-
-  const parts: Record<string, number> = {};
-  for (const part of formatter.formatToParts(instant)) {
-    if (part.type !== "literal") {
-      parts[part.type] = Number(part.value);
-    }
-  }
-
-  const asUtc = Date.UTC(
-    parts.year ?? 1970,
-    (parts.month ?? 1) - 1,
-    parts.day ?? 1,
-    parts.hour ?? 0,
-    parts.minute ?? 0,
-    parts.second ?? 0,
-  );
-
-  return asUtc - instant.getTime();
-}
-
-/**
- * Epoch ms of midnight on `dateKey` ("YYYY-MM-DD") in `timeZone`.
- *
- * All-day Google events carry a bare date in the calendar's timezone, so anchoring them to the
- * calendar's midnight (not the worker's UTC midnight) is what keeps them on the right day for
- * users west of UTC. The offset is resolved twice because the first guess can land on the wrong
- * side of a DST transition.
- */
-export function zonedMidnightMs(dateKey: string, timeZone: string): number {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const utcMidnight = Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1);
-
-  let offset = timeZoneOffsetMs(new Date(utcMidnight), timeZone);
-  offset = timeZoneOffsetMs(new Date(utcMidnight - offset), timeZone);
-
-  return utcMidnight - offset;
-}
-
-export function todayDateKeyInZone(timeZone: string, now: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-}
-
-export function shiftDateKey(dateKey: string, days: number): string {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const shifted = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1) + days * DAY_MS);
-  return shifted.toISOString().slice(0, 10);
-}
 
 /**
  * The half-open `[start, end)` range of event start times the job mirrors, anchored to midnights in
