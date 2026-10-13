@@ -174,18 +174,18 @@ export function McpAccessSection() {
   );
 
   return (
-    <section className="mt-4 rounded-lg border bg-card p-3">
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <section className="rounded-xl border bg-card p-4">
+      <div className="mb-3 flex @2xl:flex-row flex-col @2xl:items-start @2xl:justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <KeyRound className="size-4 text-muted-foreground" />
-            <h2 className="font-medium">MCP access</h2>
+            <h2 className="font-semibold">MCP access</h2>
           </div>
           <p className="mt-1 text-muted-foreground text-sm">
             Connect external agents to <span className="font-mono">{getMcpUrl()}</span> with a personal access token.
           </p>
         </div>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
+        <Button size="sm" className="self-start" onClick={() => setDialogOpen(true)}>
           <PlusIcon />
           New token
         </Button>

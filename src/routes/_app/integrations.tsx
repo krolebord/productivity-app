@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useCreateAccount } from "@/components/account-dialog";
 import { GoogleCalendarSection, useGoogleCalendarData } from "@/components/google-calendar-section";
+import { McpAccessSection } from "@/components/mcp-access-section";
 import { MonobankBackfillDialog } from "@/components/monobank-backfill-dialog";
 import { MonobankTokenDialog } from "@/components/monobank-token-dialog";
 import { Button } from "@/components/ui/button";
@@ -214,7 +215,7 @@ function MonobankSection({
           </div>
         </CollapsibleTrigger>
 
-        <div className="flex flex-wrap gap-2 pl-6 @2xl:pl-0">
+        <div className="flex flex-wrap gap-2 @2xl:pl-0 pl-6">
           {isConnected ? (
             <>
               <Button size="sm" variant="outline" onClick={() => setDialog({ open: true, mode: "replace" })}>
@@ -293,6 +294,7 @@ function IntegrationsPage() {
       <h1 className="@md:mb-2 font-semibold text-xl">Integrations</h1>
       <MonobankSection connection={connections[0]} monoAccounts={monoAccounts} accounts={accounts} />
       <GoogleCalendarSection connections={calendar.connections} sourcesByConnection={calendar.sourcesByConnection} />
+      <McpAccessSection />
     </div>
   );
 }
