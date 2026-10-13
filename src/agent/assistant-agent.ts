@@ -42,6 +42,9 @@ import {
 } from "./models";
 import { TransactionsSpecSchema } from "./transactions-spec";
 
+const TURN_BUDGET_USD = 0.5;
+const TURN_BUDGET_MESSAGE = `Stopped after reaching the $${TURN_BUDGET_USD.toFixed(2)} model budget for this turn. Send another message to continue.`;
+
 export type WorkspaceUploadInput = {
   filename: string;
   mediaType: string;
@@ -130,6 +133,7 @@ function uploadLimitError(files: readonly WorkspaceUploadInput[]): string | null
 type AssistantUsageState = {
   totalCostUsd: number;
   totalTokens: number;
+  turnStartCostUsd?: number;
   fileCounter: number;
   nextSeq: number;
   // Absent on legacy DO state. Skip backfill only when this is exactly true —
@@ -153,7 +157,7 @@ type SkillCatalogRow = {
 };
 
 export class AssistantAgent extends Think<Env, AssistantUsageState> {
-  maxSteps = 20;
+  maxSteps = 100;
 
   initialState: AssistantUsageState = {
     totalCostUsd: 0,
@@ -204,12 +208,17 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   }
 
   async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
+    if (!ctx.continuation) this.setState({ ...this.state, turnStartCostUsd: this.state.totalCostUsd });
     const stub = await this.getUserDbStub();
     const conversation = await stub.getConversation(this.getConversationId());
     const modelId = resolveAssistantModelId(conversation?.model);
     const model = this.getModel(modelId, conversation?.reasoningEffort);
     const memories = await this.getMemoriesBlock();
-    return memories ? { model, system: `${ctx.system}\n\n${memories}` } : { model };
+    return {
+      model,
+      ...(memories ? { system: `${ctx.system}\n\n${memories}` } : {}),
+      stopWhen: () => this.turnBudgetExhausted(),
+    };
   }
 
   configureSession(session: Session): Session {
@@ -359,9 +368,20 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   }
 
   async onChatResponse(result: ChatResponseResult): Promise<void> {
+    if (result.status === "completed") return this.syncConversationTurn(this.completedTurnStatus());
     const turnStatus = result.status === "error" ? "error" : "idle";
     const turnError = result.status === "error" ? (result.error ?? "Something went wrong.") : "";
     await this.syncConversationTurn({ turnStatus, turnError });
+  }
+
+  private turnBudgetExhausted() {
+    const { totalCostUsd, turnStartCostUsd = totalCostUsd } = this.state;
+    return totalCostUsd - turnStartCostUsd >= TURN_BUDGET_USD;
+  }
+
+  private completedTurnStatus() {
+    const turnError = this.turnBudgetExhausted() ? TURN_BUDGET_MESSAGE : "";
+    return { turnStatus: turnError ? "error" : "idle", turnError } as const;
   }
 
   protected override async onSubmissionStatus(submission: ThinkSubmissionInspection): Promise<void> {
@@ -377,6 +397,8 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
         });
         return;
       case "completed":
+        await this.syncConversationTurn(this.completedTurnStatus());
+        return;
       case "aborted":
       case "skipped":
         await this.syncConversationTurn({ turnStatus: "idle", turnError: "" });
