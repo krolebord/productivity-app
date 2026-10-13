@@ -3,6 +3,7 @@ import { Bot, Brain, Workflow } from "lucide-react";
 import { Cell, Pie, PieChart } from "recharts";
 import { z } from "zod";
 import { getAssistantModel } from "@/agent/models";
+import { McpAccessSection } from "@/components/mcp-access-section";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
 import { useDbQuery } from "@/user-db/user-db";
@@ -130,7 +131,7 @@ function AgentsPage() {
         <div>
           <h1 className="font-semibold text-xl">Agents</h1>
           <p className="text-muted-foreground text-sm">
-            Conversation usage, model spend, and assistant context controls.
+            Conversation usage, model spend, assistant context controls, and MCP access.
           </p>
         </div>
         <div className="grid grid-cols-2 rounded-md border bg-muted p-0.5 text-sm">
@@ -243,6 +244,8 @@ function AgentsPage() {
           detail={`${activeSkills.toLocaleString()} active / ${pendingSkills.toLocaleString()} pending / ${disabledSkills.toLocaleString()} disabled`}
         />
       </div>
+
+      <McpAccessSection />
     </div>
   );
 }

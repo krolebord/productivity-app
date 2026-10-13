@@ -2,6 +2,7 @@ import { routePartykitRequest } from "partyserver";
 import { apiHandler } from "./api/api-handler";
 import { getUserIdFromRequest } from "./lib/auth-server";
 import { renewDueMonobankWebhooks } from "./lib/monobank/webhook-renewal";
+import { MCP_PATH, mcpHandler } from "./mcp/mcp-handler";
 import { orpcHandler } from "./orpc/orpc-router";
 
 export default {
@@ -30,6 +31,10 @@ export default {
 
     if (url.pathname.startsWith("/api")) {
       return apiHandler(request);
+    }
+
+    if (url.pathname === MCP_PATH) {
+      return mcpHandler(request);
     }
 
     const partykitRequest = await routePartykitRequest(request, env, {

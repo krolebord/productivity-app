@@ -21,6 +21,7 @@ src/routes/                # File-based routes (_app = authed app, _auth = sign-
 src/components/            # App components + ui/ (shadcn-style Base UI components)
 src/orpc/                  # oRPC client/router (auth endpoints)
 src/api/handlers/          # Plain HTTP handlers (OAuth callbacks)
+src/mcp/                   # MCP server at /mcp (personal access tokens, user-db tools)
 src/user-db/               # Per-user synced DB: schema/migrations, web worker, Durable Object server, jobs
 src/lib/                   # Central D1 access (kysely), auth client, currency, emails, stores, utils
 migrations/                # D1 migrations for the central auth database
@@ -32,7 +33,7 @@ wrangler.jsonc             # Cloudflare config (D1, Durable Objects, email, asse
 - **Runtime**: Cloudflare Workers + Durable Objects (UserDbServer), D1 (central auth DB)
 - **Frontend**: React 19, TanStack Router/Query/Form, Tailwind v4, Base UI, zustand
 - **Data**: @sqlite-sync (per-user CRDT-synced SQLite), kysely + kysely-d1 (central DB)
-- **API**: oRPC (`/rpc/*`), plain handlers (`/api/*`), WebSocket sync (`/user-db/*`)
+- **API**: oRPC (`/rpc/*`), plain handlers (`/api/*`), WebSocket sync (`/user-db/*`), MCP (`/mcp`)
 - **Tooling**: pnpm, Biome (format/lint), tsc (typecheck), Vite + @cloudflare/vite-plugin
 
 ## Commands

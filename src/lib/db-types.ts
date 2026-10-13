@@ -34,6 +34,16 @@ export interface GoogleCalendarConnection {
   userId: string;
 }
 
+export interface McpToken {
+  access: Generated<string>;
+  createdAt: string;
+  id: string;
+  lastUsedAt: string | null;
+  name: string;
+  tokenHash: string;
+  userId: string;
+}
+
 export interface MonobankConnection {
   createdAt: string;
   disconnectedAt: string | null;
@@ -68,6 +78,7 @@ export interface Verification {
 export interface DB {
   d1_migrations: D1Migrations;
   google_calendar_connection: GoogleCalendarConnection;
+  mcp_token: McpToken;
   monobank_connection: MonobankConnection;
   user: User;
   verification: Verification;
