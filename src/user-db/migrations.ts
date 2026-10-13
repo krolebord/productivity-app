@@ -546,7 +546,12 @@ export const syncDbSchema = defineSyncSchema({
     account: t.table({
       currency: t.text().describe('ISO 4217 currency code, e.g. "USD".'),
       initialBalance: t.real().default(0),
-      balance: t.real().default(0).describe("App-maintained current balance."),
+      balance: t
+        .real()
+        .default(0)
+        .describe(
+          "initialBalance plus all transaction effects, recomputed by the app after every transaction change. Never write it.",
+        ),
       description: t.text().default(""),
       labelColor: t.text().default("#8b5cf6"),
       labelText: t.text().default(""),

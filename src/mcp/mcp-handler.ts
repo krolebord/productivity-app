@@ -7,11 +7,22 @@ import { getUserDbStub } from "@/lib/user-db-stub";
 
 export const MCP_PATH = "/mcp";
 
+const MCP_OVERVIEW = [
+  "This server holds the signed-in user's personal productivity data: notes, tasks, habits, financial accounts, and transactions.",
+  "Use it when the user asks about their own notes, plans, schedule, spending, or balances.",
+].join("\n");
+const MCP_WRITE_NOTE = "Writes sync to the user's devices immediately.";
+
 function createMcpServer(auth: McpTokenAuth): McpServer {
   const mutations = auth.access === "read-write";
   const server = new McpServer(
     { name: "productivity-app", version: "0.1.0" },
-    { instructions: createDbMcpInstructions({ mutations }) },
+    {
+      instructions: createDbMcpInstructions({
+        overview: mutations ? `${MCP_OVERVIEW}\n${MCP_WRITE_NOTE}` : MCP_OVERVIEW,
+        mutations,
+      }),
+    },
   );
 
   registerDbTools(server, {

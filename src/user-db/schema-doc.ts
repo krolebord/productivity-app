@@ -7,6 +7,7 @@ export const userDbSchemaDocContext: SchemaDocContext = {
     "This is a personal productivity app for notes, tasks, habits, financial accounts, and transactions.",
     "All `id` columns are UUIDs and all timestamps (`createdAt`, `updatedAt`, `lastReadAt`, `effectiveAt`)",
     "are unix epoch milliseconds.",
-    "When using mutateDb, omit ids for create events; the tool generates them and returns createdIds.",
+    "Money columns are in their row's or account's currency. Never sum or compare amounts across currencies:",
+    "group by currency, or convert via `currency_rate` first.",
   ].join("\n"),
 };
