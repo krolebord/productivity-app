@@ -29,8 +29,6 @@ import {
   conversationTurnFilesData,
   projectionRowsFromStep,
   projectionRowsFromUiMessages,
-  stepToolsFromContext,
-  uiMessageStepParts,
   userTurnModelText,
 } from "./conversation-projection";
 import {
@@ -911,16 +909,13 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     if (!assistant) return [];
     const startSeq = this.nextProjectionSeq();
     if (startSeq <= 0) return [];
-    const orderedParts = uiMessageStepParts({ message: assistant, stepNumber: ctx.stepNumber });
     return projectionRowsFromStep({
       conversationId: this.getConversationId(),
       sessionMessageId: assistant.id,
       stepNumber: ctx.stepNumber,
       startSeq,
       createdAt: Date.now(),
-      text: ctx.text,
-      tools: stepToolsFromContext(ctx),
-      ...(orderedParts.length > 0 ? { orderedParts } : {}),
+      content: ctx.content,
     });
   }
 

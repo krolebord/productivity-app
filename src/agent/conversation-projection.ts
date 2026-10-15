@@ -15,58 +15,6 @@ export type ConversationMessageSnapshot = {
   createdAt: number;
 };
 
-export type StepToolSnapshot = {
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
-  output: unknown;
-  error: boolean;
-};
-
-export type UiMessageStepPart = {
-  index: number;
-  part: UIMessage["parts"][number];
-};
-
-export function uiMessageStepParts(input: { message: UIMessage; stepNumber: number }): UiMessageStepPart[] {
-  const parts: UiMessageStepPart[] = [];
-  let currentStep = -1;
-
-  for (const [index, part] of input.message.parts.entries()) {
-    if (part.type === "step-start") {
-      currentStep += 1;
-      continue;
-    }
-    if (currentStep === input.stepNumber) {
-      parts.push({ index, part });
-    }
-  }
-
-  return parts;
-}
-
-export function stepToolsFromContext(ctx: Pick<StepContext, "content" | "toolCalls">): StepToolSnapshot[] {
-  const outcomes = new Map<string, Pick<StepToolSnapshot, "output" | "error">>();
-  for (const part of ctx.content) {
-    if (part.type === "tool-result") {
-      outcomes.set(part.toolCallId, { output: part.output, error: false });
-    } else if (part.type === "tool-error") {
-      outcomes.set(part.toolCallId, { output: part.error, error: true });
-    }
-  }
-
-  return ctx.toolCalls.map((call) => {
-    const outcome = outcomes.get(call.toolCallId);
-    return {
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      input: call.input,
-      output: outcome?.output,
-      error: outcome?.error ?? false,
-    };
-  });
-}
-
 export const WORKSPACE_FILES_PREFIX = "Uploaded files are available in the agent workspace:";
 
 export type ConversationTurnFile = {
@@ -120,14 +68,10 @@ export function toolProjectionId(sessionMessageId: string, toolCallId: string) {
   return `${sessionMessageId}:tool:${toolCallId}`;
 }
 
-export function textProjectionId(sessionMessageId: string, index: number) {
-  return `${sessionMessageId}:text:${index}`;
-}
-
-// Separate namespace from textProjectionId: the step-summary fallback knows the step but
-// not the part index, so the two schemes must not half-collide on the same message.
-export function stepTextProjectionId(sessionMessageId: string, stepNumber: number) {
-  return `${sessionMessageId}:step-text:${stepNumber}`;
+// Text parts are keyed by their position within a step: the step context and the persisted
+// message both yield it, so a live step write and a later backfill target the same row.
+export function textProjectionId(sessionMessageId: string, stepNumber: number, textIndex: number) {
+  return `${sessionMessageId}:text:${stepNumber}:${textIndex}`;
 }
 
 export function conversationTitleFromTurnText(text: string, filenames: readonly string[] = []): string {
@@ -283,45 +227,6 @@ function toolRow(input: {
   };
 }
 
-// Null for parts the UI never draws. The only place a part's row id is derived, so a live
-// step write and a later backfill of the same message target the same row.
-function assistantPartRow(input: {
-  conversationId: string;
-  sessionMessageId: string;
-  index: number;
-  part: UIMessage["parts"][number];
-  seq: number;
-  createdAt: number;
-}): ConversationMessageSnapshot | null {
-  const { part } = input;
-
-  if (part.type === "text") {
-    if (!part.text) return null;
-    return textRow({
-      id: textProjectionId(input.sessionMessageId, input.index),
-      conversationId: input.conversationId,
-      seq: input.seq,
-      role: "assistant",
-      text: part.text,
-      createdAt: input.createdAt,
-    });
-  }
-
-  if (part.type !== "dynamic-tool" && !isToolUIPart(part)) return null;
-
-  return toolRow({
-    sessionMessageId: input.sessionMessageId,
-    conversationId: input.conversationId,
-    seq: input.seq,
-    toolCallId: part.toolCallId,
-    toolName: part.type === "dynamic-tool" ? part.toolName : getToolName(part),
-    failed: part.state === "output-error" || part.state === "output-denied",
-    input: "input" in part ? part.input : undefined,
-    output: "output" in part ? part.output : undefined,
-    createdAt: input.createdAt,
-  });
-}
-
 export function projectionRowsFromUiMessages(input: {
   conversationId: string;
   messages: UIMessage[];
@@ -347,84 +252,98 @@ export function projectionRowsFromUiMessages(input: {
     }
     if (message.role !== "assistant") continue;
 
-    for (const [index, part] of message.parts.entries()) {
-      const row = assistantPartRow({
-        conversationId: input.conversationId,
-        sessionMessageId: message.id,
-        index,
-        part,
-        seq,
-        createdAt,
-      });
-      if (!row) continue;
-      rows.push(row);
-      seq++;
+    let stepNumber = -1;
+    let textIndex = 0;
+    for (const part of message.parts) {
+      if (part.type === "step-start") {
+        stepNumber++;
+        textIndex = 0;
+      } else if (part.type === "text") {
+        const id = textProjectionId(message.id, stepNumber, textIndex++);
+        if (!part.text) continue;
+        rows.push(
+          textRow({
+            id,
+            conversationId: input.conversationId,
+            seq: seq++,
+            role: "assistant",
+            text: part.text,
+            createdAt,
+          }),
+        );
+      } else if (part.type === "dynamic-tool" || isToolUIPart(part)) {
+        rows.push(
+          toolRow({
+            sessionMessageId: message.id,
+            conversationId: input.conversationId,
+            seq: seq++,
+            toolCallId: part.toolCallId,
+            toolName: part.type === "dynamic-tool" ? part.toolName : getToolName(part),
+            failed: part.state === "output-error" || part.state === "output-denied",
+            input: "input" in part ? part.input : undefined,
+            output: "output" in part ? part.output : undefined,
+            createdAt,
+          }),
+        );
+      }
     }
   }
 
   return rows;
 }
 
+// Built from the step context rather than the streaming message: Think fires onStepEnd before
+// its stream consumer has necessarily applied the step's final chunks to that message.
 export function projectionRowsFromStep(input: {
   conversationId: string;
   sessionMessageId: string;
   stepNumber: number;
   startSeq: number;
   createdAt: number;
-  text: string;
-  tools: StepToolSnapshot[];
-  orderedParts?: UiMessageStepPart[];
+  content: StepContext["content"];
 }): ConversationMessageSnapshot[] {
+  const outcomes = new Map<string, { output: unknown; failed: boolean }>();
+  for (const part of input.content) {
+    if (part.type === "tool-result") {
+      outcomes.set(part.toolCallId, { output: part.output, failed: false });
+    } else if (part.type === "tool-error") {
+      outcomes.set(part.toolCallId, { output: part.error, failed: true });
+    }
+  }
+
   const rows: ConversationMessageSnapshot[] = [];
   let seq = input.startSeq;
-
-  if (input.orderedParts) {
-    for (const { index, part } of input.orderedParts) {
-      const row = assistantPartRow({
-        conversationId: input.conversationId,
-        sessionMessageId: input.sessionMessageId,
-        index,
-        part,
-        seq,
-        createdAt: input.createdAt,
-      });
-      if (!row) continue;
-      rows.push(row);
-      seq++;
+  let textIndex = 0;
+  for (const part of input.content) {
+    if (part.type === "text") {
+      const id = textProjectionId(input.sessionMessageId, input.stepNumber, textIndex++);
+      if (!part.text) continue;
+      rows.push(
+        textRow({
+          id,
+          conversationId: input.conversationId,
+          seq: seq++,
+          role: "assistant",
+          text: part.text,
+          createdAt: input.createdAt,
+        }),
+      );
+    } else if (part.type === "tool-call") {
+      const outcome = outcomes.get(part.toolCallId);
+      rows.push(
+        toolRow({
+          sessionMessageId: input.sessionMessageId,
+          conversationId: input.conversationId,
+          seq: seq++,
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          failed: outcome?.failed ?? false,
+          input: part.input,
+          output: outcome?.output,
+          createdAt: input.createdAt,
+        }),
+      );
     }
-
-    return rows;
-  }
-
-  // Fallback for a step whose parts are not attributable to it: same rows, built from the
-  // step context instead of the message.
-  for (const tool of input.tools) {
-    rows.push(
-      toolRow({
-        sessionMessageId: input.sessionMessageId,
-        conversationId: input.conversationId,
-        seq: seq++,
-        toolCallId: tool.toolCallId,
-        toolName: tool.toolName,
-        failed: tool.error,
-        input: tool.input,
-        output: tool.output,
-        createdAt: input.createdAt,
-      }),
-    );
-  }
-
-  if (input.text) {
-    rows.push(
-      textRow({
-        id: stepTextProjectionId(input.sessionMessageId, input.stepNumber),
-        conversationId: input.conversationId,
-        seq: seq++,
-        role: "assistant",
-        text: input.text,
-        createdAt: input.createdAt,
-      }),
-    );
   }
 
   return rows;

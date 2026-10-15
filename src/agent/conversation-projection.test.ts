@@ -7,12 +7,8 @@ import {
   conversationTurnFilesFromData,
   projectionRowsFromStep,
   projectionRowsFromUiMessages,
-  type StepToolSnapshot,
-  stepTextProjectionId,
-  stepToolsFromContext,
   textProjectionId,
   toolProjectionId,
-  uiMessageStepParts,
   userTurnModelText,
 } from "./conversation-projection";
 
@@ -91,8 +87,26 @@ describe("conversationTurnFilesFromData", () => {
   });
 });
 
+type StepContent = StepContext["content"];
+
+function toolStep(input: {
+  toolCallId?: string;
+  toolName: string;
+  input: unknown;
+  output?: unknown;
+  error?: unknown;
+}): StepContent {
+  const call = { toolCallId: input.toolCallId ?? "c", toolName: input.toolName, input: input.input, dynamic: true };
+  return [
+    { type: "tool-call", ...call },
+    input.error === undefined
+      ? { type: "tool-result", ...call, output: input.output }
+      : { type: "tool-error", ...call, error: input.error },
+  ];
+}
+
 describe("projectionRowsFromUiMessages", () => {
-  it("uses the id scheme for live writes and backfill", () => {
+  it("projects user text, tools, and assistant text in message order", () => {
     const messages: UIMessage[] = [
       {
         id: "user-1",
@@ -127,7 +141,7 @@ describe("projectionRowsFromUiMessages", () => {
     expect(rows.map((row) => ({ id: row.id, seq: row.seq, kind: row.kind, toolState: row.toolState }))).toEqual([
       { id: "user-1", seq: 1, kind: "text", toolState: "" },
       { id: toolProjectionId("asst-1", "call-1"), seq: 2, kind: "tool", toolState: "done" },
-      { id: textProjectionId("asst-1", 3), seq: 3, kind: "text", toolState: "" },
+      { id: textProjectionId("asst-1", 0, 0), seq: 3, kind: "text", toolState: "" },
     ]);
     expect(rows[1]?.data).toContain('"type":"bar"');
     expect(rows[2]?.text).toBe("Here is the chart.");
@@ -135,36 +149,49 @@ describe("projectionRowsFromUiMessages", () => {
 });
 
 describe("projectionRowsFromStep", () => {
-  it("uses grouped step data when no ordered message parts are available", () => {
-    const rows = projectionRowsFromStep({
+  const step = (stepNumber: number, startSeq: number, content: StepContent) =>
+    projectionRowsFromStep({
       conversationId: "c1",
-      sessionMessageId: "asst-2",
-      stepNumber: 0,
-      startSeq: 4,
+      sessionMessageId: "asst-1",
+      stepNumber,
+      startSeq,
       createdAt: 1,
-      text: "Done.",
-      tools: [
-        {
-          toolCallId: "call-9",
-          toolName: "queryDb",
-          input: { sql: "select 1" },
-          output: { rows: [] },
-          error: false,
-        },
-      ],
+      content,
     });
 
-    expect(rows).toHaveLength(2);
-    expect(rows[0]?.id).toBe(toolProjectionId("asst-2", "call-9"));
-    expect(rows[0]?.seq).toBe(4);
-    expect(rows[0]?.data).toBe("");
-    expect(rows[1]?.id).toBe(stepTextProjectionId("asst-2", 0));
-    expect(rows[1]?.seq).toBe(5);
+  it("keeps tool outcomes from the step, even before the streamed message has them", () => {
+    const file = { filename: "report.csv", mediaType: "text/csv", size: 12, path: "/downloads/01-report.csv" };
+    const rows = step(0, 1, [
+      { type: "text", text: "Preparing your download." },
+      ...toolStep({
+        toolCallId: "call-download",
+        toolName: "saveDownload",
+        input: { path: "/report.csv" },
+        output: file,
+      }),
+    ]);
+
+    expect(rows.map((row) => row.kind)).toEqual(["text", "tool"]);
+    expect(rows[1]).toMatchObject({
+      id: toolProjectionId("asst-1", "call-download"),
+      seq: 2,
+      toolState: "done",
+      data: JSON.stringify(file),
+    });
   });
 
-  it("preserves text and tool order from the streaming message", () => {
+  it("marks failed tools as errors", () => {
+    const rows = step(
+      0,
+      1,
+      toolStep({ toolName: "saveDownload", input: { path: "/missing.csv" }, error: "Not found" }),
+    );
+    expect(rows[0]?.toolState).toBe("error");
+  });
+
+  it("writes the same ids and order that a backfill of the final message produces", () => {
     const message: UIMessage = {
-      id: "asst-ordered",
+      id: "asst-1",
       role: "assistant",
       parts: [
         { type: "step-start" },
@@ -178,6 +205,7 @@ describe("projectionRowsFromStep", () => {
           output: { applied: true },
         },
         { type: "step-start" },
+        { type: "text", text: "" },
         {
           type: "dynamic-tool",
           toolCallId: "call-verify",
@@ -190,108 +218,53 @@ describe("projectionRowsFromStep", () => {
       ],
     };
 
-    const firstStep = projectionRowsFromStep({
-      conversationId: "c1",
-      sessionMessageId: message.id,
-      stepNumber: 0,
-      startSeq: 1,
-      createdAt: 1,
-      text: "",
-      tools: [],
-      orderedParts: uiMessageStepParts({ message, stepNumber: 0 }),
-    });
-    const secondStep = projectionRowsFromStep({
-      conversationId: "c1",
-      sessionMessageId: message.id,
-      stepNumber: 1,
-      startSeq: 3,
-      createdAt: 1,
-      text: "",
-      tools: [],
-      orderedParts: uiMessageStepParts({ message, stepNumber: 1 }),
-    });
-
-    expect(firstStep.map((row) => ({ id: row.id, kind: row.kind, text: row.text, toolName: row.toolName }))).toEqual([
-      {
-        id: textProjectionId("asst-ordered", 1),
-        kind: "text",
-        text: "Deleting the empty conversations now.",
-        toolName: "",
-      },
-      {
-        id: toolProjectionId("asst-ordered", "call-delete"),
-        kind: "tool",
-        text: "",
+    const firstStep = step(0, 1, [
+      { type: "text", text: "Deleting the empty conversations now." },
+      ...toolStep({
+        toolCallId: "call-delete",
         toolName: "mutateDb",
-      },
+        input: { events: [] },
+        output: { applied: true },
+      }),
     ]);
-    expect(secondStep.map((row) => ({ id: row.id, kind: row.kind, text: row.text, toolName: row.toolName }))).toEqual([
-      {
-        id: toolProjectionId("asst-ordered", "call-verify"),
-        kind: "tool",
-        text: "",
-        toolName: "queryDb",
-      },
-      {
-        id: textProjectionId("asst-ordered", 5),
-        kind: "text",
-        text: "Nothing remains.",
-        toolName: "",
-      },
+    const secondStep = step(1, 3, [
+      { type: "text", text: "" },
+      ...toolStep({ toolCallId: "call-verify", toolName: "queryDb", input: { sql: "select 1" }, output: { rows: [] } }),
+      { type: "text", text: "Nothing remains." },
+    ]);
+    const backfill = projectionRowsFromUiMessages({ conversationId: "c1", messages: [message], createdAt: 1 });
+
+    expect([...firstStep, ...secondStep]).toEqual(backfill);
+    expect(backfill.map((row) => row.id)).toEqual([
+      textProjectionId("asst-1", 0, 0),
+      toolProjectionId("asst-1", "call-delete"),
+      toolProjectionId("asst-1", "call-verify"),
+      textProjectionId("asst-1", 1, 1),
     ]);
   });
 
   it("gives each step its own text row even when the text repeats", () => {
-    const step = (stepNumber: number, startSeq: number, text: string) =>
-      projectionRowsFromStep({
-        conversationId: "c1",
-        sessionMessageId: "asst-3",
-        stepNumber,
-        startSeq,
-        createdAt: 1,
-        text,
-        tools: [],
-      });
-
-    const first = step(0, 1, "Working on it.");
-    const second = step(1, 2, "Working on it.");
+    const first = step(0, 1, [{ type: "text", text: "Working on it." }]);
+    const second = step(1, 2, [{ type: "text", text: "Working on it." }]);
 
     expect(first[0]?.id).not.toBe(second[0]?.id);
     expect([first[0]?.seq, second[0]?.seq]).toEqual([1, 2]);
   });
 
   it("targets the same row when a step is re-delivered, so the upsert overwrites", () => {
-    const redelivered = (startSeq: number) =>
-      projectionRowsFromStep({
-        conversationId: "c1",
-        sessionMessageId: "asst-4",
-        stepNumber: 2,
-        startSeq,
-        createdAt: 1,
-        text: "Retried.",
-        tools: [],
-      })[0];
+    const redelivered = (startSeq: number) => step(2, startSeq, [{ type: "text", text: "Retried." }])[0];
 
     expect(redelivered(9)?.id).toBe(redelivered(14)?.id);
   });
 
-  function toolRowData(tool: StepToolSnapshot): unknown {
-    const [row] = projectionRowsFromStep({
-      conversationId: "c1",
-      sessionMessageId: "asst-payload",
-      stepNumber: 0,
-      startSeq: 1,
-      createdAt: 1,
-      text: "",
-      tools: [tool],
-    });
+  function toolRowData(tool: Parameters<typeof toolStep>[0]): unknown {
+    const [row] = step(0, 1, toolStep(tool));
     return row?.data ? JSON.parse(row.data) : row?.data;
   }
 
   it("keeps only the fields a chip draws, trimming web results", () => {
     expect(
       toolRowData({
-        toolCallId: "c",
         toolName: "web_search",
         input: { query: "eur rate", searchDepth: "basic" },
         output: {
@@ -303,7 +276,6 @@ describe("projectionRowsFromStep", () => {
             score: 0.9,
           })),
         },
-        error: false,
       }),
     ).toEqual({
       query: "eur rate",
@@ -313,14 +285,12 @@ describe("projectionRowsFromStep", () => {
 
     expect(
       toolRowData({
-        toolCallId: "c",
         toolName: "web_extract",
         input: { urls: ["https://a.test", "https://b.test"] },
         output: {
           results: [{ url: "https://a.test", rawContent: "z".repeat(9000) }],
           failedResults: [{ url: "https://b.test", error: "timeout" }],
         },
-        error: false,
       }),
     ).toEqual({
       urlCount: 2,
@@ -330,123 +300,30 @@ describe("projectionRowsFromStep", () => {
   });
 
   it("projects memory, read, and skill payloads", () => {
-    expect(
-      toolRowData({
-        toolCallId: "c",
-        toolName: "remember",
-        input: { content: "Prefers EUR" },
-        output: {},
-        error: false,
-      }),
-    ).toEqual({ content: "Prefers EUR" });
+    expect(toolRowData({ toolName: "remember", input: { content: "Prefers EUR" }, output: {} })).toEqual({
+      content: "Prefers EUR",
+    });
+
+    expect(toolRowData({ toolName: "read_skill_resource", input: { path: "/skills/x/steps.md" }, output: {} })).toEqual(
+      { path: "/skills/x/steps.md" },
+    );
 
     expect(
       toolRowData({
-        toolCallId: "c",
-        toolName: "read_skill_resource",
-        input: { path: "/skills/x/steps.md" },
-        output: {},
-        error: false,
-      }),
-    ).toEqual({ path: "/skills/x/steps.md" });
-
-    expect(
-      toolRowData({
-        toolCallId: "c",
         toolName: "create_skill",
         input: { name: "Monthly review", whenToUse: "...", instructions: "..." },
         output: { id: "skill-1", name: "Monthly review", status: "pending" },
-        error: false,
       }),
     ).toEqual({ id: "skill-1", name: "Monthly review" });
 
-    expect(
-      toolRowData({
-        toolCallId: "c",
-        toolName: "create_skill",
-        input: { name: "Monthly review" },
-        output: undefined,
-        error: true,
-      }),
-    ).toEqual({ id: null, name: "Monthly review" });
+    expect(toolRowData({ toolName: "create_skill", input: { name: "Monthly review" }, error: "failed" })).toEqual({
+      id: null,
+      name: "Monthly review",
+    });
   });
 
   it("stores nothing for tools whose chip needs no payload", () => {
-    expect(toolRowData({ toolCallId: "c", toolName: "forget", input: { id: "m1" }, output: {}, error: false })).toBe(
-      "",
-    );
-    expect(
-      toolRowData({ toolCallId: "c", toolName: "queryDb", input: { sql: "select 1" }, output: {}, error: false }),
-    ).toBe("");
-  });
-});
-
-describe("stepToolsFromContext", () => {
-  it("preserves successful and failed tool outcomes", () => {
-    const context = {
-      toolCalls: [
-        {
-          type: "tool-call",
-          toolCallId: "call-success",
-          toolName: "queryDb",
-          input: { sql: "select 1" },
-          dynamic: true,
-        },
-        {
-          type: "tool-call",
-          toolCallId: "call-error",
-          toolName: "queryDb",
-          input: { sql: "invalid" },
-          dynamic: true,
-        },
-      ],
-      content: [
-        {
-          type: "tool-result",
-          toolCallId: "call-success",
-          toolName: "queryDb",
-          input: { sql: "select 1" },
-          output: { rows: [] },
-          dynamic: true,
-        },
-        {
-          type: "tool-error",
-          toolCallId: "call-error",
-          toolName: "queryDb",
-          input: { sql: "invalid" },
-          error: "SQL failed",
-          dynamic: true,
-        },
-      ],
-    } satisfies Pick<StepContext, "content" | "toolCalls">;
-
-    const tools = stepToolsFromContext(context);
-    expect(tools).toEqual([
-      {
-        toolCallId: "call-success",
-        toolName: "queryDb",
-        input: { sql: "select 1" },
-        output: { rows: [] },
-        error: false,
-      },
-      {
-        toolCallId: "call-error",
-        toolName: "queryDb",
-        input: { sql: "invalid" },
-        output: "SQL failed",
-        error: true,
-      },
-    ]);
-
-    const rows = projectionRowsFromStep({
-      conversationId: "c1",
-      sessionMessageId: "asst-tools",
-      stepNumber: 0,
-      startSeq: 1,
-      createdAt: 1,
-      text: "",
-      tools,
-    });
-    expect(rows.map((row) => row.toolState)).toEqual(["done", "error"]);
+    expect(toolRowData({ toolName: "forget", input: { id: "m1" }, output: {} })).toBe("");
+    expect(toolRowData({ toolName: "queryDb", input: { sql: "select 1" }, output: {} })).toBe("");
   });
 });
