@@ -1,0 +1,50 @@
+@import "tailwindcss";
+@import "uniwind";
+
+@layer theme {
+  :root {
+    @variant light {
+      --color-background: oklch(1 0 0);
+      --color-foreground: oklch(0.3211 0 0);
+      --color-card: oklch(1 0 0);
+      --color-card-foreground: oklch(0.3211 0 0);
+      --color-popover: oklch(1 0 0);
+      --color-popover-foreground: oklch(0.3211 0 0);
+      --color-primary: oklch(0.6056 0.2189 292.7172);
+      --color-primary-foreground: oklch(1 0 0);
+      --color-secondary: oklch(0.967 0.0029 264.5419);
+      --color-secondary-foreground: oklch(0.4461 0.0263 256.8018);
+      --color-muted: oklch(0.9846 0.0017 247.8389);
+      --color-muted-foreground: oklch(0.551 0.0234 264.3637);
+      --color-accent: oklch(0.9691 0.0161 293.7558);
+      --color-accent-foreground: oklch(0.432 0.2106 292.7591);
+      --color-destructive: oklch(0.6368 0.2078 25.3313);
+      --color-destructive-foreground: oklch(1 0 0);
+      --color-border: oklch(0.9276 0.0058 264.5313);
+      --color-input: oklch(0.9276 0.0058 264.5313);
+      --color-ring: oklch(0.6056 0.2189 292.7172);
+    }
+
+    @variant dark {
+      --color-background: oklch(0.2046 0 0);
+      --color-foreground: oklch(0.9219 0 0);
+      --color-card: oklch(0.2686 0 0);
+      --color-card-foreground: oklch(0.9219 0 0);
+      --color-popover: oklch(0.2686 0 0);
+      --color-popover-foreground: oklch(0.9219 0 0);
+      --color-primary: oklch(0.6056 0.2189 292.7172);
+      --color-primary-foreground: oklch(1 0 0);
+      --color-secondary: oklch(0.2686 0 0);
+      --color-secondary-foreground: oklch(0.9219 0 0);
+      --color-muted: oklch(0.2393 0 0);
+      --color-muted-foreground: oklch(0.7155 0 0);
+      --color-accent: oklch(0.3796 0.1783 293.7446);
+      --color-accent-foreground: oklch(0.8943 0.0549 293.2829);
+      --color-destructive: oklch(0.6368 0.2078 25.3313);
+      --color-destructive-foreground: oklch(1 0 0);
+      --color-border: oklch(0.3715 0 0);
+      --color-input: oklch(0.3715 0 0);
+      --color-ring: oklch(0.6056 0.2189 292.7172);
+    }
+  }
+}

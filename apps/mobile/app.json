@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Productivity",
+    "slug": "productivity",
+    "scheme": "productivity",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.krolebord.productivity",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.krolebord.productivity",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#171717"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#ffffff",
+          "dark": { "backgroundColor": "#171717" }
+        }
+      ]
+    ]
+  }
+}

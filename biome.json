@@ -15,6 +15,7 @@
       "!**/worker-configuration.d.ts",
       "!**/.wrangler",
       "!**/*.gen.ts",
+      "!**/uniwind-types.d.ts",
       "!**/public"
     ]
   },
@@ -69,5 +70,17 @@
     "parser": {
       "tailwindDirectives": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/mobile/src/global.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDuplicateCustomProperties": "off"
+          }
+        }
+      }
+    }
+  ]
 }
