@@ -3,7 +3,7 @@ import { createRootRouteWithContext, type ErrorComponentProps, Link, Outlet } fr
 import { AlertTriangle, FileQuestion } from "lucide-react";
 import { AppUpdateProvider } from "@/components/app-update-provider";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { Devtools } from "@/components/devtools";
+import { Devtools, useCanOpenDevtools, useDevtoolsStore } from "@/components/devtools";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -36,6 +36,8 @@ function NotFound() {
 
 function ErrorPage({ error, reset }: ErrorComponentProps) {
   const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+  const canOpenDevtools = useCanOpenDevtools();
+  const openDevtools = useDevtoolsStore((s) => s.setOpen);
 
   return (
     <div className="flex min-h-dvh items-center justify-center">
@@ -52,6 +54,11 @@ function ErrorPage({ error, reset }: ErrorComponentProps) {
           <Link to="/" className={buttonVariants({ variant: "outline" })}>
             Go home
           </Link>
+          {canOpenDevtools && (
+            <Button variant="outline" onClick={() => openDevtools(true)}>
+              Devtools
+            </Button>
+          )}
         </div>
       </div>
       <Devtools />

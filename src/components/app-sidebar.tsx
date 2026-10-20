@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   ChartPie,
   ChevronsUpDown,
+  Database,
   Globe,
   ListTodoIcon,
   Loader2,
@@ -28,6 +29,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCreateAccount } from "@/components/account-dialog";
+import { useDevtoolsStore } from "@/components/devtools";
 import { useCreateNote } from "@/components/note-dialog";
 import { SidebarNav, useIntegrationsHasError, useSidebarLocation } from "@/components/sidebar/sidebar-nav";
 import { SidebarPanel, SidebarTooltip } from "@/components/sidebar/sidebar-primitives";
@@ -276,6 +278,7 @@ function SidebarUserMenu({ collapsed }: { collapsed: boolean }) {
   const defaultHome = useDefaultHomeStore((s) => s.defaultHome);
   const setDefaultHome = useDefaultHomeStore((s) => s.setDefaultHome);
   const { timeZone } = useDashboardSettings();
+  const openDevtools = useDevtoolsStore((s) => s.setOpen);
 
   return (
     <DropdownMenu>
@@ -354,6 +357,12 @@ function SidebarUserMenu({ collapsed }: { collapsed: boolean }) {
           </div>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        {auth.userRole === "admin" && (
+          <DropdownMenuItem onClick={() => openDevtools(true)}>
+            <Database className="size-4" />
+            Devtools
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={logout} disabled={logout.isPending}>
           <LogOut className="size-4" />
           Logout
