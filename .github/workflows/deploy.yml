@@ -27,7 +27,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - run: pnpm rebuild --pending
+      - run: pnpm -r rebuild --pending
 
       - name: Build
         run: pnpm run build
@@ -40,6 +40,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Deploy
-        run: pnpm exec wrangler deploy --var MODE:production --var VITE_APP_URL:https://productivity.krolebord.com
+        run: pnpm --filter @productivity/web exec wrangler deploy --var MODE:production --var VITE_APP_URL:https://productivity.krolebord.com
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

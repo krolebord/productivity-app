@@ -14,19 +14,34 @@ Auth uses magic links (sent via the Cloudflare Email binding) and Google OAuth (
 
 ## Repository Structure
 
+pnpm workspace with two packages; root scripts forward to them (`pnpm --filter`).
+
 ```
-src/server.ts              # Worker entry (serves SPA, API, RPC, user-db sync)
-src/main.tsx               # Client entry (TanStack Router)
-src/routes/                # File-based routes (_app = authed app, _auth = sign-in flow)
-src/components/            # App components + ui/ (shadcn-style Base UI components)
-src/orpc/                  # oRPC client/router (auth endpoints)
-src/api/handlers/          # Plain HTTP handlers (OAuth callbacks)
-src/mcp/                   # MCP server at /mcp (personal access tokens, user-db tools)
-src/user-db/               # Per-user synced DB: schema/migrations, web worker, Durable Object server, jobs
-src/lib/                   # Central D1 access (kysely), auth client, currency, emails, stores, utils
-migrations/                # D1 migrations for the central auth database
-wrangler.jsonc             # Cloudflare config (D1, Durable Objects, email, assets)
+apps/web/                  # @productivity/web — the deployed Worker + SPA
+  src/server.ts            # Worker entry (serves SPA, API, RPC, user-db sync)
+  src/main.tsx             # Client entry (TanStack Router)
+  src/routes/              # File-based routes (_app = authed app, _auth = sign-in flow)
+  src/components/          # App components + ui/ (shadcn-style Base UI components)
+  src/orpc/                # oRPC client/router (auth endpoints)
+  src/api/handlers/        # Plain HTTP handlers (OAuth callbacks)
+  src/mcp/                 # MCP server at /mcp (personal access tokens, user-db tools)
+  src/agent/               # Assistant Durable Object (AI agent)
+  src/user-db/             # Web Worker bootstrap, Durable Object server, jobs
+  src/lib/                 # Central D1 access (kysely), auth, emails, web-only stores and hooks
+  migrations/              # D1 migrations for the central auth database
+  wrangler.jsonc           # Cloudflare config (D1, Durable Objects, email, assets)
+packages/core/             # @productivity/core — platform-agnostic code shared with a future mobile app
+  src/user-db/             # Synced DB schema/migrations + typed DB hooks (db-context.ts)
+  src/data/                # Query hooks and mutations per domain, used by the UI
+  src/agent/               # Assistant model catalog and shared specs
+  src/*                    # Domain logic: agenda, transactions, finance, currency, tags, time zones…
 ```
+
+`packages/core` must stay runnable on React Native: it typechecks without DOM types, and
+must not import web-only libraries, `import.meta.env`, or anything from `apps/web`. Import
+it from the web app as `@productivity/core/<path>`; inside core, use relative imports.
+UI components read and write the user DB through `@productivity/core/data/*` rather than
+writing Kysely queries inline.
 
 ## Technology Stack
 
@@ -43,25 +58,25 @@ pnpm dev                  # Dev server on port 3301
 pnpm typecheck            # Type-check (tsc — TypeScript 7, native)
 pnpm format               # Format + lint fix with Biome
 pnpm build                # Production build
-pnpm deploy               # Build + wrangler deploy
+pnpm run deploy           # Build + wrangler deploy
 
 pnpm db:local:migrate     # Apply D1 migrations locally
 pnpm db:new-migration     # Create a new D1 migration
 pnpm generate:types:env   # Regenerate worker-configuration.d.ts (wrangler types)
-pnpm sync:models          # Regenerate src/agent/models.gen.ts from OpenRouter
+pnpm sync:models          # Regenerate packages/core/src/agent/models.gen.ts from OpenRouter
 ```
 
-Two env vars tune the dev server (read from `.env` or the shell): `DEV_PORT` overrides
+Two env vars tune the dev server (read from `apps/web/.env` or the shell): `DEV_PORT` overrides
 the 3301 default, and `DEV_ALLOWED_HOSTS` is a comma-separated host allowlist for
 reaching it through a proxy. The `Dev server (Tailnet)` preset in
 `.agent-ui/settings.jsonc` uses both to publish dev over Tailscale — HMR needs no extra
 port because Vite reconnects to whatever origin served the page.
 
-Note: the central D1 database uses SQL migrations in `migrations/`; the per-user synced database defines its schema/migrations in code at `src/user-db/migrations.ts`.
+Note: the central D1 database uses SQL migrations in `apps/web/migrations/`; the per-user synced database defines its schema/migrations in code at `packages/core/src/user-db/migrations.ts`.
 
-The assistant model catalog is generated: edit the seed `src/agent/supported-models.ts`,
-run `pnpm sync:models` to scrape the rest from OpenRouter into `src/agent/models.gen.ts`
+The assistant model catalog is generated: edit the seed `packages/core/src/agent/supported-models.ts`,
+run `pnpm sync:models` to scrape the rest from OpenRouter into `packages/core/src/agent/models.gen.ts`
 
-When you add a migration under `migrations/`, hand-update the matching Kysely types in
-`src/lib/db-types.ts` in the same change — they are no longer generated. Enum columns are
-narrowed to domain unions separately, in `src/lib/db.ts`.
+When you add a migration under `apps/web/migrations/`, hand-update the matching Kysely types in
+`apps/web/src/lib/db-types.ts` in the same change — they are no longer generated. Enum columns are
+narrowed to domain unions separately, in `apps/web/src/lib/db.ts`.

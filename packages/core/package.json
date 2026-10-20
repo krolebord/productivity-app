@@ -1,0 +1,32 @@
+{
+  "name": "@productivity/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "sync:models": "tsx scripts/sync-models.ts"
+  },
+  "dependencies": {
+    "@sqlite-sync/core": "catalog:",
+    "@sqlite-sync/react": "catalog:",
+    "@tanstack/react-form": "catalog:",
+    "date-fns": "catalog:",
+    "kysely": "catalog:",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "react": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

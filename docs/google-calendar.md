@@ -24,13 +24,13 @@ that limit.
 
 | Piece | Location |
 | --- | --- |
-| Consent flow | `src/orpc/routers/google-calendar.router.ts`, `src/api/handlers/callback.google-calendar.ts` |
+| Consent flow | `apps/web/src/orpc/routers/google-calendar.router.ts`, `apps/web/src/api/handlers/callback.google-calendar.ts` |
 | Tokens (central D1) | `google_calendar_connection`, `migrations/0004_create_google_calendar_connection.sql` |
-| Synced settings | `calendar_connection`, `calendar_source` in `src/user-db/migrations.ts` |
-| Sync diagnostics + cursors | `src/lib/google-calendar/sync-status.ts` (Durable Object storage) |
-| API client | `src/lib/google-calendar/api.ts` |
-| Event → task mapping + rules | `src/lib/google-calendar/mapping.ts` (unit-tested) |
-| Sync / cleanup jobs | `src/user-db/jobs/calendar-sync.ts`, `calendar-cleanup.ts`, `calendar-metadata.ts` |
+| Synced settings | `calendar_connection`, `calendar_source` in `packages/core/src/user-db/migrations.ts` |
+| Sync diagnostics + cursors | `apps/web/src/lib/google-calendar/sync-status.ts` (Durable Object storage) |
+| API client | `apps/web/src/lib/google-calendar/api.ts` |
+| Event → task mapping + rules | `packages/core/src/google-calendar/mapping.ts` (unit-tested) |
+| Sync / cleanup jobs | `apps/web/src/user-db/jobs/calendar-sync.ts`, `calendar-cleanup.ts`, `calendar-metadata.ts` |
 
 - OAuth tokens live **only** in central D1, never in the synced per-user database.
 - `calendar-sync` runs every 15 minutes in the user's Durable Object, plus on demand after
@@ -39,7 +39,7 @@ that limit.
   full re-fetch of the window.
 - `singleEvents=true` expands recurring series, so each occurrence becomes its own task. The sync
   window is therefore deliberately narrow: `SYNC_WINDOW_PAST_DAYS`/`SYNC_WINDOW_FUTURE_DAYS` in
-  `src/lib/google-calendar/types.ts` (currently 1 day back, 14 forward).
+  `packages/core/src/google-calendar/types.ts` (currently 1 day back, 14 forward).
 - All-day events are anchored to midnight in the *calendar's* timezone, not the worker's UTC
   midnight, so they land on the right day for users west of UTC.
 

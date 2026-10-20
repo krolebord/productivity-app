@@ -1,3 +1,21 @@
+packages:
+  - apps/*
+  - packages/*
+
+catalog:
+  "@sqlite-sync/core": ^0.12.3
+  "@sqlite-sync/react": ^0.12.3
+  "@tanstack/react-form": ^1.33.5
+  date-fns: ^4.4.0
+  kysely: ^0.28.10
+  zod: ^4.6.5
+  react: ^19.2.8
+  "@types/react": ^19.2.18
+  "@types/node": ^26.6.4
+  tsx: ^4.23.15
+  typescript: ^7.0.2
+  vitest: ^4.1.11
+
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - eslint

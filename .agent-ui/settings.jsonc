@@ -1,6 +1,6 @@
 {
   // Project icon shown in the Agent UI sidebar.
-  "iconPath": "public/pwa-192x192.png",
+  "iconPath": "apps/web/public/pwa-192x192.png",
 
   "commands": [
     {
