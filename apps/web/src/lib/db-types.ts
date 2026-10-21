@@ -69,6 +69,7 @@ export interface User {
 }
 
 export interface Verification {
+  attempts: Generated<number>;
   createdAt: string;
   expiresAt: string;
   target: string;

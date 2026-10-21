@@ -10,6 +10,7 @@ import {
   type DayHabitProgress,
   parseDateKey,
 } from "@productivity/core/agenda";
+import { type CalendarDayInfo, useAgenda } from "@productivity/core/data/agenda";
 import { formatDueDateLabel } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
 import { format } from "date-fns";
@@ -36,14 +37,14 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { dayDropId, INBOX_DROP_ID } from "@/lib/app-dnd";
+import { useCurrentDayKey } from "@/lib/use-current-day";
 import { cn } from "@/lib/utils";
-import { type CalendarDayInfo, useAgenda } from "./use-agenda";
 import { useTaskReorder } from "./use-task-reorder";
 
 const WEEKDAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 
 export function TodayView() {
-  const agenda = useAgenda();
+  const agenda = useAgenda(useCurrentDayKey());
   const openTaskDialog = useTaskDialogStore((s) => s.open);
 
   const headerLabel = agenda.isSelectedToday ? "Today" : format(agenda.selectedDate, "EEE, MMM d");

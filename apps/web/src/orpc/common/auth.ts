@@ -27,10 +27,20 @@ export const authCookieSession = createCookieSession<SessionData>({
   maxAge: SESSION_MAX_AGE_SECONDS,
 });
 
-export async function createSession(
-  context: ORPCContext,
-  user: { id: string; name: string; email: string; role: UserRole },
-): Promise<void> {
+type SessionUser = { id: string; name: string; email: string; role: UserRole };
+
+export async function createSession(context: ORPCContext, user: SessionUser): Promise<void> {
+  const sessionId = await storeSession(user);
+  await authCookieSession.set(context, { sessionId });
+}
+
+/** Same session as the cookie, handed to clients that send it as `Authorization: Bearer`. */
+export async function createSessionToken(user: SessionUser): Promise<string> {
+  const sessionId = await storeSession(user);
+  return sign(JSON.stringify({ sessionId } satisfies SessionData), getContext().AUTH_SECRET);
+}
+
+async function storeSession(user: SessionUser): Promise<string> {
   const sessionId = crypto.randomUUID();
   const expiresAt = addSeconds(new Date(), SESSION_MAX_AGE_SECONDS);
   const stored: StoredSession = {
@@ -44,16 +54,25 @@ export async function createSession(
   await getContext().SESSIONS.put(sessionId, JSON.stringify(stored), {
     expiration: Math.floor(expiresAt.getTime() / 1000),
   });
-  await authCookieSession.set(context, { sessionId });
+  return sessionId;
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
   await getContext().SESSIONS.delete(sessionId);
 }
 
+// A bearer header, when present, is the only credential considered — it never falls back to the cookie.
+async function getSessionFromHeaders(headers: Headers | undefined): Promise<SessionData | null> {
+  const bearer = headers?.get("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
+  if (bearer) {
+    return unsignJson<SessionData>(bearer);
+  }
+  return authCookieSession.getFromHeaders(headers);
+}
+
 // A KV miss leaves the cookie alone: a just-written session may not be visible yet.
 export async function getAuthFromHeaders(headers: Headers | undefined): Promise<AuthSession | null> {
-  const session = await authCookieSession.getFromHeaders(headers);
+  const session = await getSessionFromHeaders(headers);
 
   if (!session?.sessionId) {
     return null;
@@ -96,15 +115,7 @@ export function createCookieSession<T>({ name, maxAge }: { name: string; maxAge:
     if (!cookie) {
       return null;
     }
-    const payload = await unsign(cookie, env.AUTH_SECRET);
-    if (!payload) {
-      return null;
-    }
-    try {
-      return JSON.parse(payload) as T;
-    } catch {
-      return null;
-    }
+    return unsignJson<T>(cookie);
   };
 
   const get = async (context: ORPCContext) => {
@@ -134,4 +145,16 @@ export function createCookieSession<T>({ name, maxAge }: { name: string; maxAge:
   };
 
   return { get, getFromHeaders, set, clear, name, maxAge };
+}
+
+async function unsignJson<T>(value: string): Promise<T | null> {
+  const payload = await unsign(value, getContext().AUTH_SECRET);
+  if (!payload) {
+    return null;
+  }
+  try {
+    return JSON.parse(payload) as T;
+  } catch {
+    return null;
+  }
 }

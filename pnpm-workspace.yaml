@@ -3,8 +3,9 @@ packages:
   - packages/*
 
 catalog:
-  "@sqlite-sync/core": ^0.12.3
-  "@sqlite-sync/react": ^0.12.3
+  "@sqlite-sync/core": ^0.13.1
+  "@sqlite-sync/react": ^0.13.1
+  "@sqlite-sync/react-native": ^0.13.1
   "@tanstack/react-form": ^1.33.5
   date-fns: ^4.4.0
   kysely: ^0.28.10
@@ -15,6 +16,9 @@ catalog:
   "@types/react-dom": ^19.3.0
   tailwindcss: ^4.3.3
   "@types/node": ^26.6.4
+  "@orpc/client": ^1.15.4
+  "@orpc/contract": ^1.15.4
+  "@orpc/server": ^1.15.4
   tsx: ^4.23.15
   typescript: ^7.0.2
   vitest: ^4.1.11
@@ -27,6 +31,7 @@ minimumReleaseAgeExclude:
   - "@sqlite-sync/core"
   - "@sqlite-sync/devtools"
   - "@sqlite-sync/react"
+  - "@sqlite-sync/react-native"
   - "@cloudflare/think"
   - agents
   - "@base-ui/react"

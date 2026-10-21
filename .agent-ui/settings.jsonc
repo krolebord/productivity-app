@@ -19,6 +19,17 @@
       // it reconnects over wss:// to whatever host/port served the page.
       "run": "ts-serve 3302:3301 && DEV_PORT=3302 DEV_ALLOWED_HOSTS=agent-ui-vps.tailc07dd9.ts.net pnpm dev",
       "singleton": true
+    },
+    {
+      "id": "mobile-dev-client-tailnet",
+      "name": "Mobile dev client (Tailnet)",
+      // Metro serves plain HTTP straight on the tailnet hostname (no ts-serve: the dev
+      // client can't load a bundle through the HTTPS proxy). The EAS development build
+      // opens http://agent-ui-vps.tailc07dd9.ts.net:3303 on launch (defaultLaunchURL in
+      // app.json). 8081 is left to another project's Metro.
+      // The app talks to the "Dev server (Tailnet)" preset, so start that one too.
+      "run": "REACT_NATIVE_PACKAGER_HOSTNAME=agent-ui-vps.tailc07dd9.ts.net EXPO_PUBLIC_API_URL=https://agent-ui-vps.tailc07dd9.ts.net:3301 pnpm dev:mobile -- --dev-client --lan --port 3303",
+      "singleton": true
     }
   ]
 }

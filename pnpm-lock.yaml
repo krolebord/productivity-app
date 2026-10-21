@@ -6,12 +6,24 @@ settings:
 
 catalogs:
   default:
+    '@orpc/client':
+      specifier: ^1.15.4
+      version: 1.15.4
+    '@orpc/contract':
+      specifier: ^1.15.4
+      version: 1.15.4
+    '@orpc/server':
+      specifier: ^1.15.4
+      version: 1.15.4
     '@sqlite-sync/core':
-      specifier: ^0.12.3
-      version: 0.12.3
+      specifier: ^0.13.1
+      version: 0.13.1
     '@sqlite-sync/react':
-      specifier: ^0.12.3
-      version: 0.12.3
+      specifier: ^0.13.1
+      version: 0.13.1
+    '@sqlite-sync/react-native':
+      specifier: ^0.13.1
+      version: 0.13.1
     '@tanstack/react-form':
       specifier: ^1.33.5
       version: 1.33.5
@@ -70,21 +82,54 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@expo/vector-icons':
+        specifier: ^15.1.1
+        version: 15.1.1(expo-font@58.0.8(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      '@op-engineering/op-sqlite':
+        specifier: 18.2.5
+        version: 18.2.5(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      '@orpc/client':
+        specifier: 'catalog:'
+        version: 1.15.4(@opentelemetry/api@1.9.1)
       '@productivity/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@react-native-community/datetimepicker':
+        specifier: 9.2.1
+        version: 9.2.1(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      '@sqlite-sync/core':
+        specifier: 'catalog:'
+        version: 0.13.1(kysely@0.28.17)
+      '@sqlite-sync/react':
+        specifier: 'catalog:'
+        version: 0.13.1(@sqlite-sync/core@0.13.1(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
+      '@sqlite-sync/react-native':
+        specifier: 'catalog:'
+        version: 0.13.1(@op-engineering/op-sqlite@18.2.5(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(@sqlite-sync/core@0.13.1(kysely@0.28.17))(kysely@0.28.17)(react-native-get-random-values@2.0.0(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
+      date-fns:
+        specifier: 'catalog:'
+        version: 4.4.0
       expo:
         specifier: ~58.0.9
         version: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
       expo-constants:
         specifier: ~58.0.11
         version: 58.0.11(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(typescript@7.0.2)
+      expo-dev-client:
+        specifier: ~58.0.13
+        version: 58.0.13(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
+      expo-font:
+        specifier: ~58.0.8
+        version: 58.0.8(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       expo-linking:
         specifier: ~58.0.12
         version: 58.0.12(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
       expo-router:
         specifier: ~58.0.18
         version: 58.0.18(8887588fffe2d1da9156379f9ba920a6)
+      expo-secure-store:
+        specifier: ~58.0.2
+        version: 58.0.2(expo@58.0.9)
       expo-splash-screen:
         specifier: ~58.0.8
         version: 58.0.8(expo@58.0.9)(typescript@7.0.2)
@@ -94,12 +139,18 @@ importers:
       expo-system-ui:
         specifier: ~58.0.5
         version: 58.0.5(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
+      kysely:
+        specifier: 'catalog:'
+        version: 0.28.17
       react:
         specifier: 'catalog:'
         version: 19.3.0
       react-native:
         specifier: 0.88.0-rc.4
         version: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+      react-native-get-random-values:
+        specifier: ^2.0.0
+        version: 2.0.0(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
       react-native-safe-area-context:
         specifier: ~5.9.1
         version: 5.9.1(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
@@ -162,10 +213,10 @@ importers:
         specifier: ^2.10.0
         version: 2.10.0(ai@6.0.300(zod@4.6.5))(zod@4.6.5)
       '@orpc/client':
-        specifier: ^1.15.4
+        specifier: 'catalog:'
         version: 1.15.4(@opentelemetry/api@1.9.1)
       '@orpc/server':
-        specifier: ^1.15.4
+        specifier: 'catalog:'
         version: 1.15.4(@opentelemetry/api@1.9.1)(ws@8.22.0)
       '@orpc/tanstack-query':
         specifier: ^1.15.4
@@ -180,20 +231,20 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@sqlite-sync/ai':
-        specifier: ^0.12.3
-        version: 0.12.3(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5))(@sqlite-sync/core@0.12.3(kysely@0.28.17))(ai@6.0.300(zod@4.6.5))(zod@4.6.5)
+        specifier: ^0.13.1
+        version: 0.13.1(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5))(@sqlite-sync/core@0.13.1(kysely@0.28.17))(ai@6.0.300(zod@4.6.5))(zod@4.6.5)
       '@sqlite-sync/cloudflare':
-        specifier: ^0.12.3
-        version: 0.12.3(@sqlite-sync/core@0.12.3(kysely@0.28.17))(kysely@0.28.17)
+        specifier: ^0.13.1
+        version: 0.13.1(@sqlite-sync/core@0.13.1(kysely@0.28.17))(kysely@0.28.17)
       '@sqlite-sync/core':
         specifier: 'catalog:'
-        version: 0.12.3(kysely@0.28.17)
+        version: 0.13.1(kysely@0.28.17)
       '@sqlite-sync/devtools':
-        specifier: ^0.12.3
-        version: 0.12.3(@sqlite-sync/core@0.12.3(kysely@0.28.17))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: ^0.13.1
+        version: 0.13.1(@sqlite-sync/core@0.13.1(kysely@0.28.17))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@sqlite-sync/react':
         specifier: 'catalog:'
-        version: 0.12.3(@sqlite-sync/core@0.12.3(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
+        version: 0.13.1(@sqlite-sync/core@0.13.1(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.1.5(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
@@ -363,12 +414,15 @@ importers:
 
   packages/core:
     dependencies:
+      '@orpc/contract':
+        specifier: 'catalog:'
+        version: 1.15.4(@opentelemetry/api@1.9.1)
       '@sqlite-sync/core':
         specifier: 'catalog:'
-        version: 0.12.3(kysely@0.28.17)
+        version: 0.13.1(kysely@0.28.17)
       '@sqlite-sync/react':
         specifier: 'catalog:'
-        version: 0.12.3(@sqlite-sync/core@0.12.3(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
+        version: 0.13.1(@sqlite-sync/core@0.13.1(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
       '@tanstack/react-form':
         specifier: 'catalog:'
         version: 1.33.5(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -1916,6 +1970,13 @@ packages:
   '@expo/sudo-prompt@9.3.2':
     resolution: {integrity: sha512-HHQigo3rQWKMDzYDLkubN5WQOYXJJE2eNqIQC2axC2iO3mHdwnIR7FgZVvHWtBwAdzBgAP0ECp8KqS8TiMKvgw==}
 
+  '@expo/vector-icons@15.1.1':
+    resolution: {integrity: sha512-Iu2VkcoI5vygbtYngm7jb4ifxElNVXQYdDrYkT7UCEIiKLeWnQY0wf2ZhHZ+Wro6Sc5TaumpKUOqDRpLi5rkvw==}
+    peerDependencies:
+      expo-font: '>=14.0.4'
+      react: '*'
+      react-native: '*'
+
   '@expo/ws-tunnel@2.0.1':
     resolution: {integrity: sha512-mljsRffbOHzmSimYQbQu9h9NR3alwCCwEEouRGFL4QRTt8dNvsNtKEPa/5jHmtDLDtsh4xXsWKwzjN9BTpeXHQ==}
     peerDependencies:
@@ -2287,6 +2348,16 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@op-engineering/op-sqlite@18.2.5':
+    resolution: {integrity: sha512-OLmcM0SQLapP1p5Q6Ck5P+V3N6RsAhBozIG07PbQr+8wgB0gYoFgFjuWZK0JvNBY+UYgYPxkOQDd4rk4naWNGw==}
+    peerDependencies:
+      '@sqlite.org/sqlite-wasm': '*'
+      react: '*'
+      react-native: '*'
+    peerDependenciesMeta:
+      '@sqlite.org/sqlite-wasm':
+        optional: true
 
   '@openrouter/ai-sdk-provider@2.10.0':
     resolution: {integrity: sha512-FMsAEjLUt5pWuRE2LDC/LCvVrFjLlrEzUITH5+5SZtfq7KZ2wrOHjQVxzz92sju8S9ltpzW87CLW8/b0oBXVCw==}
@@ -3427,6 +3498,19 @@ packages:
     resolution: {integrity: sha512-LVfA+j5cFT0Szd958WRD8W/B8ucCtz4ViiveDKWLqAwBkZFW9VRW1ZvwOUhp/M3SmVPtjDaRkW12GvAuTArP+Q==}
     hasBin: true
 
+  '@react-native-community/datetimepicker@9.2.1':
+    resolution: {integrity: sha512-P2dir8EcPYuS6g7N/E4jImugB99h2+e1kzNX6Ihg+2T2v5IZ5dB+4afLisG6rdua4YZ1mADYCZ2iqI34sPjIKA==}
+    peerDependencies:
+      expo: '>=52.0.0'
+      react: '*'
+      react-native: '*'
+      react-native-windows: '*'
+    peerDependenciesMeta:
+      expo:
+        optional: true
+      react-native-windows:
+        optional: true
+
   '@react-native-masked-view/masked-view@0.3.2':
     resolution: {integrity: sha512-XwuQoW7/GEgWRMovOQtX3A4PrXhyaZm0lVUiY8qJDvdngjLms9Cpdck6SmGAUNqQwcj2EadHC1HwL0bEyoa/SQ==}
     peerDependencies:
@@ -3890,40 +3974,49 @@ packages:
   '@speed-highlight/core@1.2.16':
     resolution: {integrity: sha512-yNm/fYEcnpRjYduLMaddTK9XKYil6xB88+qFg79ZdZhHu1PadfoQmFW7pVTx7FZqMBNcUuThiAhxhENgtAO2/w==}
 
-  '@sqlite-sync/ai@0.12.3':
-    resolution: {integrity: sha512-Kbm/ap+cPclpnarR8eODeSzbJzKGpDZJanKxUbJjMM7bTzz8OcRfo0TXJYxT/TM3yvxwi4CawGcFOUsCLitVgw==}
+  '@sqlite-sync/ai@0.13.1':
+    resolution: {integrity: sha512-RwDn8oyVoJ8y7B/NQoaIn5Nt8kmrcwv4sNvmry1RAzG1Z/Ua2XBTfAhGMGqLMavE3bEXcEwzf2nYSZI2t3MekA==}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.29.0
-      '@sqlite-sync/core': ^0.12.3
+      '@sqlite-sync/core': ^0.13.1
       ai: ^6.0.0
       zod: ^4.1.8
     peerDependenciesMeta:
       '@modelcontextprotocol/sdk':
         optional: true
 
-  '@sqlite-sync/cloudflare@0.12.3':
-    resolution: {integrity: sha512-0e0ryeKRcTL5p8PJl3rMLjX6I+rUu4opsYu27vCi2b/YfkjyiPhCxrsYxD1CB0IIASxOjaiOq4hNTVAcgvGQDw==}
+  '@sqlite-sync/cloudflare@0.13.1':
+    resolution: {integrity: sha512-0552Hiy1sIjwnjm4Hs2z4zMzUPHGhVM2BefcmgidQSG7K+RN6WFG053KQ9hnK3NtXSxy+aEnQUZgXYlT1REszw==}
     peerDependencies:
       '@cloudflare/workers-types': ^4.0.0
-      '@sqlite-sync/core': ^0.12.3
+      '@sqlite-sync/core': ^0.13.1
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/core@0.12.3':
-    resolution: {integrity: sha512-LINS+/uYttEk5kVXvLgzyb6blERNijak1b1zgeGFuPg3nSA96G3Ic8ysln7t8sNK8KhYo89jRrSgtSDl9yhCkg==}
+  '@sqlite-sync/core@0.13.1':
+    resolution: {integrity: sha512-vSWjdTPnRYmlB43eZIWSboAPxShfZIDcMBuBvISnys36KjIyt8hPNy+/GXUVg2SJ6DZulOye5UtF4NMja4+6uw==}
     peerDependencies:
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/devtools@0.12.3':
-    resolution: {integrity: sha512-RtzHFgfeExgCb8fFtPqYXDn64nP005PFOzSdfi8lPeV6fgtb4A3sIZKbBwuS2HdWIVv+u4cBCFVUlAkn1pZ2zA==}
+  '@sqlite-sync/devtools@0.13.1':
+    resolution: {integrity: sha512-WcvmTeAAmNSu12ZQxsuV3re8+0KYEjiUTd3E3fPCGHgvOcLf+NUdKUADMI4cLt+9nTGYXsI8K46WVAFS+0GuHA==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.12.3
+      '@sqlite-sync/core': ^0.13.1
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
-  '@sqlite-sync/react@0.12.3':
-    resolution: {integrity: sha512-NLSxx4rpHq5OoILTzniqtx/P0M2lemaWb4SPFLNcT0l2PMqE6I5m7ZqU8tRgrZYJb6cbmjmRdZ8EcKd7EPOUIA==}
+  '@sqlite-sync/react-native@0.13.1':
+    resolution: {integrity: sha512-mgLu+LQZ/n7XAqd1rmkZWf/ZDhLLGHMZycjkbG1Olq4ZZSJR+88tXWM+YWpWlUg0ih83cTAZkFcq1oFo/4t7uA==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.12.3
+      '@op-engineering/op-sqlite': '>=18.2.0'
+      '@sqlite-sync/core': ^0.13.1
+      kysely: ^0.28.0 || ^0.29.0
+      react-native: '>=0.76.0'
+      react-native-get-random-values: ^1.11.0 || ^2.0.0
+
+  '@sqlite-sync/react@0.13.1':
+    resolution: {integrity: sha512-xUEWjYvi2m32WnMq5QWSvWFhsGQLZoJBC5zv4Tb9GpgaCIU8fDagVIGc2fgBaTwxi14xjhdDgTOBl3WZPlUfKw==}
+    peerDependencies:
+      '@sqlite-sync/core': ^0.13.1
       kysely: ^0.28.0 || ^0.29.0
       react: ^18.0.0 || ^19.0.0
 
@@ -5632,6 +5725,28 @@ packages:
       expo: '*'
       react-native: '*'
 
+  expo-dev-client@58.0.13:
+    resolution: {integrity: sha512-2Ot6Sec/OYPTIfcAwesDUPea30gyFr49OdB/8yB3zpUMCtYf7dQyuHnPo7qGyhSxnActwJVW1KKAUJ134Ehrwg==}
+    peerDependencies:
+      expo: '*'
+
+  expo-dev-launcher@58.0.13:
+    resolution: {integrity: sha512-n/Ta15l3Ti2nVhchQ3L8OzuAgtyD+R/UGinqiZUVlT2rDslUS0Qwb05bRY5QeLNF0NzLFaO0522/bhCLDLAJww==}
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+
+  expo-dev-menu-interface@58.0.1:
+    resolution: {integrity: sha512-XdjO3ZZhEq1dXm15GVtzQ0SXxSTPguJIDZib3Z8tAf2jLxfPUlQObgO/0hdnw7ssEBhTT2jQo2HAfnOSGUfj8w==}
+    peerDependencies:
+      expo: '*'
+
+  expo-dev-menu@58.0.11:
+    resolution: {integrity: sha512-kOqJ2wGsmM+tYf96mEy06WSBbX/cOx2KgmaouuqQX24/zpBPKlcLUQGgV75iGBXIxS6sczBO7qBp/MifFOud3w==}
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+
   expo-file-system@58.0.9:
     resolution: {integrity: sha512-JT0km3Wa+wDz/7Rli8ifreoMnmk68ulf/uaWzRA26xm/4K+jGTY+cDhnboRmpmXUCBkED6uqxWmNoXjaVU9VUw==}
     peerDependencies:
@@ -5652,6 +5767,9 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-json-utils@58.0.1:
+    resolution: {integrity: sha512-jNHNElOUPz2/vW3CbDKRn6tTF6eE9wwVbh/Isnqp5c/CdTcONzFVR3YHN3WQ05PnkmieyEqVfeOusOd1X9FDtQ==}
+
   expo-keep-awake@58.0.3:
     resolution: {integrity: sha512-wLRF+XeVsD/Rt/ZyX+A0mk1brdf8vefWizNAPzqV5eOCgkj23LCRZdN8gUi5X8UwyR8UJ7Y7Dzdz4YDGB/4c9Q==}
     peerDependencies:
@@ -5664,6 +5782,11 @@ packages:
       expo: '*'
       react: '*'
       react-native: '*'
+
+  expo-manifests@58.0.1:
+    resolution: {integrity: sha512-fVeJJ71Fj8FJgcAUggn6QIsm7CTxsXFgekLl4pEPHgON6fmcxog63FGO0sisQ3F6yUWFR4nn8iJmgBp1Exs7ew==}
+    peerDependencies:
+      expo: '*'
 
   expo-modules-autolinking@58.0.12:
     resolution: {integrity: sha512-ejNEuURT8rViMlH9H0e1RjuOCqHsNG8xuH0gEZtP+eLsCE19s0vmiIU0mMFIzdimtCf1hsf6ryLdEE2lHSpSNA==}
@@ -5728,6 +5851,11 @@ packages:
       react-server-dom-webpack:
         optional: true
 
+  expo-secure-store@58.0.2:
+    resolution: {integrity: sha512-VupWWEuQF6IiQ06McSymtn7/tehs8ifThhFwAU4UK8poomZcaa2S0UVt/y7G2XozBdkI3xpiPSx+r0pS2zsuYQ==}
+    peerDependencies:
+      expo: '*'
+
   expo-server@58.0.5:
     resolution: {integrity: sha512-FHYecxfGOuAhacHcanR6qCN8Cln9S+FFulcYetLu3ddDg55ohuCsMZ9U4Egzwdm+A2o6N+MdSoJKquBC5F9NIg==}
     engines: {node: ^22.13.0 || ^24.3.0 || ^26.0.0 || >=27.0.0}
@@ -5753,6 +5881,11 @@ packages:
     peerDependenciesMeta:
       react-native-web:
         optional: true
+
+  expo-updates-interface@58.0.1:
+    resolution: {integrity: sha512-OF+3BtMXtUsXWDfpHVNus9yHpx7WjMwjxDfeeN9LQBYSq/UtYmNNHBSfzChYTuqljWFSOAHRfsDykV9EB73Wlg==}
+    peerDependencies:
+      expo: '*'
 
   expo@58.0.9:
     resolution: {integrity: sha512-yx4x7j8qW4yldIRBtL+XxZFp4zvpO4KPbzIwURLFWbgmFpAT/0UbDM2uoHVuyk7ZdQqzeUIctzaJCyyKi/TW5Q==}
@@ -5793,6 +5926,9 @@ packages:
 
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
+
+  fast-base64-decode@1.0.0:
+    resolution: {integrity: sha512-qwaScUgUGBYeDNRnbc/KyllVU88Jk1pRHPStuF/lO7B0/RTRLj7U0lkdTAutlBblY08rwZDff6tNU9cjv6j//Q==}
 
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
@@ -7591,6 +7727,11 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  react-native-get-random-values@2.0.0:
+    resolution: {integrity: sha512-wx7/aPqsUIiWsG35D+MsUJd8ij96e3JKddklSdrdZUrheTx89gPtz3Q2yl9knBArj5u26Cl23T88ai+Q0vypdQ==}
+    peerDependencies:
+      react-native: '>=0.81'
 
   react-native-is-edge-to-edge@1.3.1:
     resolution: {integrity: sha512-NIXU/iT5+ORyCc7p0z2nnlkouYKX425vuU1OEm6bMMtWWR9yvb+Xg5AZmImTKoF9abxCPqrKC3rOZsKzUYgYZA==}
@@ -10674,6 +10815,12 @@ snapshots:
 
   '@expo/sudo-prompt@9.3.2': {}
 
+  '@expo/vector-icons@15.1.1(expo-font@58.0.8(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      expo-font: 58.0.8(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      react: 19.3.0
+      react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+
   '@expo/ws-tunnel@2.0.1(ws@8.22.0)':
     dependencies:
       ws: 8.22.0
@@ -10997,6 +11144,11 @@ snapshots:
 
   '@noxcturnal/noxcturnal-win32-x64-msvc@0.1.1':
     optional: true
+
+  '@op-engineering/op-sqlite@18.2.5(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
+      react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
 
   '@openrouter/ai-sdk-provider@2.10.0(ai@6.0.300(zod@4.6.5))(zod@4.6.5)':
     dependencies:
@@ -11822,6 +11974,14 @@ snapshots:
       prompts: 2.4.2
       tinyexec: 1.3.1
 
+  '@react-native-community/datetimepicker@9.2.1(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      invariant: 2.2.4
+      react: 19.3.0
+      react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+    optionalDependencies:
+      expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+
   '@react-native-masked-view/masked-view@0.3.2(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)':
     dependencies:
       react: 19.3.0
@@ -12225,20 +12385,20 @@ snapshots:
 
   '@speed-highlight/core@1.2.16': {}
 
-  '@sqlite-sync/ai@0.12.3(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5))(@sqlite-sync/core@0.12.3(kysely@0.28.17))(ai@6.0.300(zod@4.6.5))(zod@4.6.5)':
+  '@sqlite-sync/ai@0.13.1(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5))(@sqlite-sync/core@0.13.1(kysely@0.28.17))(ai@6.0.300(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@sqlite-sync/core': 0.12.3(kysely@0.28.17)
+      '@sqlite-sync/core': 0.13.1(kysely@0.28.17)
       ai: 6.0.300(zod@4.6.5)
       zod: 4.6.5
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5)
 
-  '@sqlite-sync/cloudflare@0.12.3(@sqlite-sync/core@0.12.3(kysely@0.28.17))(kysely@0.28.17)':
+  '@sqlite-sync/cloudflare@0.13.1(@sqlite-sync/core@0.13.1(kysely@0.28.17))(kysely@0.28.17)':
     dependencies:
-      '@sqlite-sync/core': 0.12.3(kysely@0.28.17)
+      '@sqlite-sync/core': 0.13.1(kysely@0.28.17)
       kysely: 0.28.17
 
-  '@sqlite-sync/core@0.12.3(kysely@0.28.17)':
+  '@sqlite-sync/core@0.13.1(kysely@0.28.17)':
     dependencies:
       '@sqlite.org/sqlite-wasm': 3.53.0-build1
       idb-keyval: 6.3.0
@@ -12246,15 +12406,23 @@ snapshots:
       xxhash-wasm: 1.1.0
       zod: 4.6.5
 
-  '@sqlite-sync/devtools@0.12.3(@sqlite-sync/core@0.12.3(kysely@0.28.17))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@sqlite-sync/devtools@0.13.1(@sqlite-sync/core@0.13.1(kysely@0.28.17))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@sqlite-sync/core': 0.12.3(kysely@0.28.17)
+      '@sqlite-sync/core': 0.13.1(kysely@0.28.17)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
 
-  '@sqlite-sync/react@0.12.3(@sqlite-sync/core@0.12.3(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)':
+  '@sqlite-sync/react-native@0.13.1(@op-engineering/op-sqlite@18.2.5(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(@sqlite-sync/core@0.13.1(kysely@0.28.17))(kysely@0.28.17)(react-native-get-random-values@2.0.0(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))':
     dependencies:
-      '@sqlite-sync/core': 0.12.3(kysely@0.28.17)
+      '@op-engineering/op-sqlite': 18.2.5(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      '@sqlite-sync/core': 0.13.1(kysely@0.28.17)
+      kysely: 0.28.17
+      react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+      react-native-get-random-values: 2.0.0(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
+
+  '@sqlite-sync/react@0.13.1(@sqlite-sync/core@0.13.1(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)':
+    dependencies:
+      '@sqlite-sync/core': 0.13.1(kysely@0.28.17)
       kysely: 0.28.17
       react: 19.3.0
 
@@ -14070,6 +14238,35 @@ snapshots:
       - supports-color
       - typescript
 
+  expo-dev-client@58.0.13(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)):
+    dependencies:
+      expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+      expo-dev-launcher: 58.0.13(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
+      expo-dev-menu: 58.0.11(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
+      expo-dev-menu-interface: 58.0.1(expo@58.0.9)
+      expo-manifests: 58.0.1(expo@58.0.9)
+      expo-updates-interface: 58.0.1(expo@58.0.9)
+    transitivePeerDependencies:
+      - react-native
+
+  expo-dev-launcher@58.0.13(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)):
+    dependencies:
+      '@expo/schema-utils': 58.0.1
+      expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+      expo-dev-menu: 58.0.11(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
+      expo-manifests: 58.0.1(expo@58.0.9)
+      react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+
+  expo-dev-menu-interface@58.0.1(expo@58.0.9):
+    dependencies:
+      expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+
+  expo-dev-menu@58.0.11(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)):
+    dependencies:
+      expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+      expo-dev-menu-interface: 58.0.1(expo@58.0.9)
+      react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+
   expo-file-system@58.0.9(expo@58.0.9)(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)):
     dependencies:
       expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
@@ -14087,6 +14284,8 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
 
+  expo-json-utils@58.0.1: {}
+
   expo-keep-awake@58.0.3(expo@58.0.9)(react@19.3.0):
     dependencies:
       expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
@@ -14102,6 +14301,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-manifests@58.0.1(expo@58.0.9):
+    dependencies:
+      expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+      expo-json-utils: 58.0.1
 
   expo-modules-autolinking@58.0.12(typescript@7.0.2):
     dependencies:
@@ -14168,6 +14372,10 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
 
+  expo-secure-store@58.0.2(expo@58.0.9):
+    dependencies:
+      expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
+
   expo-server@58.0.5: {}
 
   expo-splash-screen@58.0.8(expo@58.0.9)(typescript@7.0.2):
@@ -14194,6 +14402,10 @@ snapshots:
       react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
     transitivePeerDependencies:
       - supports-color
+
+  expo-updates-interface@58.0.1(expo@58.0.9):
+    dependencies:
+      expo: 58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2)
 
   expo@58.0.9(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.14)(expo-router@58.0.18)(react-dom@19.3.0(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@7.0.2):
     dependencies:
@@ -14281,6 +14493,8 @@ snapshots:
       - supports-color
 
   extend@3.0.2: {}
+
+  fast-base64-decode@1.0.0: {}
 
   fast-deep-equal@3.1.3: {}
 
@@ -16482,6 +16696,11 @@ snapshots:
       '@types/react-test-renderer': 19.3.0
       invariant: 2.2.4
       react: 19.3.0
+      react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
+
+  react-native-get-random-values@2.0.0(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)):
+    dependencies:
+      fast-base64-decode: 1.0.0
       react-native: 0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
 
   react-native-is-edge-to-edge@1.3.1(react-native@0.88.0-rc.4(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):

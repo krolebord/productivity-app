@@ -1,4 +1,4 @@
-import { createMigrator, createStoredValue, SQLiteReactiveDb } from "@sqlite-sync/core";
+import { createMigrator, createSQLiteReactiveDb, createStoredValue, type SQLiteReactiveDb } from "@sqlite-sync/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APP_CURRENCIES, type AppCurrencyCode } from "../currency/currencies";
 import { syncDbSchema, type TransactionEntryItem } from "../user-db/migrations";
@@ -70,7 +70,7 @@ beforeEach(async () => {
   now = new Date(2026, 8, 19, 12).getTime();
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(now);
-  reactiveDb = await SQLiteReactiveDb.create({ snapshot: new Uint8Array(), logger: () => {} });
+  reactiveDb = await createSQLiteReactiveDb({ snapshot: new Uint8Array(), logger: () => {} });
   createMigrator({
     migrations: syncDbSchema.migrations,
     schemaVersion: createStoredValue({ initialValue: -1 }),

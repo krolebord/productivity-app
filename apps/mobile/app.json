@@ -21,12 +21,21 @@
     "plugins": [
       "expo-router",
       [
+        "expo-dev-client",
+        {
+          "launchMode": "most-recent",
+          "defaultLaunchURL": "http://agent-ui-vps.tailc07dd9.ts.net:3303"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
           "imageWidth": 160,
           "backgroundColor": "#ffffff",
-          "dark": { "backgroundColor": "#171717" }
+          "dark": {
+            "backgroundColor": "#171717"
+          }
         }
       ]
     ]

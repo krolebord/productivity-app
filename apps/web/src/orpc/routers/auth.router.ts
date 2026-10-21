@@ -1,11 +1,20 @@
-import { randomInt } from "node:crypto";
+import { implement } from "@orpc/server";
+import { apiContract } from "@productivity/core/api/contract";
 import * as arctic from "arctic";
 import * as z from "zod";
 import { isAssistantAllowed } from "@/lib/assistant-access";
 import { getContext } from "@/lib/context";
 import { db } from "@/lib/db";
-import { emailService } from "@/lib/emails/emails";
-import { authCookieSession, createCookieSession, createSession, deleteSession } from "../common/auth";
+import { consumeSignInCode, sendSignInCode } from "@/lib/sign-in-code";
+import {
+  authCookieSession,
+  authMiddleware,
+  createCookieSession,
+  createSession,
+  createSessionToken,
+  deleteSession,
+} from "../common/auth";
+import { loggingMiddleware } from "../common/logging";
 import type { ORPCContext } from "../common/os";
 import { procedure, protectedProcedure } from "../common/procedure";
 
@@ -35,32 +44,7 @@ export const signUpWithMagicLink = procedure
     }),
   )
   .handler(async ({ input }) => {
-    await db.deleteFrom("verification").where("target", "=", input.email).execute();
-
-    const otp = randomInt(100000, 999999).toString();
-
-    const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
-    const createdAt = new Date().toISOString();
-
-    await db
-      .insertInto("verification")
-      .values({
-        target: input.email,
-        value: otp,
-        expiresAt,
-        createdAt,
-      })
-      .execute();
-
-    const context = getContext();
-    const magicLink = `${context.VITE_APP_URL}/magic-link-verify?email=${encodeURIComponent(input.email)}&code=${otp}`;
-
-    await emailService.sendMagicLinkEmail({
-      to: input.email,
-      link: magicLink,
-      code: otp,
-    });
-
+    await sendSignInCode(input.email);
     return { success: true };
   });
 
@@ -72,28 +56,15 @@ export const verifyMagicLink = procedure
     }),
   )
   .handler(async ({ input, context }) => {
-    const verification = await db
-      .selectFrom("verification")
-      .where("target", "=", input.email)
-      .where("value", "=", input.code)
-      .selectAll()
-      .executeTakeFirst();
-
-    if (!verification) {
-      return { success: false, error: "Invalid verification code" };
+    const result = await consumeSignInCode(input.email, input.code);
+    if (!result.success) {
+      return result;
     }
-
-    if (new Date(verification.expiresAt) < new Date()) {
-      await db.deleteFrom("verification").where("target", "=", input.email).where("value", "=", input.code).execute();
-      return { success: false, error: "Verification code has expired" };
-    }
-
-    await db.deleteFrom("verification").where("target", "=", input.email).where("value", "=", input.code).execute();
 
     const user = await findOrCreateUser({ email: input.email });
     await createSession(context, user);
 
-    return { success: true, userId: user.id };
+    return { success: true as const, userId: user.id };
   });
 
 export const getAuth = protectedProcedure.handler(async ({ context }) => {
@@ -195,10 +166,39 @@ export const handleGoogleCallback = async (context: ORPCContext, data: { code: s
   return { success: true, userId: user.id };
 };
 
+const api = implement(apiContract).$context<ORPCContext>().use(loggingMiddleware);
+const mobileAuth = api.auth.mobile;
+
+const mobileAuthRouter = {
+  requestCode: mobileAuth.requestCode.handler(async ({ input }) => {
+    await sendSignInCode(input.email);
+    return { success: true as const };
+  }),
+  verifyCode: mobileAuth.verifyCode.handler(async ({ input }) => {
+    const result = await consumeSignInCode(input.email, input.code);
+    if (!result.success) {
+      return result;
+    }
+
+    const user = await findOrCreateUser({ email: input.email });
+    const token = await createSessionToken(user);
+    return { success: true as const, token, user: { userId: user.id, userName: user.name, userEmail: user.email } };
+  }),
+  getSession: mobileAuth.getSession.use(authMiddleware).handler(async ({ context }) => {
+    const { userId, userName, userEmail } = context.auth;
+    return { userId, userName, userEmail };
+  }),
+  signOut: mobileAuth.signOut.use(authMiddleware).handler(async ({ context }) => {
+    await deleteSession(context.auth.sessionId);
+    return { success: true as const };
+  }),
+};
+
 export const authRouter = {
   signUpWithMagicLink,
   verifyMagicLink,
   getAuth,
   signOut,
   initiateGoogleSignIn,
+  mobile: mobileAuthRouter,
 };

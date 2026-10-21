@@ -33,10 +33,12 @@ apps/web/                  # @productivity/web — the deployed Worker + SPA
 apps/mobile/               # @productivity/mobile — Expo (SDK 58) + Expo Router + Uniwind
   src/app/                 # File-based routes (Expo Router)
   src/global.css           # Uniwind entry: Tailwind v4 + light/dark tokens mirrored from apps/web styles.css
+  src/lib/                 # API client (oRPC over the shared contract) and session storage
   app.json                 # Expo config (scheme, bundle ids, icons, splash)
 packages/core/             # @productivity/core — platform-agnostic code shared by web and mobile
   src/user-db/             # Synced DB schema/migrations + typed DB hooks (db-context.ts)
   src/data/                # Query hooks and mutations per domain, used by the UI
+  src/api/                 # oRPC contract for procedures shared with mobile
   src/agent/               # Assistant model catalog and shared specs
   src/*                    # Domain logic: agenda, transactions, finance, currency, tags, time zones…
 ```
@@ -47,8 +49,27 @@ it from the web app as `@productivity/core/<path>`; inside core, use relative im
 UI components read and write the user DB through `@productivity/core/data/*` rather than
 writing Kysely queries inline.
 
-The mobile app can't open the synced DB yet: sqlite-sync has no React Native package, and
-mobile has no auth flow. Until then it only uses core's pure modules. Notes for mobile:
+The mobile app opens the same synced user DB through `@sqlite-sync/react-native` (op-sqlite)
+in `apps/mobile/src/lib/user-db.tsx` and uses core's `data/*` hooks like the web does; it has
+no charts or markdown rendering yet (notes are edited as plain text). Notes for mobile:
+
+- op-sqlite is a native module, so Expo Go can't run the app: it needs a development
+  build (`expo-dev-client`). Build one with EAS from `apps/mobile`
+  (`eas build --profile development --platform android`, profiles in `eas.json`) and install
+  the APK. It opens `defaultLaunchURL` from `app.json` — the Metro served by the
+  `Mobile dev client (Tailnet)` preset, which points the app at `Dev server (Tailnet)`. The
+  bytecode-vtab SQLite flag sqlite-sync requires is set under `op-sqlite` in
+  `apps/mobile/package.json`; changing it (or any native dependency) needs a new build.
+- The sync WebSocket authenticates with the same `Authorization: Bearer` session token.
+- `metro.config.js` stubs kysely's Node-only `FileMigrationProvider`, whose dynamic
+  `import()` Hermes can't compile.
+- Mobile signs in with the emailed 6-digit code (`auth.mobile.*` procedures) and gets the
+  session back as a token it sends as `Authorization: Bearer`; `getAuthFromHeaders`
+  accepts that or the web cookie. The procedures mobile calls are declared as an oRPC
+  contract in `packages/core/src/api/contract.ts` and implemented with `implement()` in
+  apps/web — add new mobile-facing procedures there so both sides stay typed.
+- Set `EXPO_PUBLIC_API_URL` (see `apps/mobile/.env.example`) to point the app at a dev
+  server the phone can reach; it defaults to production.
 
 - React and React Native must resolve to exactly one version across the workspace, or
   Metro/Vite bundle two Reacts. `react`/`react-dom` are pinned in the pnpm catalog to the
