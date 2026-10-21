@@ -243,13 +243,13 @@ function AccountRowView({
         <Text numberOfLines={1} className="font-medium text-base text-foreground">
           {account.labelText || "Untitled"}
         </Text>
-        {(account.description || account.excludeFromDashboard) && (
+        {account.description || account.excludeFromDashboard ? (
           <Text numberOfLines={1} className="text-muted-foreground text-xs">
             {[account.excludeFromDashboard ? "Hidden from totals" : "", account.description]
               .filter(Boolean)
               .join(" · ")}
           </Text>
-        )}
+        ) : null}
       </View>
       <View className="items-end">
         <Text className="font-medium text-base text-foreground">

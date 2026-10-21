@@ -63,7 +63,7 @@ export function FormSwitch({
 }) {
   return (
     <FormRow label={label} last={last}>
-      <Switch value={value} onValueChange={onValueChange} />
+      <Switch value={value} onValueChange={onValueChange} trackColorOnClassName="accent-primary" />
     </FormRow>
   );
 }

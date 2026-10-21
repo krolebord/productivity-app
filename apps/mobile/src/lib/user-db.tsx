@@ -68,6 +68,7 @@ export function UserDbProvider({
       },
       (error: unknown) => {
         if (cancelled) return;
+        console.error("Failed to open the user database", error);
         setState({ status: "error", error: error instanceof Error ? error : new Error(String(error)) });
       },
     );

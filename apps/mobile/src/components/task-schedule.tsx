@@ -49,7 +49,7 @@ export function TaskScheduleSection({
             }
             last={!hasDueTime}
           />
-          {hasDueTime && (
+          {hasDueTime ? (
             <FormRow label="At" last>
               <DateTimeField
                 mode="time"
@@ -57,7 +57,7 @@ export function TaskScheduleSection({
                 onChange={(value) => commit(combineLocalDateAndTime(selected, format(value, "HH:mm")), true)}
               />
             </FormRow>
-          )}
+          ) : null}
         </>
       )}
     </FormSection>

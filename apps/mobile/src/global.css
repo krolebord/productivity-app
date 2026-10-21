@@ -23,6 +23,7 @@
       --color-border: oklch(0.9276 0.0058 264.5313);
       --color-input: oklch(0.9276 0.0058 264.5313);
       --color-ring: oklch(0.6056 0.2189 292.7172);
+      --color-ripple: oklch(0.6056 0.2189 292.7172 / 0.12);
     }
 
     @variant dark {
@@ -45,6 +46,7 @@
       --color-border: oklch(0.3715 0 0);
       --color-input: oklch(0.3715 0 0);
       --color-ring: oklch(0.6056 0.2189 292.7172);
+      --color-ripple: oklch(0.6056 0.2189 292.7172 / 0.2);
     }
   }
 }
