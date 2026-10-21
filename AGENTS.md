@@ -60,6 +60,10 @@ no charts or markdown rendering yet (notes are edited as plain text). Notes for 
   `Mobile dev client (Tailnet)` preset, which points the app at `Dev server (Tailnet)`. The
   bytecode-vtab SQLite flag sqlite-sync requires is set under `op-sqlite` in
   `apps/mobile/package.json`; changing it (or any native dependency) needs a new build.
+- `app.config.ts` turns `APP_VARIANT=development` (set by the `development` EAS profile and
+  the dev-client preset) into a separate app: "Productivity (dev)",
+  `com.krolebord.productivity.dev`, scheme `productivity-dev`, installable next to prod
+  (`com.krolebord.productivity.prod`).
 - The sync WebSocket authenticates with the same `Authorization: Bearer` session token.
 - `metro.config.js` stubs kysely's Node-only `FileMigrationProvider`, whose dynamic
   `import()` Hermes can't compile.

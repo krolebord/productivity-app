@@ -8,11 +8,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.krolebord.productivity",
       "supportsTablet": true
     },
     "android": {
-      "package": "com.krolebord.productivity",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#171717"
@@ -38,6 +36,17 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "4481f5e3-4b42-43b5-81ae-858b60600034"
+      }
+    },
+    "owner": "krolebord"
   }
 }
