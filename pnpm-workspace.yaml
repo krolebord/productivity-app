@@ -3,9 +3,9 @@ packages:
   - packages/*
 
 catalog:
-  "@sqlite-sync/core": ^0.13.2
-  "@sqlite-sync/react": ^0.13.2
-  "@sqlite-sync/react-native": ^0.13.2
+  "@sqlite-sync/core": ^0.13.3
+  "@sqlite-sync/react": ^0.13.3
+  "@sqlite-sync/react-native": ^0.13.3
   "@tanstack/react-form": ^1.33.5
   date-fns: ^4.4.0
   kysely: ^0.28.10
