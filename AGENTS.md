@@ -58,8 +58,10 @@ no charts or markdown rendering yet (notes are edited as plain text). Notes for 
   (`eas build --profile development --platform android`, profiles in `eas.json`) and install
   the APK. It opens `defaultLaunchURL` from `app.json` — the Metro served by the
   `Mobile dev client (Tailnet)` preset, which points the app at `Dev server (Tailnet)`. The
-  bytecode-vtab SQLite flag sqlite-sync requires is set under `op-sqlite` in
-  `apps/mobile/package.json`; changing it (or any native dependency) needs a new build.
+  bytecode-vtab SQLite flag sqlite-sync requires is set under `op-sqlite` in both
+  `apps/mobile/package.json` (read by Android's Gradle) and the root `package.json` (read by
+  the iOS podspec, which walks up from pnpm's real path in `node_modules/.pnpm`); keep them in
+  sync. Changing it (or any native dependency) needs `pod install` and a new build.
 - `app.config.ts` turns `APP_VARIANT=development` (set by the `development` EAS profile and
   the dev-client preset) into a separate app: "Productivity (dev)",
   `com.krolebord.productivity.dev`, scheme `productivity-dev`, installable next to prod
@@ -107,15 +109,19 @@ pnpm run deploy           # Build + wrangler deploy
 
 pnpm db:local:migrate     # Apply D1 migrations locally
 pnpm db:new-migration     # Create a new D1 migration
+pnpm e2e:code             # Print latest sign-in codes from the local D1
 pnpm generate:types:env   # Regenerate worker-configuration.d.ts (wrangler types)
 pnpm sync:models          # Regenerate packages/core/src/agent/models.gen.ts from OpenRouter
 ```
 
-Two env vars tune the dev server (read from `apps/web/.env` or the shell): `DEV_PORT` overrides
+Three env vars tune the dev server (read from `apps/web/.env` or the shell): `DEV_PORT` overrides
 the 3301 default, and `DEV_ALLOWED_HOSTS` is a comma-separated host allowlist for
 reaching it through a proxy. The `Dev server (Tailnet)` preset in
 `.agent-ui/settings.jsonc` uses both to publish dev over Tailscale — HMR needs no extra
-port because Vite reconnects to whatever origin served the page.
+port because Vite reconnects to whatever origin served the page. `DEV_REMOTE_BINDINGS=0`
+keeps the email binding local (Miniflare) instead of using the remote one, which needs `wrangler login`.
+
+For mobile e2e on the iOS simulator, use the `e2e-mobile` skill (`.agents/skills/e2e-mobile`).
 
 Note: the central D1 database uses SQL migrations in `apps/web/migrations/`; the per-user synced database defines its schema/migrations in code at `packages/core/src/user-db/migrations.ts`.
 

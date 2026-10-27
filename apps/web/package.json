@@ -11,6 +11,7 @@
     "db:local:migrate": "wrangler d1 migrations apply productivity-db --local",
     "db:remote:migrate": "wrangler d1 migrations apply productivity-db --remote",
     "db:new-migration": "echo 'Enter migration name: ' && read MIGRATION_NAME && wrangler d1 migrations create productivity-db $MIGRATION_NAME",
+    "e2e:code": "wrangler d1 execute productivity-db --local --command \"SELECT target, value, createdAt FROM verification ORDER BY createdAt DESC LIMIT 5\"",
     "generate:types:env": "wrangler types",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

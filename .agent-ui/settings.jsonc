@@ -30,6 +30,14 @@
       // The app talks to the "Dev server (Tailnet)" preset, so start that one too.
       "run": "APP_VARIANT=development REACT_NATIVE_PACKAGER_HOSTNAME=agent-ui-vps.tailc07dd9.ts.net EXPO_PUBLIC_API_URL=https://agent-ui-vps.tailc07dd9.ts.net:3301 pnpm dev:mobile -- --dev-client --lan --port 3303",
       "singleton": true
+    },
+    {
+      "id": "mobile-ios-simulator",
+      "name": "Mobile iOS simulator",
+      // Local Xcode build of the dev variant, launched on the iPhone 17 simulator with
+      // Metro. Run `pnpm prebuild:ios:dev` in apps/mobile first after app config changes.
+      "run": "pnpm --filter @productivity/mobile run ios:dev",
+      "singleton": true
     }
   ]
 }

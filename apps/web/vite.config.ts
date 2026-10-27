@@ -13,7 +13,8 @@ const config = defineConfig(({ mode }) => {
   return {
     plugins: [
       devtools(),
-      cloudflare(),
+      // DEV_REMOTE_BINDINGS=0 keeps the email binding local (Miniflare), e.g. for e2e runs.
+      cloudflare({ remoteBindings: env.DEV_REMOTE_BINDINGS !== "0" }),
       tailwindcss(),
       tanstackRouter({
         target: "react",

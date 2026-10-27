@@ -13,6 +13,7 @@
     "db:local:migrate": "pnpm --filter @productivity/web run db:local:migrate",
     "db:remote:migrate": "pnpm --filter @productivity/web run db:remote:migrate",
     "db:new-migration": "pnpm --filter @productivity/web run db:new-migration",
+    "e2e:code": "pnpm --filter @productivity/web run e2e:code",
     "docs:sync:sqlite-sync": "curl -fsSL https://raw.githubusercontent.com/krolebord-dev/sqlite-sync/refs/heads/main/docs.md -o docs/sqlite-sync.md",
     "generate:types:env": "pnpm --filter @productivity/web run generate:types:env",
     "sync:models": "pnpm --filter @productivity/core run sync:models",
@@ -24,6 +25,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15"
+  },
+  "op-sqlite": {
+    "sqliteFlags": "-DSQLITE_ENABLE_BYTECODE_VTAB=1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -4,8 +4,10 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "ios:dev": "APP_VARIANT=development expo run:ios --device \"iPhone 17\"",
+    "prebuild:ios:dev": "APP_VARIANT=development expo prebuild -p ios --clean",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -50,5 +52,6 @@
   },
   "op-sqlite": {
     "sqliteFlags": "-DSQLITE_ENABLE_BYTECODE_VTAB=1"
-  }
+  },
+  "version": "1.0.0"
 }
