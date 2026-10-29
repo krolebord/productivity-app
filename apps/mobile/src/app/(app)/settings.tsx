@@ -14,6 +14,22 @@ export default function SettingsScreen() {
   const { signOut } = useSession();
   const [signingOut, setSigningOut] = useState(false);
 
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    if (await signOut()) return;
+    setSigningOut(false);
+    // Signing out can't wait for a connection the way edits do, so let the user choose. The synced
+    // data stays on the device either way, unsynced changes included, until they sign back in.
+    Alert.alert(
+      "Couldn't reach the server",
+      "Sign out on this device anyway? The session stays valid on the server until it expires.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign out anyway", style: "destructive", onPress: () => void signOut({ localOnly: true }) },
+      ],
+    );
+  };
+
   const confirmReset = () =>
     Alert.alert(
       "Reset local data?",
@@ -40,15 +56,7 @@ export default function SettingsScreen() {
         </FormSection>
 
         <View className="gap-2">
-          <Button
-            label="Sign out"
-            variant="ghost"
-            loading={signingOut}
-            onPress={() => {
-              setSigningOut(true);
-              void signOut();
-            }}
-          />
+          <Button label="Sign out" variant="ghost" loading={signingOut} onPress={() => void handleSignOut()} />
           <Text className="text-center text-muted-foreground text-xs">Your data stays on this device.</Text>
         </View>
       </ScrollView>

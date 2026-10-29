@@ -59,7 +59,8 @@ export default function TodayScreen() {
   );
   const completedRows = useMemo(() => agenda.sections.flatMap((s) => s.rows.filter(isRowDone)), [agenda.sections]);
 
-  const openTask = (id: string) => router.push({ pathname: "/task/[id]", params: { id } });
+  // The viewed day is where "Scheduled" puts an inbox task, like quick-add and the inbox's schedule action.
+  const openTask = (id: string) => router.push({ pathname: "/task/[id]", params: { id, day: agenda.selectedKey } });
 
   return (
     <View className="flex-1 bg-background">

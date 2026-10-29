@@ -80,8 +80,15 @@ export function createAccount(db: UserDbDatabase, fields: AccountFields) {
   return id;
 }
 
-/** Saves the account details; a changed balance is recorded as an adjustment transaction. */
-export function updateAccount(db: UserDbDatabase, account: Pick<AccountItem, "id" | "balance">, fields: AccountFields) {
+/**
+ * Saves the account details; a changed balance is recorded as an adjustment transaction.
+ * `excludeFromDashboard` is left alone when omitted (the web toggles it from the row menu).
+ */
+export function updateAccount(
+  db: UserDbDatabase,
+  account: Pick<AccountItem, "id" | "balance">,
+  fields: AccountFields & { excludeFromDashboard?: boolean },
+) {
   db.executeTransaction((trx) => {
     trx.executeKysely((q) =>
       q
@@ -91,6 +98,7 @@ export function updateAccount(db: UserDbDatabase, account: Pick<AccountItem, "id
           labelColor: fields.labelColor,
           currency: fields.currency,
           description: fields.description,
+          ...(fields.excludeFromDashboard === undefined ? {} : { excludeFromDashboard: fields.excludeFromDashboard }),
         })
         .where("id", "=", account.id),
     );

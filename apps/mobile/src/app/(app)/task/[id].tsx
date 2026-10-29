@@ -1,3 +1,4 @@
+import { parseDateKey } from "@productivity/core/agenda";
 import { deleteItem, type ItemFieldsPatch, updateItem, useItem } from "@productivity/core/data/items";
 import { detachTaskFromCalendar, useTaskTagSuggestions } from "@productivity/core/data/tasks";
 import { localMidnightMs } from "@productivity/core/date-time";
@@ -20,7 +21,7 @@ import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { useAutosave } from "../../../lib/use-autosave";
 
 export default function TaskScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, day } = useLocalSearchParams<{ id: string; day?: string }>();
   const router = useRouter();
   const task = useItem(id);
 
@@ -32,10 +33,10 @@ export default function TaskScreen() {
       </View>
     );
   }
-  return <TaskEditor task={task} />;
+  return <TaskEditor task={task} defaultDay={day ? parseDateKey(day) : undefined} />;
 }
 
-function TaskEditor({ task }: { task: NoteItem }) {
+function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date }) {
   const db = useDb();
   const router = useRouter();
   const tagSuggestions = useTaskTagSuggestions();
@@ -112,7 +113,12 @@ function TaskEditor({ task }: { task: NoteItem }) {
         </View>
       </FormSection>
 
-      <TaskScheduleSection dueAt={fields.dueAt} hasDueTime={fields.hasDueTime} onChange={update} />
+      <TaskScheduleSection
+        dueAt={fields.dueAt}
+        hasDueTime={fields.hasDueTime}
+        defaultDay={defaultDay}
+        onChange={update}
+      />
 
       {isCalendarBackedTask(task) && (
         <View className="flex-row items-start gap-2 px-1">

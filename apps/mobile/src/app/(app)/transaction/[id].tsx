@@ -4,6 +4,7 @@ import {
   useRecentTransactionCategories,
   useTransaction,
 } from "@productivity/core/data/transactions";
+import { IMPORTANCE_LABELS } from "@productivity/core/finance/appearance";
 import {
   createTransaction,
   deleteTransaction,
@@ -28,13 +29,13 @@ import { Input } from "../../../components/ui/input";
 import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { Segmented } from "../../../components/ui/segmented";
 import { SelectField } from "../../../components/ui/select-sheet";
-import { IMPORTANCE_LABELS, parseAmountInput, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
+import { parseAmountInput, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
 
 const DEFAULT_IMPORTANCE: ImportanceTier = "flexible";
 
 const TYPE_OPTIONS = TRANSACTION_TYPES.map((type) => ({
   value: type,
-  label: type === "adjustment" ? "Adjust" : TRANSACTION_TYPE_STYLE[type].label,
+  label: TRANSACTION_TYPE_STYLE[type].shortLabel,
 }));
 const IMPORTANCE_OPTIONS = IMPORTANCE_TIERS.map((tier) => ({ value: tier, label: IMPORTANCE_LABELS[tier] }));
 
@@ -96,8 +97,9 @@ function initialState(existing: TransactionRow | undefined, defaultAccountId: st
   } satisfies FormState;
 }
 
-function validate(form: FormState, needsCounterpartyAmount: boolean): string | null {
+function validate(form: FormState, needsCounterpartyAmount: boolean, accountCount: number): string | null {
   const amount = parseAmountInput(form.amount);
+  if (form.type === "transfer" && accountCount < 2) return "Create at least two accounts before recording a transfer.";
   if (!form.accountId) return "Pick an account.";
   if (form.type === "adjustment") {
     if (!Number.isFinite(amount) || amount === 0) return "Enter a non-zero amount.";
@@ -153,7 +155,8 @@ function TransactionForm({
   const categories = useRecentTransactionCategories();
   const importanceRows = useCategoryImportanceCounts();
   const otherAccountId = accounts.find((account) => account.id !== defaultAccountId)?.id ?? "";
-  const [form, setForm] = useState<FormState>(() => initialState(existing, defaultAccountId, otherAccountId));
+  const [initial] = useState<FormState>(() => initialState(existing, defaultAccountId, otherAccountId));
+  const [form, setForm] = useState<FormState>(initial);
   const [importanceTouched, setImportanceTouched] = useState(existing != null);
   const [error, setError] = useState<string | null>(null);
 
@@ -178,6 +181,10 @@ function TransactionForm({
   const needsCounterpartyAmount =
     form.type === "transfer" && source != null && destination != null && source.currency !== destination.currency;
 
+  // As on the web, an untouched edit can't be saved, so it doesn't rewrite the row (and its sync timestamp).
+  const unchanged = existing != null && isSameForm(form, initial);
+  const canTransfer = accounts.length >= 2;
+
   const update = (patch: Partial<FormState>) => {
     setError(null);
     setForm((current) => ({ ...current, ...patch }));
@@ -193,7 +200,8 @@ function TransactionForm({
   };
 
   const save = () => {
-    const message = validate(form, needsCounterpartyAmount);
+    if (unchanged) return;
+    const message = validate(form, needsCounterpartyAmount, accounts.length);
     if (message) {
       setError(message);
       return;
@@ -233,6 +241,7 @@ function TransactionForm({
           onCancel={() => router.back()}
           onDone={save}
           doneLabel="Save"
+          doneDisabled={unchanged || (form.type === "transfer" && !canTransfer)}
         />
       }
     >
@@ -257,15 +266,21 @@ function TransactionForm({
         )}
       </View>
 
+      {form.type === "transfer" && !canTransfer && (
+        <Text className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          Transfers require at least two accounts.
+        </Text>
+      )}
+
       <FormSection>
         <SelectField
-          label={form.type === "transfer" ? "From" : "Account"}
+          label={form.type === "transfer" && canTransfer ? "From" : "Account"}
           value={form.accountId}
           options={accountOptions}
           onChange={(accountId) => update({ accountId })}
-          last={form.type !== "transfer"}
+          last={form.type !== "transfer" || !canTransfer}
         />
-        {form.type === "transfer" && (
+        {form.type === "transfer" && canTransfer && (
           <SelectField
             label="To"
             value={form.counterpartyAccountId}
@@ -305,6 +320,7 @@ function TransactionForm({
             onChange={changeCategory}
             placeholder="None"
             allowCustom
+            clearLabel="No category"
           />
         )}
         <FormRow label="Date">
@@ -352,6 +368,12 @@ function TransactionForm({
         </View>
       )}
     </KeyboardScreen>
+  );
+}
+
+function isSameForm(a: FormState, b: FormState) {
+  return (Object.keys(a) as (keyof FormState)[]).every((key) =>
+    key === "effectiveAt" ? a.effectiveAt.getTime() === b.effectiveAt.getTime() : a[key] === b[key],
   );
 }
 

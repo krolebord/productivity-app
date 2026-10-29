@@ -1,8 +1,9 @@
 import { formatBalance } from "@productivity/core/currency/format";
 import { formatDateTimeDisplay } from "@productivity/core/date-time";
+import { resolveTransactionType, transactionTitle } from "@productivity/core/finance/appearance";
 import { getDisplayAmountForAccount, type TransactionRow as TransactionRecord } from "@productivity/core/transactions";
 import { Pressable, Text, View } from "react-native";
-import { amountAccentClass, resolveTransactionType, TRANSACTION_TYPE_STYLE, transactionTitle } from "../lib/finance";
+import { TRANSACTION_TYPE_STYLE } from "../lib/finance";
 import { Icon } from "./ui/icon";
 
 export function TransactionRow({
@@ -48,11 +49,8 @@ export function TransactionRow({
           {subtitle}
         </Text>
       </View>
-      <Text
-        className={`font-medium text-base ${type === "transfer" ? "text-foreground" : amountAccentClass(display.amount)}`}
-      >
-        {formatBalance(display.amount, display.currency)}
-      </Text>
+      {/* Tinted by type like the web, so a transfer stays blue and a negative adjustment amber. */}
+      <Text className={`font-medium text-base ${style.accent}`}>{formatBalance(display.amount, display.currency)}</Text>
     </Pressable>
   );
 }

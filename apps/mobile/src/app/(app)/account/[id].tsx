@@ -2,7 +2,6 @@ import { APP_CURRENCIES, type AppCurrencyCode } from "@productivity/core/currenc
 import {
   createAccount,
   deleteAccount,
-  setAccountExcludedFromDashboard,
   updateAccount,
   useAccount,
   useAccountHasTransactions,
@@ -65,7 +64,9 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
     balance: account ? String(account.balance) : "0",
     labelColor: account?.labelColor ?? LABEL_COLORS[0],
     description: account?.description ?? "",
+    includeInTotals: !account?.excludeFromDashboard,
   });
+  const [opened] = useState(form);
   const [error, setError] = useState<string | null>(null);
   const update = (patch: Partial<typeof form>) => {
     setError(null);
@@ -80,11 +81,16 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
     const fields = {
       labelText: form.labelText.trim(),
       currency: form.currency,
-      balance,
+      // An untouched field keeps the live balance, so transactions that landed while the editor
+      // was open (or synced in) aren't undone by an adjustment back to the stale value.
+      balance: account && form.balance === opened.balance ? Number(account.balance) : balance,
       labelColor: form.labelColor,
       description: form.description.trim(),
     };
-    if (account) updateAccount(db.db, account, fields);
+    // Same for the switch: an untouched one doesn't overwrite a visibility change synced in meanwhile.
+    const visibility =
+      form.includeInTotals === opened.includeInTotals ? {} : { excludeFromDashboard: !form.includeInTotals };
+    if (account) updateAccount(db.db, account, { ...fields, ...visibility });
     else createAccount(db.db, fields);
     router.back();
   };
@@ -183,12 +189,14 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
         <FormSection footer="Hidden accounts are left out of net worth and the period totals.">
           <FormSwitch
             label="Include in totals"
-            value={!account.excludeFromDashboard}
-            onValueChange={(included) => setAccountExcludedFromDashboard(db.db, account.id, !included)}
+            value={form.includeInTotals}
+            onValueChange={(includeInTotals) => update({ includeInTotals })}
           />
           <FormRow
             label="View transactions"
-            onPress={() => router.push({ pathname: "/transactions", params: { accountId: account.id } })}
+            onPress={() =>
+              router.push({ pathname: "/transactions", params: { accountId: account.id, presentation: "sheet" } })
+            }
             last
           />
         </FormSection>

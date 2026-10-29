@@ -3,7 +3,7 @@ import { type TransactionFilters, useTransactionCount, useTransactionPage } from
 import type { TransactionType } from "@productivity/core/transactions";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { FlatList, Text, View } from "react-native";
+import { FlatList, Platform, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TransactionRow } from "../../components/transaction-row";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -19,12 +19,15 @@ const TYPE_FILTERS: readonly { value: TransactionType | "all"; label: string }[]
   { value: "expense", label: "Expense" },
   { value: "income", label: "Income" },
   { value: "transfer", label: "Transfer" },
+  { value: "adjustment", label: "Adjust" },
 ];
 
 export default function TransactionsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { accountId } = useLocalSearchParams<{ accountId?: string }>();
+  const { accountId, presentation } = useLocalSearchParams<{ accountId?: string; presentation?: "sheet" }>();
+  // Pushed from the account sheet, iOS shows this inside that sheet, below the status bar.
+  const paddingTop = presentation === "sheet" && Platform.OS === "ios" ? 12 : insets.top + 4;
   const [query, setQuery] = useState("");
   const [type, setType] = useState<TransactionType | "all">("all");
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -42,7 +45,7 @@ export default function TransactionsScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <View className="gap-3 px-4 pb-3" style={{ paddingTop: insets.top + 4 }}>
+      <View className="gap-3 px-4 pb-3" style={{ paddingTop }}>
         <View className="flex-row items-center gap-1">
           <IconButton icon="chevron-left" label="Back" onPress={() => router.back()} size={24} />
           <View className="flex-1">

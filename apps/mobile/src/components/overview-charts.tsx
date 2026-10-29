@@ -1,5 +1,6 @@
 import { formatBalance, formatCompactNumber } from "@productivity/core/currency/format";
 import { useNetWorthSeries } from "@productivity/core/data/finance";
+import { FLOW_COLOR, IMPORTANCE_CHART_COLOR, IMPORTANCE_LABELS } from "@productivity/core/finance/appearance";
 import type { CashFlowPoint, DailySpendingPoint, TrendBucket } from "@productivity/core/finance/overview";
 import { IMPORTANCE_TIERS } from "@productivity/core/transactions";
 import { type ReactNode, useEffect, useState } from "react";
@@ -18,7 +19,6 @@ import {
   StackedBar,
   useChartPressState,
 } from "victory-native";
-import { FLOW_COLOR, IMPORTANCE_CHART_COLOR, IMPORTANCE_LABELS } from "../lib/finance";
 
 export type OverviewChart = "flow" | "networth" | "spending";
 
@@ -51,16 +51,30 @@ function useChartTheme() {
   };
 }
 
-/** Mirrors the chart's press state into React so the details panel can render the touched point. */
-function usePressedIndex(state: { isActive: SharedValue<boolean>; matchedIndex: SharedValue<number> }) {
+/**
+ * Mirrors the chart's press state into React so the details panel can render the touched point.
+ * The last touched point stays selected after the finger lifts (a phone has no hover to fall
+ * back on) until the buckets change, e.g. a new range. The series are rebuilt on every render,
+ * so the buckets are compared by label rather than identity.
+ */
+function useSelectedIndex(
+  state: { isActive: SharedValue<boolean>; matchedIndex: SharedValue<number> },
+  data: readonly { label: string }[],
+) {
   const [index, setIndex] = useState<number | null>(null);
+  const bucketKey = data.map((point) => point.label).join("|");
+  const [selectedKey, setSelectedKey] = useState(bucketKey);
+  if (selectedKey !== bucketKey) {
+    setSelectedKey(bucketKey);
+    setIndex(null);
+  }
   useAnimatedReaction(
     () => (state.isActive.value ? state.matchedIndex.value : -1),
     (current, previous) => {
-      if (current !== previous) scheduleOnRN(setIndex, current < 0 ? null : current);
+      if (current !== previous && current >= 0) scheduleOnRN(setIndex, current);
     },
   );
-  return index;
+  return index !== null && index < data.length ? index : null;
 }
 
 /** Victory spreads these over its defaults, so every key must hold a real value. */
@@ -151,7 +165,7 @@ function CashFlowChart({ data, baseCurrency }: { data: CashFlowPoint[]; baseCurr
     x: "",
     y: { income: 0, expense: 0, fixed: 0, flexible: 0, optional: 0, investment: 0 },
   });
-  const pressed = usePressedIndex(state);
+  const pressed = useSelectedIndex(state, data);
   const row = data[pressed ?? data.length - 1];
 
   return (
@@ -220,7 +234,7 @@ function NetWorthChart({ buckets, baseCurrency }: { buckets: TrendBucket[]; base
   const theme = useChartTheme();
   const { data, refresh } = useNetWorthSeries({ buckets, baseCurrency });
   const { state } = useChartPressState({ x: "", y: { netWorth: 0 } });
-  const pressed = usePressedIndex(state);
+  const pressed = useSelectedIndex(state, data);
   const point = data[pressed ?? data.length - 1];
   // Like recharts' default [0, auto]: anchor at zero unless net worth dips below it.
   const minNetWorth = Math.min(0, ...data.map((item) => item.netWorth ?? 0));
@@ -294,8 +308,10 @@ function NetWorthChart({ buckets, baseCurrency }: { buckets: TrendBucket[]; base
 function SpendingChart({ data, baseCurrency }: { data: DailySpendingPoint[]; baseCurrency: string }) {
   const theme = useChartTheme();
   const { state } = useChartPressState({ x: "", y: { total: 0 } });
-  const pressed = usePressedIndex(state);
-  const row = data[pressed ?? data.length - 1];
+  const pressed = useSelectedIndex(state, data);
+  // Until a day is touched, show the latest day that had spending rather than an empty today.
+  const latestSpendingIndex = data.findLastIndex((point) => point.total > 0);
+  const row = data[pressed ?? (latestSpendingIndex >= 0 ? latestSpendingIndex : data.length - 1)];
 
   return (
     <View className="gap-3">

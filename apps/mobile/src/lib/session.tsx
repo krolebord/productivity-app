@@ -12,7 +12,11 @@ type SessionState = { status: "loading" } | { status: "signed-out" } | { status:
 type SessionContextValue = {
   state: SessionState;
   signIn: (token: string, user: SessionUser) => Promise<void>;
-  signOut: () => Promise<void>;
+  /**
+   * Ends the session on the server, then forgets it here. Resolves false, keeping the session,
+   * when the server couldn't be reached; `{ localOnly: true }` then signs out of this device only.
+   */
+  signOut: (options?: { localOnly?: boolean }) => Promise<boolean>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -79,10 +83,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setState({ status: "signed-in", user });
   }, []);
 
-  const signOut = useCallback(async () => {
-    await safe(api.auth.mobile.signOut());
-    await clearSession();
-  }, [clearSession]);
+  const signOut = useCallback(
+    async ({ localOnly = false } = {}) => {
+      if (!localOnly) {
+        const { error } = await safe(api.auth.mobile.signOut());
+        // UNAUTHORIZED means the server already dropped the session, so there's nothing left to end there.
+        if (error && !(isDefinedError(error) && error.code === "UNAUTHORIZED")) return false;
+      }
+      await clearSession();
+      return true;
+    },
+    [clearSession],
+  );
 
   const value = useMemo(() => ({ state, signIn, signOut }), [state, signIn, signOut]);
 

@@ -19,15 +19,18 @@ export function SelectField<T extends string>({
   placeholder = "Choose",
   last,
   allowCustom = false,
+  clearLabel,
 }: {
   label: string;
   value: T | "";
   options: readonly SelectOption<T>[];
-  onChange: (value: T) => void;
+  onChange: (value: T | "") => void;
   placeholder?: string;
   last?: boolean;
   /** Lets the search text itself be picked, for free-text fields with suggestions. */
   allowCustom?: boolean;
+  /** Adds a first option with this label that clears the value back to "". */
+  clearLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
@@ -44,10 +47,11 @@ export function SelectField<T extends string>({
         value={value}
         options={options}
         allowCustom={allowCustom}
+        clearLabel={clearLabel}
         onClose={() => setOpen(false)}
         onSelect={(next) => {
           setOpen(false);
-          onChange(next as T);
+          onChange(next as T | "");
         }}
       />
     </>
@@ -60,6 +64,7 @@ function SelectSheet<T extends string>({
   value,
   options,
   allowCustom,
+  clearLabel,
   onClose,
   onSelect,
 }: {
@@ -68,6 +73,7 @@ function SelectSheet<T extends string>({
   value: string;
   options: readonly SelectOption<T>[];
   allowCustom: boolean;
+  clearLabel?: string;
   onClose: () => void;
   onSelect: (value: string) => void;
 }) {
@@ -109,6 +115,8 @@ function SelectSheet<T extends string>({
           ListHeaderComponent={
             showCustom ? (
               <OptionRow label={`Use “${query.trim()}”`} selected={false} onPress={() => onSelect(query.trim())} />
+            ) : clearLabel && !q ? (
+              <OptionRow label={clearLabel} muted selected={value === ""} onPress={() => onSelect("")} />
             ) : undefined
           }
           renderItem={({ item }) => (
@@ -128,11 +136,13 @@ function SelectSheet<T extends string>({
 function OptionRow({
   label,
   description,
+  muted = false,
   selected,
   onPress,
 }: {
   label: string;
   description?: string;
+  muted?: boolean;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -144,7 +154,7 @@ function OptionRow({
       className="min-h-12 flex-row items-center border-border border-b px-5 py-2 active:bg-muted"
     >
       <View className="flex-1">
-        <Text className="text-base text-foreground">{label}</Text>
+        <Text className={`text-base ${muted ? "text-muted-foreground" : "text-foreground"}`}>{label}</Text>
         {description && <Text className="text-muted-foreground text-sm">{description}</Text>}
       </View>
       {selected && <Icon name="check" size={18} colorClassName="accent-primary" />}
