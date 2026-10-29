@@ -6,12 +6,12 @@ import { parseTags, serializeTags } from "@productivity/core/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@productivity/core/use-debounced-callback";
 import { useDb } from "@productivity/core/user-db/db-context";
 import { CalendarClock, CheckIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { type RefObject, useCallback, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { cn } from "@/lib/utils";
 import { NoteEditor, type NoteEditorHandle } from "./note-editor";
-import { TagInput } from "./tag-input";
+import { TagInput, type TagInputHandle } from "./tag-input";
 import { TaskScheduleControl, type TaskScheduleFields } from "./task-schedule";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
@@ -47,12 +47,14 @@ type TaskFields = ItemFieldsPatch;
 
 function TaskDialogContent({
   taskId,
+  tagInputRef,
   saveTask,
   onClose,
   onDelete,
   onDetach,
 }: {
   taskId: string;
+  tagInputRef: RefObject<TagInputHandle | null>;
   saveTask: DebouncedCallback<[TaskFields]>;
   onClose: () => void;
   onDelete: () => void;
@@ -130,6 +132,7 @@ function TaskDialogContent({
           onEscape={onClose}
         />
         <TagInput
+          ref={tagInputRef}
           value={tags}
           onChange={(next) => {
             setTags(next);
@@ -187,8 +190,10 @@ export function TaskDialog() {
   const saveTask = useDebounceCallback((fields: TaskFields) => {
     if (taskId) updateItem(db.db, taskId, fields);
   }, 1000);
+  const tagInputRef = useRef<TagInputHandle>(null);
 
   function saveAndClose() {
+    tagInputRef.current?.commit();
     saveTask.flush();
     closeDialog();
   }
@@ -210,6 +215,7 @@ export function TaskDialog() {
           <TaskDialogContent
             key={openRevision}
             taskId={taskId}
+            tagInputRef={tagInputRef}
             saveTask={saveTask}
             onClose={saveAndClose}
             onDelete={deleteAndClose}

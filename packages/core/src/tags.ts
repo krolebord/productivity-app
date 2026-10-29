@@ -45,3 +45,12 @@ export function parseTags(raw: string | null | undefined): string[] {
 export function serializeTags(tags: string[]): string {
   return JSON.stringify(tags);
 }
+
+/** Appends typed tag text (comma-separated) to a tag list, normalized and without duplicates. */
+export function addTags(tags: readonly string[], raw: string): string[] {
+  const next = [...tags];
+  for (const tag of raw.split(",").map(normalizeTag)) {
+    if (tag && !next.includes(tag)) next.push(tag);
+  }
+  return next;
+}

@@ -1,14 +1,21 @@
-import { normalizeTag } from "@productivity/core/tags";
-import { useState } from "react";
+import { addTags, normalizeTag } from "@productivity/core/tags";
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Icon } from "./ui/icon";
 import { Input } from "./ui/input";
 
+export type TagEditorHandle = {
+  /** Adds the typed, not yet committed tag text, e.g. before the editor's data moves elsewhere. */
+  commit: () => void;
+};
+
 export function TagEditor({
+  ref,
   value,
   onChange,
   suggestions,
 }: {
+  ref?: Ref<TagEditorHandle>;
   value: string[];
   onChange: (tags: string[]) => void;
   suggestions: readonly string[];
@@ -17,14 +24,26 @@ export function TagEditor({
   const query = normalizeTag(draft);
   const matches = suggestions.filter((tag) => !value.includes(tag) && (!query || tag.includes(query))).slice(0, 12);
 
-  const add = (...raw: string[]) => {
+  const add = (raw: string) => {
     setDraft("");
-    const next = [...value];
-    for (const tag of raw.map(normalizeTag)) {
-      if (tag && !next.includes(tag)) next.push(tag);
-    }
+    const next = addTags(value, raw);
     if (next.length > value.length) onChange(next);
   };
+
+  useImperativeHandle(ref, () => ({ commit: () => add(draft) }));
+
+  // Closing the screen doesn't reliably blur the field first, so keep a typed tag on unmount too
+  // (useAutosave saves changes scheduled after unmount right away).
+  const latest = useRef({ draft, value, onChange });
+  latest.current = { draft, value, onChange };
+  useEffect(
+    () => () => {
+      const { draft, value, onChange } = latest.current;
+      const next = addTags(value, draft);
+      if (next.length > value.length) onChange(next);
+    },
+    [],
+  );
 
   return (
     <View className="gap-2">
@@ -46,9 +65,8 @@ export function TagEditor({
           // Commas separate tags; spaces stay so "side project" becomes "side-project", as on web.
           onChangeText={(text) => {
             if (!text.includes(",")) return setDraft(text);
-            const parts = text.split(",");
-            const rest = parts.pop() ?? "";
-            add(...parts);
+            const rest = text.slice(text.lastIndexOf(",") + 1);
+            add(text.slice(0, text.lastIndexOf(",")));
             setDraft(rest);
           }}
           onSubmitEditing={() => add(draft)}

@@ -51,9 +51,15 @@ UI components read and write the user DB through `@productivity/core/data/*` rat
 writing Kysely queries inline.
 
 The mobile app opens the same synced user DB through `@sqlite-sync/react-native` (op-sqlite)
-in `apps/mobile/src/lib/user-db.tsx` and uses core's `data/*` hooks like the web does; it has
-no markdown rendering yet (notes are edited as plain text). Notes for mobile:
+in `apps/mobile/src/lib/user-db.tsx` and uses core's `data/*` hooks like the web does. Notes for mobile:
 
+- Markdown (notes, task details, assistant replies) renders natively through
+  react-native-enriched-markdown in `apps/mobile/src/components/markdown.tsx`; notes show it by
+  default and edit the raw markdown behind an Edit toggle, and checkbox taps rewrite the source
+  line with core's `setMarkdownTaskChecked`. It requires the New Architecture. Its code
+  highlighting, LaTeX and video assets are opted out under `enriched-markdown` in both
+  package.jsons (the root one stops the download, which pnpm skips anyway as an ignored build
+  script; the app one is read at `pod install`), so `katex` isn't needed.
 - Charts use victory-native (Skia + Reanimated + Gesture Handler) where the web uses recharts;
   the finance overview charts live in `apps/mobile/src/components/overview-charts.tsx`.
   victory-native 43+ imports Skia from the renamed `react-native-skia` package (2.15+), not the

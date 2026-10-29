@@ -3,8 +3,9 @@ import { closestCenter, DragOverlay } from "@dnd-kit/core";
 import { reorderItems, setItemOrder } from "@productivity/core/data/items";
 import { createNoteView, deleteNoteView, useNoteViews } from "@productivity/core/data/note-views";
 import { useNotesList } from "@productivity/core/data/notes";
+import { filterTagCounts, filterTagOptions, matchesTagFilter, type TagFilter } from "@productivity/core/note-filter";
 import { noteViewSearch, viewMatchesSearch } from "@productivity/core/note-views";
-import { parseTags, UNTAGGED } from "@productivity/core/tags";
+import { UNTAGGED } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem, NoteViewItem } from "@productivity/core/user-db/migrations";
 import { formatForDisplay } from "@tanstack/hotkeys";
@@ -23,22 +24,6 @@ import { NEW_NOTE_HOTKEY } from "@/lib/hotkeys";
 import { cn } from "@/lib/utils";
 
 const tagFilterLabel = (tag: string) => (tag === UNTAGGED ? "untagged" : `#${tag}`);
-
-function noteFilterTags(note: NoteItem): string[] {
-  const tags = parseTags(note.tags);
-  return tags.length > 0 ? tags : [UNTAGGED];
-}
-
-type TagFilter = { include: string[]; exclude: string[]; match: "all" | "any" };
-
-function matchesTagFilter(note: NoteItem, filter: TagFilter, ignoreExcluded?: string): boolean {
-  const tags = noteFilterTags(note);
-  if (filter.exclude.some((tag) => tag !== ignoreExcluded && tags.includes(tag))) return false;
-  if (filter.include.length === 0) return true;
-  return filter.match === "all"
-    ? filter.include.every((tag) => tags.includes(tag))
-    : filter.include.some((tag) => tags.includes(tag));
-}
 
 const notesSearchSchema = z.object({
   tags: z.array(z.string()).optional(),
@@ -274,36 +259,10 @@ function NotesPage() {
     );
   }, [tagMatchedNotes, query]);
 
-  const allFilterTags = useMemo(() => {
-    const set = new Set<string>();
-    let hasUntagged = false;
-    for (const note of notes) {
-      const tags = parseTags(note.tags);
-      if (tags.length === 0) hasUntagged = true;
-      for (const tag of tags) set.add(tag);
-    }
-    for (const tag of [...include, ...exclude]) {
-      if (tag === UNTAGGED) hasUntagged = true;
-      else set.add(tag);
-    }
-    const sorted = Array.from(set).sort((a, b) => a.localeCompare(b));
-    if (hasUntagged) sorted.push(UNTAGGED);
-    return sorted;
-  }, [notes, include, exclude]);
+  const allFilterTags = useMemo(() => filterTagOptions(notes, { include, exclude }), [notes, include, exclude]);
 
-  const rowCount = useCallback(
-    (tag: string) => {
-      if (exclude.includes(tag)) {
-        return notes.filter((note) => noteFilterTags(note).includes(tag) && matchesTagFilter(note, filter, tag)).length;
-      }
-      if (matchMode === "any" && include.length > 0 && !include.includes(tag)) {
-        const alone: TagFilter = { include: [tag], exclude, match: "any" };
-        return notes.filter((note) => matchesTagFilter(note, alone)).length;
-      }
-      return tagMatchedNotes.filter((note) => noteFilterTags(note).includes(tag)).length;
-    },
-    [notes, tagMatchedNotes, filter, include, exclude, matchMode],
-  );
+  const tagCounts = useMemo(() => filterTagCounts(notes, filter, allFilterTags), [notes, filter, allFilterTags]);
+  const rowCount = useCallback((tag: string) => tagCounts.get(tag) ?? 0, [tagCounts]);
 
   const [dragIds, setDragIds] = useState<string[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);

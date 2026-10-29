@@ -1,8 +1,11 @@
-import { createNote, useNotesList } from "@productivity/core/data/notes";
+import { useNoteViews } from "@productivity/core/data/note-views";
+import { useNotesList } from "@productivity/core/data/notes";
+import { filterTagCounts, filterTagOptions, matchesTagFilter, type TagFilter } from "@productivity/core/note-filter";
 import { markdownToPlainText } from "@productivity/core/note-text";
+import { effectiveMatch, noteViewSearch, viewMatchesSearch } from "@productivity/core/note-views";
 import { parseTags, serializeTags, UNTAGGED } from "@productivity/core/tags";
-import { useDb } from "@productivity/core/user-db/db-context";
-import type { NoteItem } from "@productivity/core/user-db/migrations";
+import type { NoteItem, NoteViewItem } from "@productivity/core/user-db/migrations";
+import { generateId } from "@sqlite-sync/core";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
@@ -14,42 +17,40 @@ import { Icon } from "../../../components/ui/icon";
 import { IconButton } from "../../../components/ui/icon-button";
 import { Input } from "../../../components/ui/input";
 
-const noteTags = (note: NoteItem) => {
-  const tags = parseTags(note.tags);
-  return tags.length > 0 ? tags : [UNTAGGED];
-};
-
 const tagLabel = (tag: string) => (tag === UNTAGGED ? "untagged" : `#${tag}`);
 
 export default function NotesScreen() {
   const contentInset = useTabContentInset();
-  const db = useDb();
   const router = useRouter();
   const { notes } = useNotesList();
+  const views = useNoteViews();
   const [query, setQuery] = useState("");
   const [include, setInclude] = useState<string[]>([]);
   const [exclude, setExclude] = useState<string[]>([]);
-
-  // Active filters stay listed after their last note loses the tag, so they can still be turned off.
-  const allTags = useMemo(() => {
-    const tags = new Set([...include, ...exclude]);
-    for (const note of notes) {
-      for (const tag of noteTags(note)) tags.add(tag);
-    }
-    return [...tags].sort((a, b) => (a === UNTAGGED ? 1 : b === UNTAGGED ? -1 : a.localeCompare(b)));
-  }, [notes, include, exclude]);
+  const [matchMode, setMatchMode] = useState<TagFilter["match"]>("all");
+  // "Any" only means something with two or more tags, as on web.
+  const filter = useMemo<TagFilter>(
+    () => ({ include, exclude, match: effectiveMatch(include, matchMode) }),
+    [include, exclude, matchMode],
+  );
   const hasTagFilters = include.length > 0 || exclude.length > 0;
+
+  const allTags = useMemo(() => filterTagOptions(notes, filter), [notes, filter]);
+  const tagCounts = useMemo(() => filterTagCounts(notes, filter, allTags), [notes, filter, allTags]);
+
+  const activeViewId = useMemo(() => {
+    const current = { tags: include, not: exclude, match: filter.match === "any" ? ("any" as const) : undefined };
+    return views.find((view) => viewMatchesSearch(view, current))?.id ?? null;
+  }, [views, include, exclude, filter.match]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return notes.filter((note) => {
-      const tags = noteTags(note);
-      if (exclude.some((tag) => tags.includes(tag))) return false;
-      if (include.length > 0 && !include.every((tag) => tags.includes(tag))) return false;
+      if (!matchesTagFilter(note, filter)) return false;
       if (!q) return true;
       return note.title.toLowerCase().includes(q) || (note.content ?? "").toLowerCase().includes(q);
     });
-  }, [notes, query, include, exclude]);
+  }, [notes, query, filter]);
 
   const toggleTag = (tag: string) => {
     if (exclude.includes(tag)) {
@@ -67,11 +68,20 @@ export default function NotesScreen() {
   const clearFilters = () => {
     setInclude([]);
     setExclude([]);
+    setMatchMode("all");
   };
 
+  const applyView = (view: NoteViewItem) => {
+    const search = noteViewSearch(view);
+    setInclude(search.tags ?? []);
+    setExclude(search.not ?? []);
+    setMatchMode(search.match ?? "all");
+  };
+
+  // The note row is only inserted once it gets content, so backing out of a new note leaves nothing behind.
   const create = () => {
-    const id = createNote(db.db, { tags: serializeTags(include.filter((tag) => tag !== UNTAGGED)) });
-    router.push({ pathname: "/note/[id]", params: { id } });
+    const tags = serializeTags(include.filter((tag) => tag !== UNTAGGED));
+    router.push({ pathname: "/note/[id]", params: { id: generateId(), draft: "1", tags } });
   };
 
   return (
@@ -88,14 +98,31 @@ export default function NotesScreen() {
             clearButtonMode="while-editing"
           />
         </View>
+        {views.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-5">
+            <View className="flex-row gap-2 px-5">
+              <Chip label="All" selected={!hasTagFilters} onPress={clearFilters} />
+              {views.map((view) => (
+                <Chip
+                  key={view.id}
+                  label={view.name || "Untitled"}
+                  selected={view.id === activeViewId}
+                  onPress={() => (view.id === activeViewId ? clearFilters() : applyView(view))}
+                />
+              ))}
+            </View>
+          </ScrollView>
+        )}
         {allTags.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-5">
             <View className="flex-row gap-2 px-5">
-              {hasTagFilters && <Chip label="Clear" onPress={clearFilters} />}
+              {hasTagFilters && views.length === 0 && <Chip label="Clear" onPress={clearFilters} />}
+              {include.length >= 2 && <MatchToggle value={filter.match} onChange={setMatchMode} />}
               {allTags.map((tag) => (
                 <Chip
                   key={tag}
                   label={tagLabel(tag)}
+                  count={tagCounts.get(tag)}
                   selected={include.includes(tag)}
                   tone={exclude.includes(tag) ? "excluded" : "default"}
                   onPress={() => toggleTag(tag)}
@@ -114,7 +141,12 @@ export default function NotesScreen() {
         contentContainerStyle={{ paddingBottom: contentInset }}
         keyboardDismissMode="on-drag"
         renderItem={({ item }) => (
-          <NoteCard note={item} onPress={() => router.push({ pathname: "/note/[id]", params: { id: item.id } })} />
+          <NoteCard
+            note={item}
+            activeTags={include}
+            onTagPress={toggleTag}
+            onPress={() => router.push({ pathname: "/note/[id]", params: { id: item.id } })}
+          />
         )}
         ListEmptyComponent={
           notes.length === 0 ? (
@@ -142,7 +174,48 @@ export default function NotesScreen() {
   );
 }
 
-function NoteCard({ note, onPress }: { note: NoteItem; onPress: () => void }) {
+/** Whether a note needs all of the included tags or any one of them. */
+function MatchToggle({
+  value,
+  onChange,
+}: {
+  value: TagFilter["match"];
+  onChange: (match: TagFilter["match"]) => void;
+}) {
+  return (
+    <View className="h-8 flex-row rounded-full border border-border bg-card p-0.5">
+      {(["all", "any"] as const).map((mode) => {
+        const selected = mode === value;
+        return (
+          <Pressable
+            key={mode}
+            accessibilityRole="button"
+            accessibilityLabel={`Match ${mode} tags`}
+            accessibilityState={{ selected }}
+            onPress={() => onChange(mode)}
+            className={`justify-center rounded-full px-3 ${selected ? "bg-accent" : ""}`}
+          >
+            <Text className={`text-sm ${selected ? "font-medium text-accent-foreground" : "text-muted-foreground"}`}>
+              {mode}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function NoteCard({
+  note,
+  activeTags,
+  onTagPress,
+  onPress,
+}: {
+  note: NoteItem;
+  activeTags: string[];
+  onTagPress: (tag: string) => void;
+  onPress: () => void;
+}) {
   const title = note.title.trim();
   const preview = useMemo(() => markdownToPlainText(note.content ?? "", 220), [note.content]);
   const tags = parseTags(note.tags);
@@ -153,7 +226,11 @@ function NoteCard({ note, onPress }: { note: NoteItem; onPress: () => void }) {
       onPress={onPress}
       className="gap-1.5 rounded-xl border border-border bg-card p-4 active:opacity-70"
     >
-      {title ? <Text className="font-semibold text-base text-card-foreground">{title}</Text> : null}
+      {title ? (
+        <Text numberOfLines={2} className="font-semibold text-base text-card-foreground">
+          {title}
+        </Text>
+      ) : null}
       {preview ? (
         <Text numberOfLines={5} className="text-muted-foreground text-sm">
           {preview}
@@ -163,11 +240,24 @@ function NoteCard({ note, onPress }: { note: NoteItem; onPress: () => void }) {
       ) : null}
       {tags.length > 0 && (
         <View className="mt-1 flex-row flex-wrap gap-1.5">
-          {tags.map((tag) => (
-            <Text key={tag} className="rounded-full bg-accent px-2 py-0.5 text-accent-foreground text-xs">
-              #{tag}
-            </Text>
-          ))}
+          {tags.map((tag) => {
+            const active = activeTags.includes(tag);
+            return (
+              <Pressable
+                key={tag}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${tag}`}
+                accessibilityState={{ selected: active }}
+                onPress={() => onTagPress(tag)}
+                hitSlop={4}
+                className={`rounded-full px-2 py-0.5 active:opacity-70 ${active ? "bg-primary" : "bg-accent"}`}
+              >
+                <Text className={`text-xs ${active ? "text-primary-foreground" : "text-accent-foreground"}`}>
+                  #{tag}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </Pressable>

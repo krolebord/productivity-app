@@ -1,14 +1,23 @@
-import { deleteItem, type ItemFieldsPatch, updateItem, useItem } from "@productivity/core/data/items";
-import { convertNoteToTask, useNoteTagSuggestions } from "@productivity/core/data/notes";
+import { deleteItem, useItem } from "@productivity/core/data/items";
+import {
+  convertNoteToTask,
+  discardNoteIfBlank,
+  isBlankNote,
+  type NoteFields,
+  saveNote,
+  useNoteTagSuggestions,
+} from "@productivity/core/data/notes";
+import { setMarkdownTaskChecked } from "@productivity/core/note-text";
 import { parseTags, serializeTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { Alert, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
+import { Markdown } from "../../../components/markdown";
 import { SheetHeader } from "../../../components/screen-header";
-import { TagEditor } from "../../../components/tag-editor";
+import { TagEditor, type TagEditorHandle } from "../../../components/tag-editor";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { FormSection } from "../../../components/ui/form";
 import { Input } from "../../../components/ui/input";
@@ -16,11 +25,12 @@ import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { useAutosave } from "../../../lib/use-autosave";
 
 export default function NoteScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // "New note" opens a fresh id with `draft` set: the row is only inserted once it has content.
+  const { id, draft, tags } = useLocalSearchParams<{ id: string; draft?: string; tags?: string }>();
   const router = useRouter();
   const note = useItem(id);
 
-  if (!note) {
+  if (!note && !draft) {
     return (
       <View className="flex-1 bg-background">
         <SheetHeader title="Note" onDone={() => router.back()} />
@@ -28,27 +38,61 @@ export default function NoteScreen() {
       </View>
     );
   }
-  return <NoteEditor note={note} />;
+  return <NoteEditor id={id} note={note} draftTags={tags} />;
 }
 
-function NoteEditor({ note }: { note: NoteItem }) {
+function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | undefined; draftTags?: string }) {
   const db = useDb();
   const router = useRouter();
   const tagSuggestions = useNoteTagSuggestions();
-  const [fields, setFields] = useState({ title: note.title, content: note.content ?? "", tags: parseTags(note.tags) });
-  const autosave = useAutosave((patch: ItemFieldsPatch) => updateItem(db.db, note.id, patch));
-  const isNew = !note.title.trim() && !note.content?.trim();
+  const [openedBlank] = useState(() => isBlankNote(note ?? {}));
+  const [editing, setEditing] = useState(openedBlank);
+  const [fields, setFields] = useState(() => ({
+    title: note?.title ?? "",
+    content: note?.content ?? "",
+    tags: parseTags(note?.tags ?? draftTags),
+  }));
+  const fieldsRef = useRef(fields);
+  const tagEditor = useRef<TagEditorHandle>(null);
+  const toNoteFields = (next: typeof fields): NoteFields => ({ ...next, tags: serializeTags(next.tags) });
+  // Until its first save inserts it, a new note has no row; after that (or for a note opened
+  // from its row) a missing row means it was deleted elsewhere, and saves mustn't recreate it.
+  const isDraft = useRef(!note);
+  const save = (value: NoteFields, options?: { insertBlank: boolean }) => {
+    if (saveNote(db.db, id, value, { draft: isDraft.current, ...options })) isDraft.current = false;
+  };
+  const autosave = useAutosave((value: NoteFields) => save(value));
+
+  // Runs after useAutosave's unmount flush: a note opened blank and left blank is discarded.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only on unmount.
+  useEffect(
+    () => () => {
+      if (openedBlank) discardNoteIfBlank(db.db, id);
+    },
+    [],
+  );
 
   const update = (patch: Partial<typeof fields>) => {
-    const next = { ...fields, ...patch };
+    const next = { ...fieldsRef.current, ...patch };
+    fieldsRef.current = next;
     setFields(next);
-    autosave.schedule({ ...next, tags: serializeTags(next.tags) });
+    autosave.schedule(toNoteFields(next));
+  };
+
+  const toggleTask = (task: { index: number; checked: boolean; text: string }) => {
+    const content = setMarkdownTaskChecked(fieldsRef.current.content, task);
+    // The item couldn't be told apart from another; let the user tick it in the source instead.
+    if (content === fieldsRef.current.content) return setEditing(true);
+    update({ content });
+    autosave.flush();
   };
 
   const convertToTask = () => {
-    autosave.flush();
-    convertNoteToTask(db.db, note.id);
-    router.replace({ pathname: "/task/[id]", params: { id: note.id } });
+    tagEditor.current?.commit();
+    autosave.cancel();
+    save(toNoteFields(fieldsRef.current), { insertBlank: true });
+    convertNoteToTask(db.db, id);
+    router.replace({ pathname: "/task/[id]", params: { id } });
   };
 
   const confirmDelete = () =>
@@ -58,15 +102,25 @@ function NoteEditor({ note }: { note: NoteItem }) {
         text: "Delete",
         style: "destructive",
         onPress: () => {
-          autosave.cancel();
-          deleteItem(db.db, note.id);
+          // Also stops the tag editor's unmount commit from re-inserting the deleted row.
+          autosave.discard();
+          deleteItem(db.db, id);
           router.back();
         },
       },
     ]);
 
   return (
-    <KeyboardScreen header={<SheetHeader title={isNew ? "New note" : "Note"} onDone={() => router.back()} />}>
+    <KeyboardScreen
+      header={
+        <SheetHeader
+          title={openedBlank ? "New note" : "Note"}
+          onCancel={() => setEditing(!editing)}
+          cancelLabel={editing ? "Preview" : "Edit"}
+          onDone={() => router.back()}
+        />
+      }
+    >
       <View className="gap-2">
         <Input
           value={fields.title}
@@ -76,20 +130,33 @@ function NoteEditor({ note }: { note: NoteItem }) {
           multiline
           submitBehavior="blurAndSubmit"
         />
-        <Input
-          value={fields.content}
-          onChangeText={(content) => update({ content })}
-          placeholder="Write something… (markdown)"
-          className="min-h-64"
-          multiline
-          textAlignVertical="top"
-          autoFocus={isNew}
-        />
+        {editing ? (
+          <Input
+            value={fields.content}
+            onChangeText={(content) => update({ content })}
+            placeholder="Write something… (markdown)"
+            className="min-h-64"
+            multiline
+            textAlignVertical="top"
+            autoFocus
+          />
+        ) : fields.content.trim() ? (
+          <Markdown markdown={fields.content} onToggleTask={toggleTask} style={{ minHeight: 64 }} />
+        ) : (
+          <Pressable accessibilityRole="button" onPress={() => setEditing(true)} className="min-h-16 py-1">
+            <Text className="text-base text-muted-foreground">Tap to write…</Text>
+          </Pressable>
+        )}
       </View>
 
       <FormSection title="Tags">
         <View className="px-4 py-2">
-          <TagEditor value={fields.tags} onChange={(tags) => update({ tags })} suggestions={tagSuggestions} />
+          <TagEditor
+            ref={tagEditor}
+            value={fields.tags}
+            onChange={(tags) => update({ tags })}
+            suggestions={tagSuggestions}
+          />
         </View>
       </FormSection>
 

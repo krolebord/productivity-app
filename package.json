@@ -29,6 +29,11 @@
   "op-sqlite": {
     "sqliteFlags": "-DSQLITE_ENABLE_BYTECODE_VTAB=1"
   },
+  "enriched-markdown": {
+    "enableCodeHighlight": false,
+    "enableMath": false,
+    "enableVideo": false
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@mongodb-js/zstd",
@@ -39,6 +44,9 @@
       "react-grab",
       "sharp",
       "workerd"
+    ],
+    "ignoredBuiltDependencies": [
+      "react-native-enriched-markdown"
     ],
     "patchedDependencies": {
       "@cloudflare/think@0.16.0": "patches/@cloudflare__think@0.16.0.patch",

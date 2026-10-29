@@ -1,16 +1,24 @@
-import { deleteItem, type ItemFieldsPatch, updateItem, useItem } from "@productivity/core/data/items";
-import { convertNoteToTask, createNote, useNoteTagSuggestions } from "@productivity/core/data/notes";
+import { deleteItem, useItem } from "@productivity/core/data/items";
+import {
+  convertNoteToTask,
+  discardNoteIfBlank,
+  isBlankNote,
+  type NoteFields,
+  saveNote,
+  useNoteTagSuggestions,
+} from "@productivity/core/data/notes";
 import { parseTags, serializeTags, UNTAGGED } from "@productivity/core/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@productivity/core/use-debounced-callback";
 import { useDb } from "@productivity/core/user-db/db-context";
+import { generateId } from "@sqlite-sync/core";
 import { useMatches } from "@tanstack/react-router";
 import { ListTodoIcon, Trash2Icon } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { type Ref, useCallback, useImperativeHandle, useRef, useState } from "react";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { cn } from "@/lib/utils";
 import { NoteEditor, type NoteEditorHandle } from "./note-editor";
-import { TagInput } from "./tag-input";
+import { TagInput, type TagInputHandle } from "./tag-input";
 import { useTaskDialogStore } from "./task-dialog";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
@@ -22,22 +30,25 @@ export const useNoteDialogStore = create(
     {
       isOpen: false,
       noteId: null as string | null,
+      /** Tags for a new note, whose row doesn't exist until it gets content (see saveNote). */
+      draftTags: null as string | null,
       openRevision: 0,
     },
     (set, get) => ({
-      open: (id: string) => set({ isOpen: true, noteId: id, openRevision: get().openRevision + 1 }),
+      open: (id: string, draftTags: string | null = null) =>
+        set({ isOpen: true, noteId: id, draftTags, openRevision: get().openRevision + 1 }),
       close: () => set({ isOpen: false }),
     }),
   ),
 );
 
 export function useCreateNote() {
-  const db = useDb();
   const openNoteDialog = useNoteDialogStore((s) => s.open);
 
   // When creating from the notes page with a tag filter active, prefill the
   // included tags so the new note appears in the view being looked at (this
   // covers every entry point: page button, hotkey, sidebar, command palette).
+  // Nothing is inserted until the note gets content, so abandoned new notes don't pile up.
   const matches = useMatches();
   const lastMatch = matches[matches.length - 1];
   const filterTags =
@@ -47,23 +58,37 @@ export function useCreateNote() {
   const initialTags = serializeTags(filterTags);
 
   return useCallback(() => {
-    const id = createNote(db.db, { tags: initialTags });
-
-    openNoteDialog(id);
-  }, [db, openNoteDialog, initialTags]);
+    openNoteDialog(generateId(), initialTags);
+  }, [openNoteDialog, initialTags]);
 }
 
-type NoteFields = Pick<ItemFieldsPatch, "title" | "content" | "tags">;
+type DraftFlag = { current: boolean };
+
+type NoteDialogContentHandle = {
+  /** Commits pending tag text and returns the fields to save. */
+  commit: () => NoteFields;
+  /** Opened as a new or empty note, so closing it while still blank discards it. */
+  openedBlank: boolean;
+  /**
+   * A new note whose row hasn't been inserted yet. After the first insert, or for a note
+   * opened from its row, a missing row means it was deleted elsewhere and isn't recreated.
+   */
+  draft: DraftFlag;
+};
 
 function NoteDialogContent({
+  ref,
   noteId,
-  saveNote,
+  draftTags,
+  queueSave,
   onClose,
   onDelete,
   onConvertToTask,
 }: {
+  ref: Ref<NoteDialogContentHandle>;
   noteId: string;
-  saveNote: DebouncedCallback<[NoteFields]>;
+  draftTags: string | null;
+  queueSave: DebouncedCallback<[string, NoteFields, DraftFlag]>;
   onClose: () => void;
   onDelete: () => void;
   onConvertToTask: () => void;
@@ -72,19 +97,31 @@ function NoteDialogContent({
   const tagSuggestions = useNoteTagSuggestions();
 
   const [title, setTitle] = useState(note?.title ?? "");
-  const [tags, setTags] = useState<string[]>(() => parseTags(note?.tags));
+  const [tags, setTags] = useState<string[]>(() => parseTags(note?.tags ?? draftTags));
+  const [openedBlank] = useState(() => isBlankNote(note ?? {}));
+  const draft = useRef(!note);
   const editorRef = useRef<NoteEditorHandle>(null);
-  const fieldsRef = useRef({
+  const tagInputRef = useRef<TagInputHandle>(null);
+  const fieldsRef = useRef<NoteFields>({
     title: note?.title ?? "",
     content: note?.content ?? "",
-    tags: note?.tags ?? "[]",
+    tags: note?.tags ?? draftTags ?? "[]",
   });
 
-  const updateNote = (fields: NoteFields) => {
+  const updateNote = (fields: Partial<NoteFields>) => {
     if (fields.title !== undefined) setTitle(fields.title);
     fieldsRef.current = { ...fieldsRef.current, ...fields };
-    saveNote({ ...fieldsRef.current });
+    queueSave(noteId, { ...fieldsRef.current }, draft);
   };
+
+  useImperativeHandle(ref, () => ({
+    commit: () => {
+      tagInputRef.current?.commit();
+      return { ...fieldsRef.current };
+    },
+    openedBlank,
+    draft,
+  }));
 
   const handleTagsChange = (next: string[]) => {
     setTags(next);
@@ -93,7 +130,7 @@ function NoteDialogContent({
 
   const deleteConfirm = useInlineConfirm({ onConfirm: onDelete });
 
-  const isNew = !note?.title?.trim() && !note?.content?.trim();
+  const isNew = isBlankNote(note ?? {});
 
   return (
     <>
@@ -113,7 +150,13 @@ function NoteDialogContent({
           }}
           className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
         />
-        <TagInput value={tags} onChange={handleTagsChange} suggestions={tagSuggestions} placeholder="Add tags..." />
+        <TagInput
+          ref={tagInputRef}
+          value={tags}
+          onChange={handleTagsChange}
+          suggestions={tagSuggestions}
+          placeholder="Add tags..."
+        />
         <NoteEditor
           ref={editorRef}
           initialContent={note?.content ?? ""}
@@ -157,28 +200,38 @@ export function NoteDialog() {
   const db = useDb();
   const isOpen = useNoteDialogStore((x) => x.isOpen);
   const noteId = useNoteDialogStore((x) => x.noteId);
+  const draftTags = useNoteDialogStore((x) => x.draftTags);
   const openRevision = useNoteDialogStore((x) => x.openRevision);
   const closeDialog = useNoteDialogStore((x) => x.close);
   const openTaskDialog = useTaskDialogStore((x) => x.open);
 
-  const saveNote = useDebounceCallback((fields: NoteFields) => {
-    if (noteId) updateItem(db.db, noteId, fields);
+  const contentRef = useRef<NoteDialogContentHandle>(null);
+
+  const queueSave = useDebounceCallback((id: string, fields: NoteFields, draft: DraftFlag) => {
+    if (saveNote(db.db, id, fields, { draft: draft.current })) draft.current = false;
   }, 1000);
 
   function saveAndClose() {
-    saveNote.flush();
+    const content = contentRef.current;
+    content?.commit();
+    queueSave.flush();
+    if (noteId && content?.openedBlank) discardNoteIfBlank(db.db, noteId);
     closeDialog();
   }
 
   function deleteAndClose() {
-    saveNote.cancel();
+    queueSave.cancel();
     if (noteId) deleteItem(db.db, noteId);
     closeDialog();
   }
 
   function convertToTask() {
-    if (!noteId) return;
-    saveNote.flush();
+    const content = contentRef.current;
+    const fields = content?.commit();
+    if (!noteId || !content || !fields) return;
+    queueSave.cancel();
+    if (saveNote(db.db, noteId, fields, { draft: content.draft.current, insertBlank: true }))
+      content.draft.current = false;
     convertNoteToTask(db.db, noteId);
     closeDialog();
     openTaskDialog(noteId);
@@ -190,8 +243,10 @@ export function NoteDialog() {
         {noteId ? (
           <NoteDialogContent
             key={openRevision}
+            ref={contentRef}
             noteId={noteId}
-            saveNote={saveNote}
+            draftTags={draftTags}
+            queueSave={queueSave}
             onClose={saveAndClose}
             onDelete={deleteAndClose}
             onConvertToTask={convertToTask}

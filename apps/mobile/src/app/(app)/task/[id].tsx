@@ -3,13 +3,15 @@ import { deleteItem, type ItemFieldsPatch, updateItem, useItem } from "@producti
 import { detachTaskFromCalendar, useTaskTagSuggestions } from "@productivity/core/data/tasks";
 import { localMidnightMs } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
+import { setMarkdownTaskChecked } from "@productivity/core/note-text";
 import { parseTags, serializeTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
+import { Markdown } from "../../../components/markdown";
 import { SheetHeader } from "../../../components/screen-header";
 import { TagEditor } from "../../../components/tag-editor";
 import { TaskScheduleSection } from "../../../components/task-schedule";
@@ -48,12 +50,23 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
     hasDueTime: task.hasDueTime,
     completedAt: task.completedAt ?? null,
   });
+  const fieldsRef = useRef(fields);
+  const [editingDetails, setEditingDetails] = useState(!task.content?.trim());
   const autosave = useAutosave((patch: ItemFieldsPatch) => updateItem(db.db, task.id, patch));
 
   const update = (patch: Partial<typeof fields>) => {
-    const next = { ...fields, ...patch };
+    const next = { ...fieldsRef.current, ...patch };
+    fieldsRef.current = next;
     setFields(next);
     autosave.schedule({ ...next, tags: serializeTags(next.tags) });
+  };
+
+  const toggleChecklistItem = (item: { index: number; checked: boolean; text: string }) => {
+    const content = setMarkdownTaskChecked(fieldsRef.current.content, item);
+    // The item couldn't be told apart from another; let the user tick it in the source instead.
+    if (content === fieldsRef.current.content) return setEditingDetails(true);
+    update({ content });
+    autosave.flush();
   };
 
   const toggleCompleted = () => {
@@ -76,7 +89,8 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
         text: "Delete",
         style: "destructive",
         onPress: () => {
-          autosave.cancel();
+          // Also stops the tag editor's unmount commit from re-inserting the deleted row.
+          autosave.discard();
           deleteItem(db.db, task.id);
           router.back();
         },
@@ -86,7 +100,16 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
   const completed = fields.completedAt != null;
 
   return (
-    <KeyboardScreen header={<SheetHeader title="Task" onDone={() => router.back()} />}>
+    <KeyboardScreen
+      header={
+        <SheetHeader
+          title="Task"
+          onCancel={() => setEditingDetails(!editingDetails)}
+          cancelLabel={editingDetails ? "Preview" : "Edit"}
+          onDone={() => router.back()}
+        />
+      }
+    >
       <View className="gap-2">
         <Input
           value={fields.title}
@@ -97,14 +120,24 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
           submitBehavior="blurAndSubmit"
           autoFocus={!task.title && !task.content}
         />
-        <Input
-          value={fields.content}
-          onChangeText={(content) => update({ content })}
-          placeholder="Add details…"
-          className="min-h-24"
-          multiline
-          textAlignVertical="top"
-        />
+        {editingDetails ? (
+          <Input
+            value={fields.content}
+            onChangeText={(content) => update({ content })}
+            placeholder="Add details… (markdown)"
+            className="min-h-24"
+            multiline
+            textAlignVertical="top"
+            // Opening the editor from a rendered task focuses it; a new task focuses the title instead.
+            autoFocus={!!task.content?.trim()}
+          />
+        ) : fields.content.trim() ? (
+          <Markdown markdown={fields.content} onToggleTask={toggleChecklistItem} />
+        ) : (
+          <Pressable accessibilityRole="button" onPress={() => setEditingDetails(true)} className="min-h-12 py-1">
+            <Text className="text-base text-muted-foreground">Add details…</Text>
+          </Pressable>
+        )}
       </View>
 
       <FormSection title="Tags">

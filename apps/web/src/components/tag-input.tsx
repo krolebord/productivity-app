@@ -1,9 +1,15 @@
-import { normalizeTag } from "@productivity/core/tags";
+import { addTags, normalizeTag } from "@productivity/core/tags";
 import { XIcon } from "lucide-react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+export type TagInputHandle = {
+  /** Adds the typed, not yet committed tag text, for dialogs that are about to close. */
+  commit: () => void;
+};
+
 type TagInputProps = {
+  ref?: React.Ref<TagInputHandle>;
   value: string[];
   onChange: (tags: string[]) => void;
   suggestions: string[];
@@ -14,7 +20,7 @@ type TagInputProps = {
 
 const MAX_SUGGESTIONS = 8;
 
-export function TagInput({ value, onChange, suggestions, placeholder, id, className }: TagInputProps) {
+export function TagInput({ ref, value, onChange, suggestions, placeholder, id, className }: TagInputProps) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -60,6 +66,15 @@ export function TagInput({ value, onChange, suggestions, placeholder, id, classN
     if (!tag || value.includes(tag)) return;
     onChange([...value, tag]);
   }
+
+  React.useImperativeHandle(ref, () => ({
+    commit: () => {
+      if (!inputValue.trim()) return;
+      setInputValue("");
+      const next = addTags(value, inputValue);
+      if (next.length > value.length) onChange(next);
+    },
+  }));
 
   function removeTag(tag: string) {
     onChange(value.filter((t) => t !== tag));

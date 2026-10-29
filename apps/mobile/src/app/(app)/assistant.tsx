@@ -27,6 +27,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Markdown } from "../../components/markdown";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Icon } from "../../components/ui/icon";
 import { IconButton } from "../../components/ui/icon-button";
@@ -307,7 +308,14 @@ function Chat({
             />
           </View>
         ) : (
-          messages.map((message) => <MessageRow key={message.id} message={message} />)
+          messages.map((message, index) => (
+            <MessageRow
+              key={message.id}
+              message={message}
+              // Text grows in place while the turn runs; only the newest message can still be streaming.
+              streaming={isRunning && index === messages.length - 1}
+            />
+          ))
         )}
         {isWorking && (
           <View className="flex-row items-center gap-2">
@@ -360,7 +368,7 @@ function Chat({
   );
 }
 
-function MessageRow({ message }: { message: ConversationMessageItem }) {
+function MessageRow({ message, streaming }: { message: ConversationMessageItem; streaming: boolean }) {
   if (message.kind === "tool") {
     const failed = message.toolState === "error";
     return (
@@ -406,9 +414,5 @@ function MessageRow({ message }: { message: ConversationMessageItem }) {
 
   if (!message.text) return null;
 
-  return (
-    <Text selectable className="text-base text-foreground leading-6">
-      {message.text}
-    </Text>
-  );
+  return <Markdown markdown={message.text} streaming={streaming} />;
 }
