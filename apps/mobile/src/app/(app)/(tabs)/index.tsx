@@ -22,6 +22,7 @@ import { EmptyState } from "../../../components/ui/empty-state";
 import { Icon } from "../../../components/ui/icon";
 import { IconButton } from "../../../components/ui/icon-button";
 import { Input } from "../../../components/ui/input";
+import { confirmHabitReset } from "../../../lib/habits";
 import { useCurrentDayKey } from "../../../lib/use-current-day";
 import { cn } from "../../../lib/utils";
 
@@ -500,7 +501,13 @@ function HabitRow({
         checked={done}
         disabled={!editable}
         label={done ? `Uncheck ${habit.name}` : isSimple ? `Complete ${habit.name}` : `Add 1 to ${habit.name}`}
-        onPress={() => (done || isSimple ? onToggle(habit, !done) : onIncrement())}
+        onPress={() =>
+          done
+            ? confirmHabitReset(habit, value, () => onToggle(habit, false))
+            : isSimple
+              ? onToggle(habit, true)
+              : onIncrement()
+        }
       />
       <View className="flex-1 py-2">
         <View className="flex-row items-center gap-2">

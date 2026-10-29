@@ -19,6 +19,7 @@ import { ScreenHeader } from "../../components/screen-header";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Icon } from "../../components/ui/icon";
 import { IconButton } from "../../components/ui/icon-button";
+import { confirmHabitReset } from "../../lib/habits";
 import { useCurrentDayKey } from "../../lib/use-current-day";
 
 const DAYS_SHOWN = 7;
@@ -167,8 +168,17 @@ function HabitCard({
               key={dateKey}
               accessibilityRole="button"
               accessibilityLabel={`${format(day, "EEEE")}: ${done ? "done" : "not done"}`}
-              onPress={() => (isCounter && !done ? onIncrement(dateKey, dayValue) : onToggle(dateKey, !done))}
-              onLongPress={() => onToggle(dateKey, false)}
+              onPress={() =>
+                done
+                  ? confirmHabitReset(habit, progress, () => onToggle(dateKey, false))
+                  : isCounter
+                    ? onIncrement(dateKey, dayValue)
+                    : onToggle(dateKey, true)
+              }
+              // Clears a partly logged counter day too, which a tap would only add to.
+              onLongPress={() =>
+                (recorded || done) && confirmHabitReset(habit, progress, () => onToggle(dateKey, false))
+              }
               className="items-center gap-1"
             >
               <Text className={`text-[11px] ${isToday ? "font-semibold text-primary" : "text-muted-foreground"}`}>

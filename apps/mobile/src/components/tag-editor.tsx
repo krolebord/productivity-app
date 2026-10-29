@@ -17,10 +17,13 @@ export function TagEditor({
   const query = normalizeTag(draft);
   const matches = suggestions.filter((tag) => !value.includes(tag) && (!query || tag.includes(query))).slice(0, 12);
 
-  const add = (raw: string) => {
-    const tag = normalizeTag(raw);
+  const add = (...raw: string[]) => {
     setDraft("");
-    if (tag && !value.includes(tag)) onChange([...value, tag]);
+    const next = [...value];
+    for (const tag of raw.map(normalizeTag)) {
+      if (tag && !next.includes(tag)) next.push(tag);
+    }
+    if (next.length > value.length) onChange(next);
   };
 
   return (
@@ -40,11 +43,17 @@ export function TagEditor({
         ))}
         <Input
           value={draft}
+          // Commas separate tags; spaces stay so "side project" becomes "side-project", as on web.
           onChangeText={(text) => {
-            if (/[\s,]$/.test(text)) add(text);
-            else setDraft(text);
+            if (!text.includes(",")) return setDraft(text);
+            const parts = text.split(",");
+            const rest = parts.pop() ?? "";
+            add(...parts);
+            setDraft(rest);
           }}
           onSubmitEditing={() => add(draft)}
+          // Spaces no longer commit a tag, so keep a typed one when the field loses focus.
+          onBlur={() => add(draft)}
           submitBehavior="submit"
           placeholder={value.length ? "Add tag" : "Add tags"}
           autoCapitalize="none"

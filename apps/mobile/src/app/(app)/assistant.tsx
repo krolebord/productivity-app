@@ -1,4 +1,5 @@
 import { safe } from "@orpc/client";
+import { conversationTurnFilesFromData } from "@productivity/core/agent/conversation-files";
 import { DEFAULT_ASSISTANT_MODEL, getAssistantModel, resolveAssistantModelId } from "@productivity/core/agent/models";
 import { conversationRowStatus, conversationTitle } from "@productivity/core/conversation-list";
 import {
@@ -31,6 +32,13 @@ import { Icon } from "../../components/ui/icon";
 import { IconButton } from "../../components/ui/icon-button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
+import {
+  clearAssistantSubmitLock,
+  getAssistantChat,
+  setAssistantDraft,
+  setAssistantSubmitLock,
+  useAssistantChat,
+} from "../../lib/assistant-chats";
 
 // Reopening the assistant resumes the chat it was last showing, until the app restarts.
 let lastConversationId: string | null = null;
@@ -182,25 +190,28 @@ function Chat({
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const messages = useConversationMessages(conversationId);
-  const [input, setInput] = useState("");
-  const [submitLock, setSubmitLock] = useState<SubmitLock>();
+  const { draft: input, lock: submitLock } = useAssistantChat(conversationId);
   const [rpcError, setRpcError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollViewInstance>(null);
   const nearBottomRef = useRef(true);
   const warmedRef = useRef(false);
 
   const isRunning = conversation?.turnStatus === "running";
-  const hasMessage = submitLock != null && messages.some((message) => message.id === submitLock.messageId);
-  const lockHolding = isSubmitLockHolding({ lock: submitLock, conversation, hasMessage });
+  const isLockHolding = (lock: SubmitLock | undefined) =>
+    isSubmitLockHolding({
+      lock,
+      conversation,
+      hasMessage: lock != null && messages.some((message) => message.id === lock.messageId),
+    });
+  const lockHolding = isLockHolding(submitLock);
   const isWorking = lockHolding || isRunning;
   const canStop = isRunning || (lockHolding && conversation !== null);
   const turnError = conversation?.turnStatus === "error" ? conversation.turnError : "";
 
   // Drop the lock once the turn has moved past it, so the next send starts clean.
   useEffect(() => {
-    if (submitLock && !lockHolding) setSubmitLock(undefined);
-  }, [submitLock, lockHolding]);
+    if (submitLock && !lockHolding) clearAssistantSubmitLock(conversationId, submitLock);
+  }, [conversationId, submitLock, lockHolding]);
 
   // Viewing a chat marks its latest reply as read; not while the list covers it.
   const updatedAt = conversation?.updatedAt;
@@ -223,8 +234,10 @@ function Chat({
   };
 
   const submit = async () => {
-    const text = input.trim();
-    if (!text || isWorking) return;
+    const sent = input;
+    const text = sent.trim();
+    // Read the store, not the render: a quick second tap lands before the lock re-renders.
+    if (!text || isRunning || isLockHolding(getAssistantChat(conversationId).lock)) return;
 
     setRpcError(null);
     const lock: SubmitLock = {
@@ -232,8 +245,7 @@ function Chat({
       messageId: generateId(),
       submittedUpdatedAt: conversation?.updatedAt ?? null,
     };
-    setSubmitLock(lock);
-    setSending(true);
+    setAssistantSubmitLock(conversationId, lock);
     nearBottomRef.current = true;
 
     const { error, data } = await safe(
@@ -247,19 +259,19 @@ function Chat({
             reasoningEffort: null,
           }),
     );
-    setSending(false);
     if (error || !data.accepted) {
-      setSubmitLock((current) => (current === lock ? undefined : current));
+      clearAssistantSubmitLock(conversationId, lock);
       if (error) setRpcError(rpcErrorMessage(error));
       return;
     }
-    setInput("");
+    // Keep anything typed while the send was in flight.
+    setAssistantDraft(conversationId, (current) => (current === sent ? "" : current));
   };
 
   const cancel = async () => {
     const { error } = await safe(api.assistant.cancelTurn({ conversationId }));
     if (error) setRpcError(rpcErrorMessage(error));
-    else setSubmitLock(undefined);
+    else clearAssistantSubmitLock(conversationId);
   };
 
   const errorMessage = rpcError ?? turnError;
@@ -318,11 +330,9 @@ function Chat({
         <Input
           value={input}
           onChangeText={(text) => {
-            setInput(text);
+            setAssistantDraft(conversationId, text);
             warmAgent();
           }}
-          // Read-only while the send is in flight, so a failure can't clobber newer text.
-          editable={!sending}
           placeholder="Message"
           multiline
           className="max-h-32 min-h-10 flex-1 rounded-2xl bg-muted px-4 pt-2.5 pb-2.5"
@@ -365,17 +375,36 @@ function MessageRow({ message }: { message: ConversationMessageItem }) {
     );
   }
 
-  if (!message.text) return null;
-
   if (message.role === "user") {
+    const files = conversationTurnFilesFromData(message.data);
+    if (!message.text && files.length === 0) return null;
     return (
-      <View className="ml-12 self-end rounded-2xl bg-primary px-3.5 py-2">
-        <Text selectable className="text-base text-primary-foreground">
-          {message.text}
-        </Text>
+      <View className="ml-12 gap-2 self-end rounded-2xl bg-primary px-3.5 py-2">
+        {message.text ? (
+          <Text selectable className="text-base text-primary-foreground">
+            {message.text}
+          </Text>
+        ) : null}
+        {files.length > 0 && (
+          <View className="flex-row flex-wrap gap-1.5">
+            {files.map((file) => (
+              <View
+                key={file.path}
+                className="max-w-full flex-row items-center gap-1.5 rounded-md border border-primary-foreground/25 bg-primary-foreground/10 px-2 py-1"
+              >
+                <Icon name="file-text" size={13} colorClassName="accent-primary-foreground" />
+                <Text numberOfLines={1} className="max-w-40 text-primary-foreground text-xs">
+                  {file.filename}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     );
   }
+
+  if (!message.text) return null;
 
   return (
     <Text selectable className="text-base text-foreground leading-6">

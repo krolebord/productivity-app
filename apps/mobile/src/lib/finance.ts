@@ -57,6 +57,27 @@ export const FLOW_COLOR = {
   netWorth: "#3b82f6",
 } as const;
 
+/**
+ * Reads a typed amount, or NaN when it isn't a plain number. Either "." or "," can be the
+ * decimal mark (iOS decimal pads type the locale's): it's the last separator when both kinds
+ * appear ("1,234.50", "1.234,50") or there's only one ("12,5"). Any others must group
+ * thousands ("1,234,567").
+ */
+export function parseAmountInput(text: string): number {
+  const value = text.replace(/[\s\u00a0\u202f']/g, "").replace(/^[\u2212\u2013]/, "-");
+  const separators = value.match(/[.,]/g) ?? [];
+  const decimalAt =
+    new Set(separators).size > 1 || separators.length === 1
+      ? Math.max(value.lastIndexOf("."), value.lastIndexOf(","))
+      : -1;
+  const whole = decimalAt >= 0 ? value.slice(0, decimalAt) : value;
+  const fraction = decimalAt >= 0 ? value.slice(decimalAt + 1) : "";
+  if (!/^-?(\d*|\d{1,3}([.,]\d{3})+)$/.test(whole) || !/^\d*$/.test(fraction)) return Number.NaN;
+  const digits = whole.replace(/[.,]/g, "");
+  if (!/\d/.test(digits + fraction)) return Number.NaN;
+  return Number(`${digits}.${fraction || "0"}`);
+}
+
 /** `type` is a free-text column, so narrow it before indexing into the styles. */
 export function resolveTransactionType(type: string): TransactionType {
   return type in TRANSACTION_TYPE_STYLE ? (type as TransactionType) : "expense";

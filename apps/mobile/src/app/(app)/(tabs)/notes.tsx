@@ -30,13 +30,15 @@ export default function NotesScreen() {
   const [include, setInclude] = useState<string[]>([]);
   const [exclude, setExclude] = useState<string[]>([]);
 
+  // Active filters stay listed after their last note loses the tag, so they can still be turned off.
   const allTags = useMemo(() => {
-    const counts = new Map<string, number>();
+    const tags = new Set([...include, ...exclude]);
     for (const note of notes) {
-      for (const tag of noteTags(note)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      for (const tag of noteTags(note)) tags.add(tag);
     }
-    return [...counts.keys()].sort((a, b) => (a === UNTAGGED ? 1 : b === UNTAGGED ? -1 : a.localeCompare(b)));
-  }, [notes]);
+    return [...tags].sort((a, b) => (a === UNTAGGED ? 1 : b === UNTAGGED ? -1 : a.localeCompare(b)));
+  }, [notes, include, exclude]);
+  const hasTagFilters = include.length > 0 || exclude.length > 0;
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -62,6 +64,11 @@ export default function NotesScreen() {
     setExclude(exclude.includes(tag) ? exclude.filter((t) => t !== tag) : [...exclude, tag]);
   };
 
+  const clearFilters = () => {
+    setInclude([]);
+    setExclude([]);
+  };
+
   const create = () => {
     const id = createNote(db.db, { tags: serializeTags(include.filter((tag) => tag !== UNTAGGED)) });
     router.push({ pathname: "/note/[id]", params: { id } });
@@ -84,6 +91,7 @@ export default function NotesScreen() {
         {allTags.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-5">
             <View className="flex-row gap-2 px-5">
+              {hasTagFilters && <Chip label="Clear" onPress={clearFilters} />}
               {allTags.map((tag) => (
                 <Chip
                   key={tag}
@@ -112,7 +120,21 @@ export default function NotesScreen() {
           notes.length === 0 ? (
             <EmptyState icon="file-text" title="No notes yet" description="Tap + to write your first note." />
           ) : (
-            <EmptyState icon="search" title="No matching notes" description="Long-press a tag to exclude it." />
+            <EmptyState
+              icon="search"
+              title="No matching notes"
+              description={hasTagFilters ? "No notes match these tag filters." : "Try a different search."}
+            >
+              {hasTagFilters && (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={clearFilters}
+                  className="mt-3 h-10 justify-center rounded-lg border border-border px-4 active:bg-muted"
+                >
+                  <Text className="font-medium text-foreground">Clear filters</Text>
+                </Pressable>
+              )}
+            </EmptyState>
           )
         }
       />

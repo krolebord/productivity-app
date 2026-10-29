@@ -15,6 +15,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { withTracing } from "@posthog/ai";
 import { BUILTIN_SKILLS, type BuiltinSkill } from "@productivity/core/agent/builtin-skills";
 import { RenderChartInputSchema } from "@productivity/core/agent/chart-spec";
+import { conversationTurnFilesData } from "@productivity/core/agent/conversation-files";
 import {
   type AssistantModelId,
   type AssistantReasoningEffort,
@@ -38,7 +39,6 @@ import { z } from "zod";
 import type { UserDbServer } from "../user-db/user-db-server";
 import {
   conversationTitleFromTurnText,
-  conversationTurnFilesData,
   projectionRowsFromStep,
   projectionRowsFromUiMessages,
   userTurnModelText,

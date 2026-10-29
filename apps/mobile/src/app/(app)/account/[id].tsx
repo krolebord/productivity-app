@@ -21,6 +21,7 @@ import { Icon } from "../../../components/ui/icon";
 import { Input } from "../../../components/ui/input";
 import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { SelectField } from "../../../components/ui/select-sheet";
+import { parseAmountInput } from "../../../lib/finance";
 
 const LABEL_COLORS = [
   "#8b5cf6",
@@ -72,7 +73,7 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
   };
 
   const save = () => {
-    const balance = Number.parseFloat(form.balance.replace(",", "."));
+    const balance = parseAmountInput(form.balance);
     if (!form.labelText.trim()) return setError("Name is required.");
     if (!Number.isFinite(balance)) return setError("Balance must be a number.");
 

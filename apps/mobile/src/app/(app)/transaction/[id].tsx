@@ -28,7 +28,7 @@ import { Input } from "../../../components/ui/input";
 import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { Segmented } from "../../../components/ui/segmented";
 import { SelectField } from "../../../components/ui/select-sheet";
-import { IMPORTANCE_LABELS, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
+import { IMPORTANCE_LABELS, parseAmountInput, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
 
 const DEFAULT_IMPORTANCE: ImportanceTier = "flexible";
 
@@ -50,8 +50,6 @@ type FormState = {
   importance: ImportanceTier | null;
   notes: string;
 };
-
-const parseAmount = (value: string) => Number.parseFloat(value.replace(",", "."));
 
 export default function TransactionScreen() {
   const { id, accountId } = useLocalSearchParams<{ id: string; accountId?: string }>();
@@ -99,7 +97,7 @@ function initialState(existing: TransactionRow | undefined, defaultAccountId: st
 }
 
 function validate(form: FormState, needsCounterpartyAmount: boolean): string | null {
-  const amount = parseAmount(form.amount);
+  const amount = parseAmountInput(form.amount);
   if (!form.accountId) return "Pick an account.";
   if (form.type === "adjustment") {
     if (!Number.isFinite(amount) || amount === 0) return "Enter a non-zero amount.";
@@ -109,7 +107,7 @@ function validate(form: FormState, needsCounterpartyAmount: boolean): string | n
   if (form.type === "transfer") {
     if (!form.counterpartyAccountId) return "Pick the destination account.";
     if (form.counterpartyAccountId === form.accountId) return "Transfer accounts must be different.";
-    const received = parseAmount(form.counterpartyAmount);
+    const received = parseAmountInput(form.counterpartyAmount);
     if (needsCounterpartyAmount && (!Number.isFinite(received) || received <= 0)) {
       return "Enter the amount received.";
     }
@@ -123,7 +121,7 @@ function toInput(form: FormState, needsCounterpartyAmount: boolean): Transaction
     effectiveAt: form.effectiveAt.getTime(),
     title: form.title,
     notes: form.notes,
-    amount: parseAmount(form.amount),
+    amount: parseAmountInput(form.amount),
   };
   switch (form.type) {
     case "expense":
@@ -137,7 +135,7 @@ function toInput(form: FormState, needsCounterpartyAmount: boolean): Transaction
         ...base,
         type: "transfer",
         counterpartyAccountId: form.counterpartyAccountId,
-        counterpartyAmount: needsCounterpartyAmount ? parseAmount(form.counterpartyAmount) : base.amount,
+        counterpartyAmount: needsCounterpartyAmount ? parseAmountInput(form.counterpartyAmount) : base.amount,
       };
   }
 }

@@ -1,4 +1,5 @@
 import { BUILTIN_SKILLS, findBuiltinSkill, isBuiltinSkillId } from "@productivity/core/agent/builtin-skills";
+import { conversationTurnFilesFromData } from "@productivity/core/agent/conversation-files";
 import {
   ASSISTANT_MODELS,
   ASSISTANT_MODELS_BY_PRICE,
@@ -63,7 +64,6 @@ import { type ClipboardEvent, lazy, Suspense, useCallback, useEffect, useRef, us
 import { ErrorBoundary } from "react-error-boundary";
 import { Streamdown } from "streamdown";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
-import { conversationTurnFilesFromData } from "@/agent/conversation-projection";
 import { AssistantHeaderActions } from "@/components/assistant/assistant-header-actions";
 import { ChatsBackButton, ConversationList } from "@/components/assistant/conversation-list";
 import { useAssistantStore } from "@/lib/assistant-store";

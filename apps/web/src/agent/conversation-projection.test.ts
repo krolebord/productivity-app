@@ -1,10 +1,9 @@
 import type { StepContext } from "@cloudflare/think";
+import { conversationTurnFilesData, conversationTurnFilesFromData } from "@productivity/core/agent/conversation-files";
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import {
   conversationTitleFromTurnText,
-  conversationTurnFilesData,
-  conversationTurnFilesFromData,
   projectionRowsFromStep,
   projectionRowsFromUiMessages,
   textProjectionId,
