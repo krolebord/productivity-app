@@ -259,13 +259,7 @@ function FinancesPage() {
       </SectionCard>
 
       <div className="grid @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] grid-cols-[minmax(0,1fr)] gap-4">
-        <RecentActivityCard
-          accounts={accountMap}
-          baseCurrency={baseCurrency}
-          convert={convert}
-          rangeSearch={{ from: rangeStart, to: rangeEnd }}
-          transactions={recent}
-        />
+        <RecentActivityCard accounts={accountMap} baseCurrency={baseCurrency} convert={convert} transactions={recent} />
         <AccountsOverviewCard baseCurrency={baseCurrency} convert={convert} />
       </div>
     </div>

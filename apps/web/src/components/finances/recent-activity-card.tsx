@@ -11,14 +11,11 @@ export function RecentActivityCard({
   accounts,
   baseCurrency,
   convert,
-  /** Carries the dashboard period into the transactions view. */
-  rangeSearch,
   transactions,
 }: {
   accounts: ReadonlyMap<string, AccountItem>;
   baseCurrency: string;
   convert: AmountConverter;
-  rangeSearch: { from: number; to: number };
   transactions: readonly TransactionRecord[];
 }) {
   const openEdit = useTransactionDialogStore((state) => state.openEdit);
@@ -27,11 +24,7 @@ export function RecentActivityCard({
     <SectionCard
       title="Recent activity"
       actions={
-        <Link
-          to="/finances/transactions"
-          search={rangeSearch}
-          className={buttonVariants({ size: "sm", variant: "ghost" })}
-        >
+        <Link to="/finances/transactions" className={buttonVariants({ size: "sm", variant: "ghost" })}>
           View all
         </Link>
       }
