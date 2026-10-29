@@ -41,6 +41,22 @@ export const IMPORTANCE_LABELS: Record<ImportanceTier, string> = {
   investment: "Invest",
 };
 
+/** Chart bars stay a red stack so stacked expenses read as one series (darker = more fixed), as on the web. */
+export const IMPORTANCE_CHART_COLOR: Record<ImportanceTier, string> = {
+  fixed: "#991b1b",
+  flexible: "#ef4444",
+  optional: "#f87171",
+  investment: "#fca5a5",
+};
+
+/** Totals keep the income/expense tint even though they aren't typed rows. */
+export const FLOW_COLOR = {
+  income: "#10b981",
+  expense: "#e11d48",
+  net: "#3b82f6",
+  netWorth: "#3b82f6",
+} as const;
+
 /** `type` is a free-text column, so narrow it before indexing into the styles. */
 export function resolveTransactionType(type: string): TransactionType {
   return type in TRANSACTION_TYPE_STYLE ? (type as TransactionType) : "expense";

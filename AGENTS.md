@@ -52,8 +52,12 @@ writing Kysely queries inline.
 
 The mobile app opens the same synced user DB through `@sqlite-sync/react-native` (op-sqlite)
 in `apps/mobile/src/lib/user-db.tsx` and uses core's `data/*` hooks like the web does; it has
-no charts or markdown rendering yet (notes are edited as plain text). Notes for mobile:
+no markdown rendering yet (notes are edited as plain text). Notes for mobile:
 
+- Charts use victory-native (Skia + Reanimated + Gesture Handler) where the web uses recharts;
+  the finance overview charts live in `apps/mobile/src/components/overview-charts.tsx`.
+  victory-native 43+ imports Skia from the renamed `react-native-skia` package (2.15+), not the
+  `@shopify/react-native-skia` that Expo SDK 58 still pins, so `expo install` won't manage it.
 - op-sqlite is a native module, so Expo Go can't run the app: it needs a development
   build (`expo-dev-client`). Build one with EAS from `apps/mobile`
   (`eas build --profile development --platform android`, profiles in `eas.json`) and install

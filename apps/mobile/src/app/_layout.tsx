@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SessionProvider, useSession } from "../lib/session";
 
 SplashScreen.preventAutoHideAsync();
@@ -32,9 +33,11 @@ function RootStack() {
 
 export default function RootLayout() {
   return (
-    <SessionProvider>
-      <RootStack />
-      <StatusBar style="auto" />
-    </SessionProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SessionProvider>
+        <RootStack />
+        <StatusBar style="auto" />
+      </SessionProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -24,6 +24,11 @@
       --color-input: oklch(0.9276 0.0058 264.5313);
       --color-ring: oklch(0.6056 0.2189 292.7172);
       --color-ripple: oklch(0.6056 0.2189 292.7172 / 0.12);
+      --color-chart-1: oklch(0.6056 0.2189 292.7172);
+      --color-chart-2: oklch(0.5413 0.2466 293.009);
+      --color-chart-3: oklch(0.4907 0.2412 292.5809);
+      --color-chart-4: oklch(0.432 0.2106 292.7591);
+      --color-chart-5: oklch(0.3796 0.1783 293.7446);
     }
 
     @variant dark {
@@ -47,6 +52,11 @@
       --color-input: oklch(0.3715 0 0);
       --color-ring: oklch(0.6056 0.2189 292.7172);
       --color-ripple: oklch(0.6056 0.2189 292.7172 / 0.2);
+      --color-chart-1: oklch(0.709 0.1592 293.5412);
+      --color-chart-2: oklch(0.6056 0.2189 292.7172);
+      --color-chart-3: oklch(0.5413 0.2466 293.009);
+      --color-chart-4: oklch(0.4907 0.2412 292.5809);
+      --color-chart-5: oklch(0.432 0.2106 292.7591);
     }
   }
 }
