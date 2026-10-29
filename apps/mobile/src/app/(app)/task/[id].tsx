@@ -7,15 +7,16 @@ import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, Text, TextInput, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
-import { EmptyState } from "../../../components/empty-state";
-import { FormSection } from "../../../components/form";
-import { Icon } from "../../../components/icon";
-import { KeyboardScreen } from "../../../components/keyboard-screen";
 import { SheetHeader } from "../../../components/screen-header";
 import { TagEditor } from "../../../components/tag-editor";
 import { TaskScheduleSection } from "../../../components/task-schedule";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { FormSection } from "../../../components/ui/form";
+import { Icon } from "../../../components/ui/icon";
+import { Input } from "../../../components/ui/input";
+import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { useAutosave } from "../../../lib/use-autosave";
 
 export default function TaskScreen() {
@@ -86,22 +87,20 @@ function TaskEditor({ task }: { task: NoteItem }) {
   return (
     <KeyboardScreen header={<SheetHeader title="Task" onDone={() => router.back()} />}>
       <View className="gap-2">
-        <TextInput
+        <Input
           value={fields.title}
           onChangeText={(title) => update({ title })}
           placeholder="What needs doing?"
-          placeholderTextColorClassName="accent-muted-foreground"
-          className={`font-semibold text-foreground text-xl ${completed ? "line-through opacity-60" : ""}`}
+          className={`font-semibold text-xl ${completed ? "line-through opacity-60" : ""}`}
           multiline
           submitBehavior="blurAndSubmit"
           autoFocus={!task.title && !task.content}
         />
-        <TextInput
+        <Input
           value={fields.content}
           onChangeText={(content) => update({ content })}
           placeholder="Add details…"
-          placeholderTextColorClassName="accent-muted-foreground"
-          className="min-h-24 text-base text-foreground"
+          className="min-h-24"
           multiline
           textAlignVertical="top"
         />

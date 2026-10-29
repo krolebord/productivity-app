@@ -3,7 +3,7 @@ import { formatDateTimeDisplay } from "@productivity/core/date-time";
 import { getDisplayAmountForAccount, type TransactionRow as TransactionRecord } from "@productivity/core/transactions";
 import { Pressable, Text, View } from "react-native";
 import { amountAccentClass, resolveTransactionType, TRANSACTION_TYPE_STYLE, transactionTitle } from "../lib/finance";
-import { Icon } from "./icon";
+import { Icon } from "./ui/icon";
 
 export function TransactionRow({
   transaction,

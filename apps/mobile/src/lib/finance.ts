@@ -5,7 +5,7 @@ import { useDashboardSettings } from "@productivity/core/data/dashboard-settings
 import { createAmountConverter } from "@productivity/core/finance/overview";
 import type { ImportanceTier, TransactionType } from "@productivity/core/transactions";
 import { useMemo } from "react";
-import type { IconName } from "../components/icon";
+import type { IconName } from "../components/ui/icon";
 
 export const TRANSACTION_TYPE_STYLE = {
   expense: {

@@ -15,12 +15,11 @@ import { format } from "date-fns";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { EmptyState } from "../../../components/empty-state";
-import { Icon } from "../../../components/icon";
-import { IconButton } from "../../../components/icon-button";
-import { ScreenHeader } from "../../../components/screen-header";
-import { OfflineBanner } from "../../../components/sync-status";
-import { useCurrentDayKey } from "../../../lib/use-current-day";
+import { ScreenHeader } from "../../components/screen-header";
+import { EmptyState } from "../../components/ui/empty-state";
+import { Icon } from "../../components/ui/icon";
+import { IconButton } from "../../components/ui/icon-button";
+import { useCurrentDayKey } from "../../lib/use-current-day";
 
 const DAYS_SHOWN = 7;
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -61,8 +60,11 @@ export default function HabitsScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <ScreenHeader title="Habits" actions={<IconButton icon="plus" label="New habit" onPress={() => open("new")} />} />
-      <OfflineBanner />
+      <ScreenHeader
+        title="Habits"
+        onBack={router.back}
+        actions={<IconButton icon="plus" label="New habit" onPress={() => open("new")} />}
+      />
       <ScrollView className="flex-1" contentContainerClassName="gap-3 px-5 pt-1 pb-10">
         {active.length === 0 && (
           <EmptyState icon="repeat" title="No habits yet" description="Tap + to start tracking a habit." />

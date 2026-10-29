@@ -1,41 +1,122 @@
 import { useDb, useDbEvent, useDbState } from "@productivity/core/user-db/db-context";
 import { useEffect, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
-import { Icon } from "./icon";
+import { Alert, Animated, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { cn } from "../lib/utils";
+import { Icon } from "./ui/icon";
 
-const SHOW_DELAY_MS = 1500;
+const SHOW_DELAY_MS = 1000;
+const BACK_ONLINE_MS = 1000;
 
-/** Pill shown while the sync connection is down; local edits keep working and push once it's back. */
+type Phase = "hidden" | "offline" | "back-online" | "leaving";
+
+/**
+ * Connection badge floating over the top of every screen, like web's: appears once the sync
+ * connection has been down for a moment, flashes "Back online" when it returns, then slides away.
+ * Local edits keep working throughout and push once the connection is back.
+ */
 export function OfflineBanner() {
-  const db = useDb();
+  const { state } = useDb();
   const { remoteState } = useDbState();
-  const online = remoteState === "online";
-  const [visible, setVisible] = useState(false);
+  const insets = useSafeAreaInsets();
+  const [phase, setPhase] = useState<Phase>("hidden");
+  const [progress] = useState(() => new Animated.Value(0));
+  const [spin] = useState(() => new Animated.Value(0));
 
+  const online = remoteState === "online";
+
+  // Keyed on a boolean, so flips between "connecting" and "offline" during retries don't restart the delay.
   useEffect(() => {
     if (online) {
-      setVisible(false);
+      setPhase((current) => (current === "offline" ? "back-online" : current));
       return;
     }
-    const timeout = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
+    setPhase((current) => (current === "back-online" || current === "leaving" ? "offline" : current));
+    const timeout = setTimeout(() => setPhase("offline"), SHOW_DELAY_MS);
     return () => clearTimeout(timeout);
   }, [online]);
 
-  if (!visible) return null;
+  useEffect(() => {
+    if (phase !== "back-online") return;
+    const timeout = setTimeout(() => setPhase("leaving"), BACK_ONLINE_MS);
+    return () => clearTimeout(timeout);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase === "hidden") return;
+    const leaving = phase === "leaving";
+    const animation = Animated.timing(progress, {
+      toValue: leaving ? 0 : 1,
+      duration: leaving ? 300 : 200,
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished && leaving) setPhase("hidden");
+    });
+    return () => animation.stop();
+  }, [phase, progress]);
+
+  const reconnecting = phase === "offline" && remoteState === "connecting";
+  useEffect(() => {
+    if (!reconnecting) return;
+    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 1000, useNativeDriver: true }));
+    loop.start();
+    return () => {
+      loop.stop();
+      spin.setValue(0);
+    };
+  }, [reconnecting, spin]);
+
+  if (phase === "hidden") return null;
+
+  const offline = phase === "offline";
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Offline. Tap to reconnect."
-      onPress={() => db.state.sync()}
-      className="mx-5 mb-2 flex-row items-center gap-2 rounded-full border border-rose-500/30 bg-rose-50 px-3.5 py-1.5 active:opacity-80 dark:bg-rose-950"
+    <View
+      pointerEvents="box-none"
+      className="absolute inset-x-0 top-0 items-center px-4"
+      style={{ paddingTop: insets.top + 4 }}
     >
-      <Icon name="wifi-off" size={14} colorClassName="accent-rose-700 dark:accent-rose-300" />
-      <Text className="flex-1 text-rose-700 text-sm dark:text-rose-300" numberOfLines={1}>
-        {remoteState === "connecting" ? "Reconnecting…" : "Offline — changes will sync later"}
-      </Text>
-      <Icon name="refresh-cw" size={13} colorClassName="accent-rose-700 dark:accent-rose-300" />
-    </Pressable>
+      <Animated.View
+        style={{
+          opacity: progress,
+          transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={offline ? "You're offline. Tap to reconnect." : "Back online"}
+          accessibilityState={{ busy: reconnecting, disabled: !offline }}
+          disabled={!offline}
+          onPress={() => void state.goOnline()}
+          className={cn(
+            "flex-row items-center gap-2 rounded-full border py-1.5 pr-3 pl-3.5 shadow-md active:opacity-80",
+            offline
+              ? "border-rose-500/30 bg-rose-50 dark:bg-rose-950"
+              : "border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950",
+          )}
+        >
+          {offline ? (
+            <>
+              <Icon name="wifi-off" size={16} colorClassName="accent-rose-700 dark:accent-rose-300" />
+              <Text className="text-rose-700 text-sm dark:text-rose-300">You're offline</Text>
+              <Animated.View
+                style={{
+                  transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
+                }}
+              >
+                <Icon name="refresh-cw" size={14} colorClassName="accent-rose-700 dark:accent-rose-300" />
+              </Animated.View>
+            </>
+          ) : (
+            <>
+              <Icon name="wifi" size={16} colorClassName="accent-emerald-700 dark:accent-emerald-300" />
+              <Text className="text-emerald-700 text-sm dark:text-emerald-300">Back online</Text>
+            </>
+          )}
+        </Pressable>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -59,9 +140,24 @@ export function SyncStatusMonitor() {
   return null;
 }
 
-export function SyncDot() {
-  const { remoteState } = useDbState();
-  const color =
-    remoteState === "online" ? "bg-emerald-500" : remoteState === "connecting" ? "bg-amber-500" : "bg-rose-500";
-  return <View className={`size-2 rounded-full ${color}`} />;
+const REMOTE_STATE_LABEL = { online: "Connected", connecting: "Connecting…", offline: "Offline" } as const;
+
+/** Colored dot plus label for the sync connection. */
+export function SyncStatus() {
+  const { remoteState, deSynced } = useDbState();
+  const color = deSynced
+    ? "bg-rose-500"
+    : remoteState === "online"
+      ? "bg-emerald-500"
+      : remoteState === "connecting"
+        ? "bg-amber-500"
+        : "bg-rose-500";
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <View className={cn("size-2 rounded-full", color)} />
+      <Text className="text-muted-foreground text-sm">
+        {deSynced ? "Out of sync" : REMOTE_STATE_LABEL[remoteState]}
+      </Text>
+    </View>
+  );
 }

@@ -1,8 +1,8 @@
 import { Stack } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 import { useCSSVariable } from "uniwind";
-import { Button } from "../../components/button";
-import { SyncStatusMonitor } from "../../components/sync-status";
+import { OfflineBanner, SyncStatusMonitor } from "../../components/sync-status";
+import { Button } from "../../components/ui/button";
 import { useSession } from "../../lib/session";
 import { UserDbProvider } from "../../lib/user-db";
 
@@ -34,12 +34,17 @@ export default function AppLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: background } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="transactions" />
+        <Stack.Screen name="habits" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="assistant" />
         <Stack.Screen name="task/[id]" options={modal} />
         <Stack.Screen name="note/[id]" options={modal} />
         <Stack.Screen name="habit/[id]" options={modal} />
         <Stack.Screen name="transaction/[id]" options={modal} />
         <Stack.Screen name="account/[id]" options={modal} />
       </Stack>
+      {/* After the stack so it floats over every screen pushed on it. */}
+      <OfflineBanner />
     </UserDbProvider>
   );
 }

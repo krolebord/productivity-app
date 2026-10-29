@@ -23,6 +23,7 @@ import {
   resolveAssistantReasoningEffort,
 } from "@productivity/core/agent/models";
 import { TransactionsSpecSchema } from "@productivity/core/agent/transactions-spec";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from "@productivity/core/agent/uploads";
 import {
   type ConversationItem,
   MEMORY_INJECTION_LIMIT,
@@ -34,7 +35,6 @@ import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { PostHog } from "posthog-node";
 import { z } from "zod";
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from "../lib/assistant-files";
 import type { UserDbServer } from "../user-db/user-db-server";
 import {
   conversationTitleFromTurnText,

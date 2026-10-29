@@ -13,6 +13,7 @@ import {
   getWeekDays,
   type HabitEntryValuesByDate,
   isHabitPeriodSchedule,
+  isTaskOverdueForToday,
   parseDateKey,
   parseScheduleMonthDays,
   parseScheduleWeekdays,
@@ -21,6 +22,7 @@ import {
   toDateKey,
 } from "../agenda";
 import { combineLocalDateAndTime, localMidnightMs } from "../date-time";
+import { isCalendarBackedTask } from "../google-calendar/mapping";
 import { useDb, useDbQuery } from "../user-db/db-context";
 import { setHabitEntryValue as writeHabitEntryValue } from "./habits";
 import { createTask as insertTask, rescheduleTask, scheduleAllDayTask, setTaskCompleted } from "./tasks";
@@ -120,6 +122,16 @@ export type CalendarDayInfo = {
   habitProgress: { due: number; done: number } | null;
 };
 
+/** `task`'s due time moved onto `day`: the same time of day for timed tasks, else all-day. */
+function dueAtOnDay(task: Pick<AgendaTask, "dueAt" | "hasDueTime">, day: Date): number {
+  if (!task.hasDueTime || task.dueAt == null) return localMidnightMs(day);
+  const due = new Date(task.dueAt);
+  return combineLocalDateAndTime(
+    day,
+    `${String(due.getHours()).padStart(2, "0")}:${String(due.getMinutes()).padStart(2, "0")}`,
+  );
+}
+
 /** Agenda state for the selected day; `todayKey` comes from the platform's day-change watcher. */
 export function useAgenda(todayKey: string) {
   const db = useDb();
@@ -208,28 +220,26 @@ export function useAgenda(todayKey: string) {
     setCalendarExpanded((prev) => !prev);
   }, []);
 
+  const isSelectedToday = selectedKey === todayKey;
+
   const toggleTaskCompleted = useCallback(
     (taskId: string, completed: boolean) => {
+      const task = completed && isSelectedToday ? agendaTasks.find((row) => row.id === taskId) : undefined;
+      // Finishing an overdue task logs it as done today instead of on the day it was missed.
+      // Calendar-mirrored tasks keep their date, which the next sync would restore anyway.
+      if (task && isTaskOverdueForToday(task, todayKey) && !isCalendarBackedTask(task)) {
+        rescheduleTask(db.db, task.id, dueAtOnDay(task, today), { completed: true });
+        return;
+      }
       setTaskCompleted(db.db, taskId, completed);
     },
-    [db],
+    [db, agendaTasks, isSelectedToday, todayKey, today],
   );
 
   const moveTaskToToday = useCallback(
     (task: AgendaTask) => {
       if (task.dueAt == null) return;
-      let nextDueAt: number;
-      if (task.hasDueTime) {
-        const hours = new Date(task.dueAt).getHours();
-        const minutes = new Date(task.dueAt).getMinutes();
-        nextDueAt = combineLocalDateAndTime(
-          today,
-          `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
-        );
-      } else {
-        nextDueAt = localMidnightMs(today);
-      }
-      rescheduleTask(db.db, task.id, nextDueAt);
+      rescheduleTask(db.db, task.id, dueAtOnDay(task, today));
     },
     [db, today],
   );
@@ -265,7 +275,7 @@ export function useAgenda(todayKey: string) {
     selectedDate,
     selectedKey,
     todayKey,
-    isSelectedToday: selectedKey === todayKey,
+    isSelectedToday,
     calendarExpanded,
     toggleCalendarExpanded,
     dayInfos,

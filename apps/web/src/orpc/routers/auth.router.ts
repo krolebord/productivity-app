@@ -1,5 +1,3 @@
-import { implement } from "@orpc/server";
-import { apiContract } from "@productivity/core/api/contract";
 import * as arctic from "arctic";
 import * as z from "zod";
 import { isAssistantAllowed } from "@/lib/assistant-access";
@@ -14,7 +12,7 @@ import {
   createSessionToken,
   deleteSession,
 } from "../common/auth";
-import { loggingMiddleware } from "../common/logging";
+import { contractApi } from "../common/contract";
 import type { ORPCContext } from "../common/os";
 import { procedure, protectedProcedure } from "../common/procedure";
 
@@ -166,8 +164,11 @@ export const handleGoogleCallback = async (context: ORPCContext, data: { code: s
   return { success: true, userId: user.id };
 };
 
-const api = implement(apiContract).$context<ORPCContext>().use(loggingMiddleware);
-const mobileAuth = api.auth.mobile;
+const mobileAuth = contractApi.auth.mobile;
+
+function toMobileSessionUser(user: { userId: string; userName: string; userEmail: string }) {
+  return { ...user, assistantEnabled: isAssistantAllowed(user.userEmail) };
+}
 
 const mobileAuthRouter = {
   requestCode: mobileAuth.requestCode.handler(async ({ input }) => {
@@ -182,11 +183,15 @@ const mobileAuthRouter = {
 
     const user = await findOrCreateUser({ email: input.email });
     const token = await createSessionToken(user);
-    return { success: true as const, token, user: { userId: user.id, userName: user.name, userEmail: user.email } };
+    return {
+      success: true as const,
+      token,
+      user: toMobileSessionUser({ userId: user.id, userName: user.name, userEmail: user.email }),
+    };
   }),
   getSession: mobileAuth.getSession.use(authMiddleware).handler(async ({ context }) => {
     const { userId, userName, userEmail } = context.auth;
-    return { userId, userName, userEmail };
+    return toMobileSessionUser({ userId, userName, userEmail });
   }),
   signOut: mobileAuth.signOut.use(authMiddleware).handler(async ({ context }) => {
     await deleteSession(context.auth.sessionId);

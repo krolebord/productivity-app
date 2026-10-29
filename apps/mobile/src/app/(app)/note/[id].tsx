@@ -5,13 +5,14 @@ import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, TextInput, View } from "react-native";
+import { Alert, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
-import { EmptyState } from "../../../components/empty-state";
-import { FormSection } from "../../../components/form";
-import { KeyboardScreen } from "../../../components/keyboard-screen";
 import { SheetHeader } from "../../../components/screen-header";
 import { TagEditor } from "../../../components/tag-editor";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { FormSection } from "../../../components/ui/form";
+import { Input } from "../../../components/ui/input";
+import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { useAutosave } from "../../../lib/use-autosave";
 
 export default function NoteScreen() {
@@ -67,21 +68,19 @@ function NoteEditor({ note }: { note: NoteItem }) {
   return (
     <KeyboardScreen header={<SheetHeader title={isNew ? "New note" : "Note"} onDone={() => router.back()} />}>
       <View className="gap-2">
-        <TextInput
+        <Input
           value={fields.title}
           onChangeText={(title) => update({ title })}
           placeholder="Title"
-          placeholderTextColorClassName="accent-muted-foreground"
-          className="font-semibold text-foreground text-xl"
+          className="font-semibold text-xl"
           multiline
           submitBehavior="blurAndSubmit"
         />
-        <TextInput
+        <Input
           value={fields.content}
           onChangeText={(content) => update({ content })}
           placeholder="Write something… (markdown)"
-          placeholderTextColorClassName="accent-muted-foreground"
-          className="min-h-64 text-base text-foreground"
+          className="min-h-64"
           multiline
           textAlignVertical="top"
           autoFocus={isNew}

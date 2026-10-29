@@ -3,13 +3,14 @@ import { type TransactionFilters, useTransactionCount, useTransactionPage } from
 import type { TransactionType } from "@productivity/core/transactions";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { FlatList, Text, TextInput, View } from "react-native";
+import { FlatList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { EmptyState } from "../../components/empty-state";
-import { Icon } from "../../components/icon";
-import { IconButton } from "../../components/icon-button";
-import { Segmented } from "../../components/segmented";
 import { TransactionRow } from "../../components/transaction-row";
+import { EmptyState } from "../../components/ui/empty-state";
+import { Icon } from "../../components/ui/icon";
+import { IconButton } from "../../components/ui/icon-button";
+import { Input } from "../../components/ui/input";
+import { Segmented } from "../../components/ui/segmented";
 
 const PAGE_SIZE = 50;
 
@@ -62,15 +63,14 @@ export default function TransactionsScreen() {
         </View>
         <View className="h-10 flex-row items-center gap-2 rounded-lg bg-muted px-3">
           <Icon name="search" size={16} colorClassName="accent-muted-foreground" />
-          <TextInput
+          <Input
             value={query}
             onChangeText={(text) => {
               setQuery(text);
               setLimit(PAGE_SIZE);
             }}
             placeholder="Search title, category, notes"
-            placeholderTextColorClassName="accent-muted-foreground"
-            className="h-full flex-1 text-base text-foreground"
+            className="h-full flex-1"
             returnKeyType="search"
             clearButtonMode="while-editing"
           />

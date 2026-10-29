@@ -3,8 +3,8 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Text } from "react-native";
 import { AuthScreen } from "../components/auth-screen";
-import { Button } from "../components/button";
-import { TextField } from "../components/text-field";
+import { Button } from "../components/ui/button";
+import { TextField } from "../components/ui/text-field";
 import { api } from "../lib/api";
 
 export default function SignInScreen() {

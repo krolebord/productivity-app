@@ -59,9 +59,14 @@ export function setTaskCompleted(db: UserDbDatabase, id: string, completed: bool
   );
 }
 
-/** Moves a task to `dueAt` and reopens it, keeping its all-day/timed flag. */
-export function rescheduleTask(db: UserDbDatabase, id: string, dueAt: number) {
-  db.executeKysely((q) => q.updateTable("item").set({ dueAt, completedAt: null }).where("id", "=", id));
+/** Moves a task to `dueAt`, keeping its all-day/timed flag; reopens it unless `completed`. */
+export function rescheduleTask(db: UserDbDatabase, id: string, dueAt: number, { completed = false } = {}) {
+  db.executeKysely((q) =>
+    q
+      .updateTable("item")
+      .set({ dueAt, completedAt: completed ? Date.now() : null })
+      .where("id", "=", id),
+  );
 }
 
 /** Schedules a task as an all-day task at `dueAt`, optionally completing it at the same time. */

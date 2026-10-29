@@ -13,6 +13,7 @@ import {
   resolveAssistantModelId,
   resolveAssistantReasoningEffort,
 } from "@productivity/core/agent/models";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@productivity/core/agent/uploads";
 import { conversationTitle } from "@productivity/core/conversation-list";
 import {
   deleteConversation as deleteConversationRow,
@@ -65,7 +66,6 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { conversationTurnFilesFromData } from "@/agent/conversation-projection";
 import { AssistantHeaderActions } from "@/components/assistant/assistant-header-actions";
 import { ChatsBackButton, ConversationList } from "@/components/assistant/conversation-list";
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@/lib/assistant-files";
 import { useAssistantStore } from "@/lib/assistant-store";
 import { useAuth } from "@/lib/auth-client";
 import { useAssistantNavigation } from "@/lib/use-assistant-navigation";

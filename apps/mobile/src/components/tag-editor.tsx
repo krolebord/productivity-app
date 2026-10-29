@@ -1,7 +1,8 @@
 import { normalizeTag } from "@productivity/core/tags";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Icon } from "./icon";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { Icon } from "./ui/icon";
+import { Input } from "./ui/input";
 
 export function TagEditor({
   value,
@@ -37,7 +38,7 @@ export function TagEditor({
             <Icon name="x" size={12} colorClassName="accent-accent-foreground" />
           </Pressable>
         ))}
-        <TextInput
+        <Input
           value={draft}
           onChangeText={(text) => {
             if (/[\s,]$/.test(text)) add(text);
@@ -46,11 +47,10 @@ export function TagEditor({
           onSubmitEditing={() => add(draft)}
           submitBehavior="submit"
           placeholder={value.length ? "Add tag" : "Add tags"}
-          placeholderTextColorClassName="accent-muted-foreground"
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="done"
-          className="h-8 min-w-24 flex-1 text-base text-foreground"
+          className="h-8 min-w-24 flex-1"
         />
       </View>
       {matches.length > 0 && (

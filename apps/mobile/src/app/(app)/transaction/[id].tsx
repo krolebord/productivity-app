@@ -18,15 +18,16 @@ import {
 import { useDb } from "@productivity/core/user-db/db-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Platform, Text, TextInput, View } from "react-native";
+import { Alert, Platform, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
 import { DateTimeField } from "../../../components/date-time-field";
-import { EmptyState } from "../../../components/empty-state";
-import { FieldError, FormRow, FormSection } from "../../../components/form";
-import { KeyboardScreen } from "../../../components/keyboard-screen";
 import { SheetHeader } from "../../../components/screen-header";
-import { Segmented } from "../../../components/segmented";
-import { SelectField } from "../../../components/select-sheet";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { FieldError, FormRow, FormSection } from "../../../components/ui/form";
+import { Input } from "../../../components/ui/input";
+import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
+import { Segmented } from "../../../components/ui/segmented";
+import { SelectField } from "../../../components/ui/select-sheet";
 import { IMPORTANCE_LABELS, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
 
 const DEFAULT_IMPORTANCE: ImportanceTier = "flexible";
@@ -241,11 +242,10 @@ function TransactionForm({
 
       <View className="items-center gap-1 py-2">
         <View className="flex-row items-baseline gap-2">
-          <TextInput
+          <Input
             value={form.amount}
             onChangeText={(amount) => update({ amount })}
             placeholder="0.00"
-            placeholderTextColorClassName="accent-muted-foreground"
             keyboardType={
               form.type === "adjustment" && Platform.OS === "ios" ? "numbers-and-punctuation" : "decimal-pad"
             }
@@ -278,13 +278,12 @@ function TransactionForm({
         )}
         {needsCounterpartyAmount && (
           <FormRow label="Received" last>
-            <TextInput
+            <Input
               value={form.counterpartyAmount}
               onChangeText={(counterpartyAmount) => update({ counterpartyAmount })}
               placeholder="0.00"
-              placeholderTextColorClassName="accent-muted-foreground"
               keyboardType="decimal-pad"
-              className="h-10 min-w-24 text-right text-base text-foreground"
+              className="h-10 min-w-24 text-right"
             />
             <Text className="text-base text-muted-foreground">{destination?.currency}</Text>
           </FormRow>
@@ -293,12 +292,11 @@ function TransactionForm({
 
       <FormSection>
         <FormRow label="Title">
-          <TextInput
+          <Input
             value={form.title}
             onChangeText={(title) => update({ title })}
             placeholder={TRANSACTION_TYPE_STYLE[form.type].label}
-            placeholderTextColorClassName="accent-muted-foreground"
-            className="h-10 min-w-40 text-right text-base text-foreground"
+            className="h-10 min-w-40 text-right"
           />
         </FormRow>
         {form.type !== "transfer" && (
@@ -324,12 +322,11 @@ function TransactionForm({
           />
         </FormRow>
         <View className="px-4 py-2">
-          <TextInput
+          <Input
             value={form.notes}
             onChangeText={(notes) => update({ notes })}
             placeholder="Notes"
-            placeholderTextColorClassName="accent-muted-foreground"
-            className="min-h-10 text-base text-foreground"
+            className="min-h-10"
             multiline
           />
         </View>

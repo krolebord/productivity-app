@@ -1,22 +1,30 @@
 import type { ReactNode } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { IconButton } from "./ui/icon-button";
 
 export function ScreenHeader({
   title,
   subtitle,
   actions,
+  onBack,
   children,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  /** Shows a back chevron, for screens pushed over the tabs. */
+  onBack?: () => void;
   children?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <View className="gap-3 bg-background px-5 pb-3" style={{ paddingTop: insets.top + 12 }}>
+    <View
+      className={`gap-3 bg-background pb-3 ${onBack ? "pr-5 pl-2" : "px-5"}`}
+      style={{ paddingTop: insets.top + 12 }}
+    >
       <View className="flex-row items-center gap-2">
+        {onBack && <IconButton icon="chevron-left" label="Back" onPress={onBack} size={26} />}
         <View className="min-w-0 flex-1">
           <Text numberOfLines={1} className="font-semibold text-3xl text-foreground">
             {title}

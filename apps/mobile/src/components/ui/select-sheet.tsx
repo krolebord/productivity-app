@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { FlatList, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { FlatList, Modal, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SheetHeader } from "../screen-header";
 import { FormRow, FormValue } from "./form";
 import { Icon } from "./icon";
-import { SheetHeader } from "./screen-header";
+import { Input } from "./input";
 
 export type SelectOption<T extends string> = { value: T; label: string; description?: string };
 
@@ -90,12 +91,11 @@ function SelectSheet<T extends string>({
         {searchable && (
           <View className="mx-4 mt-3 h-10 flex-row items-center gap-2 rounded-lg bg-muted px-3">
             <Icon name="search" size={16} colorClassName="accent-muted-foreground" />
-            <TextInput
+            <Input
               value={query}
               onChangeText={setQuery}
               placeholder={allowCustom ? "Search or type a new one" : "Search"}
-              placeholderTextColorClassName="accent-muted-foreground"
-              className="h-full flex-1 text-base text-foreground"
+              className="h-full flex-1"
               autoCorrect={false}
               onSubmitEditing={() => showCustom && onSelect(query.trim())}
             />

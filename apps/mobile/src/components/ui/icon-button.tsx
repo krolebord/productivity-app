@@ -1,11 +1,12 @@
 import { Pressable } from "react-native";
+import { cn } from "../../lib/utils";
 import { Icon, type IconName } from "./icon";
 
 export function IconButton({
   icon,
   label,
   onPress,
-  className = "",
+  className,
   iconClassName = "accent-foreground",
   size = 20,
   disabled = false,
@@ -25,7 +26,7 @@ export function IconButton({
       hitSlop={8}
       onPress={onPress}
       disabled={disabled}
-      className={`size-10 items-center justify-center rounded-full active:bg-muted disabled:opacity-40 ${className}`}
+      className={cn("size-10 items-center justify-center rounded-full active:bg-muted disabled:opacity-40", className)}
     >
       <Icon name={icon} size={size} colorClassName={iconClassName} />
     </Pressable>

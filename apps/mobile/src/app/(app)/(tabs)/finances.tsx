@@ -9,19 +9,20 @@ import type { AccountRow } from "@productivity/core/transactions";
 import { useRouter } from "expo-router";
 import { type ReactNode, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { EmptyState } from "../../../components/empty-state";
-import { FormSection } from "../../../components/form";
-import { IconButton } from "../../../components/icon-button";
+import { useTabContentInset } from "../../../components/assistant-button";
 import { ScreenHeader } from "../../../components/screen-header";
-import { SelectField } from "../../../components/select-sheet";
-import { OfflineBanner } from "../../../components/sync-status";
 import { TransactionRow } from "../../../components/transaction-row";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { FormSection } from "../../../components/ui/form";
+import { IconButton } from "../../../components/ui/icon-button";
+import { SelectField } from "../../../components/ui/select-sheet";
 import { amountAccentClass, TRANSACTION_TYPE_STYLE, useDisplayCurrency } from "../../../lib/finance";
 import { useCurrentDayKey } from "../../../lib/use-current-day";
 
 const RECENT_LIMIT = 10;
 
 export default function FinancesScreen() {
+  const contentInset = useTabContentInset();
   const router = useRouter();
   const currentDayKey = useCurrentDayKey();
   const { mode, days, cycleDay } = useDashboardSettings();
@@ -67,8 +68,11 @@ export default function FinancesScreen() {
           accounts.length > 0 ? <IconButton icon="plus" label="New transaction" onPress={newTransaction} /> : null
         }
       />
-      <OfflineBanner />
-      <ScrollView className="flex-1" contentContainerClassName="gap-6 px-5 pt-1 pb-10">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-6 px-5 pt-1"
+        contentContainerStyle={{ paddingBottom: contentInset }}
+      >
         {accounts.length === 0 ? (
           <EmptyState
             icon="credit-card"

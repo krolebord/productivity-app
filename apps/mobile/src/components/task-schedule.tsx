@@ -1,7 +1,7 @@
 import { combineLocalDateAndTime, localMidnightMs } from "@productivity/core/date-time";
 import { format } from "date-fns";
 import { DateTimeField } from "./date-time-field";
-import { FormRow, FormSection, FormSwitch } from "./form";
+import { FormRow, FormSection, FormSwitch } from "./ui/form";
 
 export type TaskScheduleFields = { dueAt: number | null; hasDueTime: boolean; completedAt: null };
 

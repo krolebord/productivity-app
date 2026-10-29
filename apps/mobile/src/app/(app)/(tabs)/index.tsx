@@ -11,17 +11,19 @@ import { type CalendarDayInfo, useAgenda } from "@productivity/core/data/agenda"
 import { formatDueDateLabel } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
 import { markdownToPlainText } from "@productivity/core/note-text";
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { CheckCircle } from "../../../components/check-circle";
-import { EmptyState } from "../../../components/empty-state";
-import { Icon } from "../../../components/icon";
-import { IconButton } from "../../../components/icon-button";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { useTabContentInset } from "../../../components/assistant-button";
 import { ScreenHeader } from "../../../components/screen-header";
-import { OfflineBanner } from "../../../components/sync-status";
+import { CheckCircle } from "../../../components/ui/check-circle";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { Icon } from "../../../components/ui/icon";
+import { IconButton } from "../../../components/ui/icon-button";
+import { Input } from "../../../components/ui/input";
 import { useCurrentDayKey } from "../../../lib/use-current-day";
+import { cn } from "../../../lib/utils";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -29,7 +31,17 @@ type Agenda = ReturnType<typeof useAgenda>;
 
 const isRowDone = (row: AgendaRow) => (row.kind === "task" ? row.completed : row.done);
 
+/** Subtitle under the day title; always set, so switching days doesn't shift the layout. */
+function daySubtitle(date: Date, todayKey: string) {
+  const days = differenceInCalendarDays(date, parseDateKey(todayKey));
+  if (days === 0) return format(date, "EEEE, MMMM d");
+  if (days === 1) return "Tomorrow";
+  if (days === -1) return "Yesterday";
+  return days > 0 ? `In ${days} days` : `${-days} days ago`;
+}
+
 export default function TodayScreen() {
+  const contentInset = useTabContentInset();
   const agenda = useAgenda(useCurrentDayKey());
   const router = useRouter();
   const [showCompleted, setShowCompleted] = useState(false);
@@ -52,18 +64,23 @@ export default function TodayScreen() {
     <View className="flex-1 bg-background">
       <ScreenHeader
         title={headerLabel}
-        subtitle={agenda.isSelectedToday ? format(agenda.selectedDate, "EEEE, MMMM d") : undefined}
+        subtitle={daySubtitle(agenda.selectedDate, agenda.todayKey)}
         actions={
           <>
-            {!agenda.isSelectedToday && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={agenda.goToToday}
-                className="h-8 justify-center rounded-full border border-border px-3 active:bg-muted"
-              >
-                <Text className="font-medium text-foreground text-sm">Today</Text>
-              </Pressable>
-            )}
+            {/* Hidden rather than removed on today, so the title keeps its width. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityElementsHidden={agenda.isSelectedToday}
+              importantForAccessibility={agenda.isSelectedToday ? "no-hide-descendants" : "auto"}
+              disabled={agenda.isSelectedToday}
+              onPress={agenda.goToToday}
+              className={cn(
+                "h-8 justify-center rounded-full border border-border px-3 active:bg-muted",
+                agenda.isSelectedToday && "opacity-0",
+              )}
+            >
+              <Text className="font-medium text-foreground text-sm">Today</Text>
+            </Pressable>
             <IconButton
               icon={agenda.calendarExpanded ? "chevron-up" : "calendar"}
               label={agenda.calendarExpanded ? "Collapse calendar" : "Expand calendar"}
@@ -75,11 +92,11 @@ export default function TodayScreen() {
       >
         <CalendarStrip agenda={agenda} />
       </ScreenHeader>
-      <OfflineBanner />
 
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-5 px-5 pt-1 pb-10"
+        contentContainerClassName="gap-5 px-5 pt-1"
+        contentContainerStyle={{ paddingBottom: contentInset }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
@@ -113,21 +130,11 @@ export default function TodayScreen() {
             ))}
             {completedRows.length > 0 && (
               <View className="gap-1">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: showCompleted }}
-                  onPress={() => setShowCompleted((value) => !value)}
-                  className="flex-row items-center gap-1 py-1"
-                >
-                  <Icon
-                    name={showCompleted ? "chevron-down" : "chevron-right"}
-                    size={14}
-                    colorClassName="accent-muted-foreground"
-                  />
-                  <Text className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                    Completed · {completedRows.length}
-                  </Text>
-                </Pressable>
+                <CollapsibleSectionTitle
+                  label={`Completed · ${completedRows.length}`}
+                  expanded={showCompleted}
+                  onToggle={() => setShowCompleted((value) => !value)}
+                />
                 {showCompleted &&
                   completedRows.map((row) => (
                     <AgendaRowView
@@ -154,6 +161,29 @@ function SectionTitle({ label, destructive = false }: { label: string; destructi
     >
       {label}
     </Text>
+  );
+}
+
+/** Section label that toggles its rows, as used by the Inbox and Completed groups. */
+function CollapsibleSectionTitle({
+  label,
+  expanded,
+  onToggle,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      onPress={onToggle}
+      className="flex-row items-center gap-1 py-1"
+    >
+      <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} colorClassName="accent-muted-foreground" />
+      <Text className="font-medium text-muted-foreground text-xs uppercase tracking-wide">{label}</Text>
+    </Pressable>
   );
 }
 
@@ -281,7 +311,7 @@ function QuickAddTask({
   return (
     <View className="h-12 flex-row items-center gap-2 rounded-xl border border-border bg-card pr-1 pl-3">
       <Icon name="plus" size={18} colorClassName="accent-muted-foreground" />
-      <TextInput
+      <Input
         value={title}
         onChangeText={setTitle}
         onSubmitEditing={submit}
@@ -292,8 +322,7 @@ function QuickAddTask({
             ? "Add to inbox"
             : `Add a task for ${selectedLabel.toLowerCase() === "today" ? "today" : selectedLabel}`
         }
-        placeholderTextColorClassName="accent-muted-foreground"
-        className="h-full flex-1 text-base text-foreground"
+        className="h-full flex-1"
       />
       <IconButton
         icon="inbox"
@@ -318,32 +347,36 @@ function InboxSection({
   agenda: Agenda;
   onOpen: (id: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <View className="gap-1">
-      <View className="flex-row items-center gap-1.5">
-        <Icon name="inbox" size={12} colorClassName="accent-muted-foreground" />
-        <SectionTitle label={`Inbox · ${tasks.length}`} />
-      </View>
-      {tasks.map((task) => (
-        <View key={task.id} className="min-h-11 flex-row items-center gap-3">
-          <CheckCircle
-            checked={false}
-            label={`Complete ${taskLabel(task)}`}
-            onPress={() => agenda.completeInboxTask(task.id, true)}
-          />
-          <Pressable className="flex-1 py-2" onPress={() => onOpen(task.id)}>
-            <TaskTitle task={task} />
-          </Pressable>
-          <IconButton
-            icon="calendar"
-            label={`Schedule for ${selectedLabel}`}
-            onPress={() => agenda.scheduleInboxTask(task.id)}
-            iconClassName="accent-muted-foreground"
-            size={16}
-            className="size-8"
-          />
-        </View>
-      ))}
+      <CollapsibleSectionTitle
+        label={`Inbox · ${tasks.length}`}
+        expanded={expanded}
+        onToggle={() => setExpanded((value) => !value)}
+      />
+      {expanded &&
+        tasks.map((task) => (
+          <View key={task.id} className="min-h-11 flex-row items-center gap-3">
+            <CheckCircle
+              checked={false}
+              label={`Complete ${taskLabel(task)}`}
+              onPress={() => agenda.completeInboxTask(task.id, true)}
+            />
+            <Pressable className="flex-1 py-2" onPress={() => onOpen(task.id)}>
+              <TaskTitle task={task} />
+            </Pressable>
+            <IconButton
+              icon="calendar"
+              label={`Schedule for ${selectedLabel}`}
+              onPress={() => agenda.scheduleInboxTask(task.id)}
+              iconClassName="accent-muted-foreground"
+              size={16}
+              className="size-8"
+            />
+          </View>
+        ))}
     </View>
   );
 }

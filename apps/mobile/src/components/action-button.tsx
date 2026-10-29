@@ -1,5 +1,5 @@
 import { Pressable, Text } from "react-native";
-import { Icon, type IconName } from "./icon";
+import { Icon, type IconName } from "./ui/icon";
 
 export function ActionButton({
   icon,

@@ -4,13 +4,14 @@ import { useDb } from "@productivity/core/user-db/db-context";
 import type { HabitItem } from "@productivity/core/user-db/migrations";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
-import { EmptyState } from "../../../components/empty-state";
-import { FieldError, FormOption, FormRow, FormSection } from "../../../components/form";
-import { KeyboardScreen } from "../../../components/keyboard-screen";
 import { SheetHeader } from "../../../components/screen-header";
-import { Segmented } from "../../../components/segmented";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { FieldError, FormOption, FormRow, FormSection } from "../../../components/ui/form";
+import { Input } from "../../../components/ui/input";
+import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
+import { Segmented } from "../../../components/ui/segmented";
 
 type ScheduleType = HabitItem["scheduleType"];
 type TimeOfDay = NonNullable<HabitItem["timeOfDay"]> | "anytime";
@@ -148,12 +149,11 @@ function HabitForm({ habit }: { habit: HabitItem | undefined }) {
     >
       <View className="gap-2">
         <FormSection>
-          <TextInput
+          <Input
             value={form.name}
             onChangeText={(name) => update({ name })}
             placeholder="Habit name"
-            placeholderTextColorClassName="accent-muted-foreground"
-            className="h-12 px-4 text-base text-foreground"
+            className="h-12 px-4"
             autoFocus={!habit}
             returnKeyType="done"
           />
@@ -177,11 +177,11 @@ function HabitForm({ habit }: { habit: HabitItem | undefined }) {
         {form.scheduleType === "everyNDays" && (
           <FormSection>
             <FormRow label="Every" last>
-              <TextInput
+              <Input
                 value={form.scheduleInterval}
                 onChangeText={(scheduleInterval) => update({ scheduleInterval })}
                 keyboardType="number-pad"
-                className="h-10 min-w-12 text-right text-base text-foreground"
+                className="h-10 min-w-12 text-right"
               />
               <Text className="text-base text-muted-foreground">days</Text>
             </FormRow>
@@ -231,20 +231,19 @@ function HabitForm({ habit }: { habit: HabitItem | undefined }) {
           footer={`How much counts as done per ${habitTargetPeriodLabel(form.scheduleType)}. Leave at 1 for a simple check-off.`}
         >
           <FormRow label="Target">
-            <TextInput
+            <Input
               value={form.target}
               onChangeText={(target) => update({ target })}
               keyboardType="decimal-pad"
-              className="h-10 min-w-12 text-right text-base text-foreground"
+              className="h-10 min-w-12 text-right"
             />
           </FormRow>
           <FormRow label="Unit" last>
-            <TextInput
+            <Input
               value={form.unit}
               onChangeText={(unit) => update({ unit })}
               placeholder="e.g. glasses"
-              placeholderTextColorClassName="accent-muted-foreground"
-              className="h-10 min-w-32 text-right text-base text-foreground"
+              className="h-10 min-w-32 text-right"
             />
           </FormRow>
         </FormSection>

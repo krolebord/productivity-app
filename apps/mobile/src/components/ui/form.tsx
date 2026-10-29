@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
-import { Icon } from "./icon";
+import { cn } from "../../lib/utils";
+import { Icon, type IconName } from "./icon";
 
 export function FormSection({ title, children, footer }: { title?: string; children: ReactNode; footer?: string }) {
   return (
@@ -12,31 +13,37 @@ export function FormSection({ title, children, footer }: { title?: string; child
   );
 }
 
+// Icon glyphs are text, so screen readers would otherwise read them as part of the row label.
+const decorative = { accessible: false, importantForAccessibility: "no", accessibilityElementsHidden: true } as const;
+
 export function FormRow({
   label,
+  icon,
   children,
   onPress,
   last = false,
 }: {
   label: string;
+  icon?: IconName;
   children?: ReactNode;
   onPress?: () => void;
   last?: boolean;
 }) {
   const content = (
     <>
+      {icon && <Icon name={icon} size={18} colorClassName="accent-muted-foreground" {...decorative} />}
       <Text className="text-base text-foreground">{label}</Text>
       <View className="ml-auto max-w-[65%] shrink flex-row items-center gap-2">
         {children}
-        {onPress && <Icon name="chevron-right" size={18} colorClassName="accent-muted-foreground" />}
+        {onPress && <Icon name="chevron-right" size={18} colorClassName="accent-muted-foreground" {...decorative} />}
       </View>
     </>
   );
-  const className = `min-h-12 flex-row items-center gap-3 px-4 py-2 ${last ? "" : "border-border border-b"}`;
+  const className = cn("min-h-12 flex-row items-center gap-3 px-4 py-2", !last && "border-border border-b");
 
   if (!onPress) return <View className={className}>{content}</View>;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} className={`${className} active:bg-muted`}>
+    <Pressable accessibilityRole="button" onPress={onPress} className={cn(className, "active:bg-muted")}>
       {content}
     </Pressable>
   );
@@ -44,7 +51,7 @@ export function FormRow({
 
 export function FormValue({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
   return (
-    <Text numberOfLines={1} className={`shrink text-base ${muted ? "text-muted-foreground" : "text-foreground"}`}>
+    <Text numberOfLines={1} className={cn("shrink text-base", muted ? "text-muted-foreground" : "text-foreground")}>
       {children}
     </Text>
   );
@@ -89,7 +96,7 @@ export function FormOption({
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
       onPress={onPress}
-      className={`min-h-12 flex-row items-center px-4 py-2 active:bg-muted ${last ? "" : "border-border border-b"}`}
+      className={cn("min-h-12 flex-row items-center px-4 py-2 active:bg-muted", !last && "border-border border-b")}
     >
       <Text className="flex-1 text-base text-foreground">{label}</Text>
       {selected && <Icon name="check" size={18} colorClassName="accent-primary" />}

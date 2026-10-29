@@ -5,13 +5,14 @@ import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Chip } from "../../../components/chip";
-import { EmptyState } from "../../../components/empty-state";
-import { Icon } from "../../../components/icon";
-import { IconButton } from "../../../components/icon-button";
+import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import { useTabContentInset } from "../../../components/assistant-button";
 import { ScreenHeader } from "../../../components/screen-header";
-import { OfflineBanner } from "../../../components/sync-status";
+import { Chip } from "../../../components/ui/chip";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { Icon } from "../../../components/ui/icon";
+import { IconButton } from "../../../components/ui/icon-button";
+import { Input } from "../../../components/ui/input";
 
 const noteTags = (note: NoteItem) => {
   const tags = parseTags(note.tags);
@@ -21,6 +22,7 @@ const noteTags = (note: NoteItem) => {
 const tagLabel = (tag: string) => (tag === UNTAGGED ? "untagged" : `#${tag}`);
 
 export default function NotesScreen() {
+  const contentInset = useTabContentInset();
   const db = useDb();
   const router = useRouter();
   const { notes } = useNotesList();
@@ -70,12 +72,11 @@ export default function NotesScreen() {
       <ScreenHeader title="Notes" actions={<IconButton icon="plus" label="New note" onPress={create} />}>
         <View className="h-10 flex-row items-center gap-2 rounded-lg bg-muted px-3">
           <Icon name="search" size={16} colorClassName="accent-muted-foreground" />
-          <TextInput
+          <Input
             value={query}
             onChangeText={setQuery}
             placeholder="Search notes"
-            placeholderTextColorClassName="accent-muted-foreground"
-            className="h-full flex-1 text-base text-foreground"
+            className="h-full flex-1"
             returnKeyType="search"
             clearButtonMode="while-editing"
           />
@@ -97,12 +98,12 @@ export default function NotesScreen() {
           </ScrollView>
         )}
       </ScreenHeader>
-      <OfflineBanner />
 
       <FlatList
         data={visible}
         keyExtractor={(note) => note.id}
-        contentContainerClassName="gap-3 px-5 pt-1 pb-10"
+        contentContainerClassName="gap-3 px-5 pt-1"
+        contentContainerStyle={{ paddingBottom: contentInset }}
         keyboardDismissMode="on-drag"
         renderItem={({ item }) => (
           <NoteCard note={item} onPress={() => router.push({ pathname: "/note/[id]", params: { id: item.id } })} />

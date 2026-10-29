@@ -12,14 +12,15 @@ import type { AccountRow } from "@productivity/core/transactions";
 import { useDb } from "@productivity/core/user-db/db-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
-import { EmptyState } from "../../../components/empty-state";
-import { FieldError, FormRow, FormSection, FormSwitch } from "../../../components/form";
-import { Icon } from "../../../components/icon";
-import { KeyboardScreen } from "../../../components/keyboard-screen";
 import { SheetHeader } from "../../../components/screen-header";
-import { SelectField } from "../../../components/select-sheet";
+import { EmptyState } from "../../../components/ui/empty-state";
+import { FieldError, FormRow, FormSection, FormSwitch } from "../../../components/ui/form";
+import { Icon } from "../../../components/ui/icon";
+import { Input } from "../../../components/ui/input";
+import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
+import { SelectField } from "../../../components/ui/select-sheet";
 
 const LABEL_COLORS = [
   "#8b5cf6",
@@ -119,12 +120,11 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
     >
       <FormSection>
         <FormRow label="Name">
-          <TextInput
+          <Input
             value={form.labelText}
             onChangeText={(labelText) => update({ labelText })}
             placeholder="e.g. Checking"
-            placeholderTextColorClassName="accent-muted-foreground"
-            className="h-10 min-w-40 text-right text-base text-foreground"
+            className="h-10 min-w-40 text-right"
             autoFocus={!account}
           />
         </FormRow>
@@ -135,11 +135,11 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
           onChange={(currency) => update({ currency })}
         />
         <FormRow label="Balance" last>
-          <TextInput
+          <Input
             value={form.balance}
             onChangeText={(balance) => update({ balance })}
             keyboardType="numbers-and-punctuation"
-            className="h-10 min-w-32 text-right text-base text-foreground"
+            className="h-10 min-w-32 text-right"
           />
         </FormRow>
       </FormSection>
@@ -169,12 +169,11 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
       </View>
 
       <FormSection title="Description">
-        <TextInput
+        <Input
           value={form.description}
           onChangeText={(description) => update({ description })}
           placeholder="Optional"
-          placeholderTextColorClassName="accent-muted-foreground"
-          className="min-h-16 px-4 py-3 text-base text-foreground"
+          className="min-h-16 px-4 py-3"
           multiline
         />
       </FormSection>
