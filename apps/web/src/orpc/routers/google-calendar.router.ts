@@ -11,8 +11,11 @@ import {
   getUserDbStub,
   mapCalendarListToSources,
 } from "@/lib/google-calendar/server";
-import { createCookieSession } from "../common/auth";
+import { authMiddleware, createCookieSession } from "../common/auth";
+import { contractApi } from "../common/contract";
 import { protectedProcedure } from "../common/procedure";
+
+const api = contractApi.integrations.googleCalendar;
 
 type CalendarOAuthSessionData = {
   state: string;
@@ -53,8 +56,6 @@ const connect = protectedProcedure
     return { url: url.toString() };
   });
 
-const connectionInput = z.object({ connectionId: z.string() });
-
 async function requireConnection(userId: string, connectionId: string) {
   const connections = await getGoogleCalendarConnectionsByUserId(userId);
   return connections.find((candidate) => candidate.id === connectionId);
@@ -66,7 +67,7 @@ async function requireConnection(userId: string, connectionId: string) {
  * Deliberately a query rather than synced data: "synced 3 minutes ago" changes on every run and is
  * of no interest to the user's other devices, so it must not become a replicated write.
  */
-const getSyncStatus = protectedProcedure.handler(async ({ context }) => {
+const getSyncStatus = api.getSyncStatus.use(authMiddleware).handler(async ({ context }) => {
   const connections = await getGoogleCalendarConnectionsByUserId(context.auth.userId);
   if (connections.length === 0) {
     return { connections: [] };
@@ -78,7 +79,7 @@ const getSyncStatus = protectedProcedure.handler(async ({ context }) => {
   return { connections: reports };
 });
 
-const refreshCalendars = protectedProcedure.input(connectionInput).handler(async ({ input, context, errors }) => {
+const refreshCalendars = api.refreshCalendars.use(authMiddleware).handler(async ({ input, context, errors }) => {
   const connection = await requireConnection(context.auth.userId, input.connectionId);
   if (!connection) {
     throw errors.BAD_REQUEST({ message: "That Google account is no longer connected." });
@@ -105,54 +106,44 @@ const refreshCalendars = protectedProcedure.input(connectionInput).handler(async
   }
 });
 
-const syncNow = protectedProcedure
-  .input(z.object({ connectionId: z.string().nullable().default(null) }))
-  .handler(async ({ input, context, errors }) => {
-    const connections = await getGoogleCalendarConnectionsByUserId(context.auth.userId);
-    if (connections.length === 0) {
-      throw errors.BAD_REQUEST({ message: "Connect a Google account first." });
-    }
+const syncNow = api.syncNow.use(authMiddleware).handler(async ({ input, context, errors }) => {
+  const connections = await getGoogleCalendarConnectionsByUserId(context.auth.userId);
+  if (connections.length === 0) {
+    throw errors.BAD_REQUEST({ message: "Connect a Google account first." });
+  }
 
-    if (input.connectionId && !connections.some((candidate) => candidate.id === input.connectionId)) {
-      throw errors.BAD_REQUEST({ message: "That Google account is no longer connected." });
-    }
+  if (input.connectionId && !connections.some((candidate) => candidate.id === input.connectionId)) {
+    throw errors.BAD_REQUEST({ message: "That Google account is no longer connected." });
+  }
 
-    const stub = await getUserDbStub(context.auth.userId);
-    await stub.enqueueCalendarSync({ providerConnectionId: input.connectionId });
+  const stub = await getUserDbStub(context.auth.userId);
+  await stub.enqueueCalendarSync({ providerConnectionId: input.connectionId });
 
-    return { success: true as const };
+  return { success: true as const };
+});
+
+const setCalendarEnabled = api.setCalendarEnabled.use(authMiddleware).handler(async ({ input, context, errors }) => {
+  const connection = await requireConnection(context.auth.userId, input.connectionId);
+  if (!connection) {
+    throw errors.BAD_REQUEST({ message: "That Google account is no longer connected." });
+  }
+
+  const stub = await getUserDbStub(context.auth.userId);
+  const found = await stub.setCalendarSourceEnabled({
+    sourceId: input.sourceId,
+    providerConnectionId: connection.id,
+    providerCalendarId: input.providerCalendarId,
+    enabled: input.enabled,
   });
+  if (!found) {
+    throw errors.BAD_REQUEST({ message: "That calendar is no longer available." });
+  }
 
-const setCalendarEnabled = protectedProcedure
-  .input(
-    connectionInput.extend({
-      sourceId: z.string(),
-      providerCalendarId: z.string(),
-      enabled: z.boolean(),
-    }),
-  )
-  .handler(async ({ input, context, errors }) => {
-    const connection = await requireConnection(context.auth.userId, input.connectionId);
-    if (!connection) {
-      throw errors.BAD_REQUEST({ message: "That Google account is no longer connected." });
-    }
-
-    const stub = await getUserDbStub(context.auth.userId);
-    const found = await stub.setCalendarSourceEnabled({
-      sourceId: input.sourceId,
-      providerConnectionId: connection.id,
-      providerCalendarId: input.providerCalendarId,
-      enabled: input.enabled,
-    });
-    if (!found) {
-      throw errors.BAD_REQUEST({ message: "That calendar is no longer available." });
-    }
-
-    return { success: true as const };
-  });
+  return { success: true as const };
+});
 
 const cleanupCalendar = protectedProcedure
-  .input(connectionInput.extend({ providerCalendarId: z.string().nullable().default(null) }))
+  .input(z.object({ connectionId: z.string(), providerCalendarId: z.string().nullable().default(null) }))
   .handler(async ({ input, context, errors }) => {
     const connection = await requireConnection(context.auth.userId, input.connectionId);
     if (!connection) {
@@ -168,7 +159,7 @@ const cleanupCalendar = protectedProcedure
     return { success: true as const };
   });
 
-const disconnect = protectedProcedure.input(connectionInput).handler(async ({ input, context }) => {
+const disconnect = api.disconnect.use(authMiddleware).handler(async ({ input, context }) => {
   const connection = await requireConnection(context.auth.userId, input.connectionId);
 
   if (!connection) {

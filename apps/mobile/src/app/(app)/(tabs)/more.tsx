@@ -1,3 +1,4 @@
+import { useIntegrationsHasError } from "@productivity/core/data/integrations";
 import { useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
 import { useTabContentInset } from "../../../components/assistant-button";
@@ -9,6 +10,7 @@ import { useSession } from "../../../lib/session";
 export default function MoreScreen() {
   const contentInset = useTabContentInset();
   const router = useRouter();
+  const integrationsHasError = useIntegrationsHasError();
   return (
     <View className="flex-1 bg-background">
       <ScreenHeader title="More" />
@@ -20,6 +22,12 @@ export default function MoreScreen() {
         <AccountCard />
         <FormSection>
           <FormRow icon="repeat" label="Habits" onPress={() => router.push("/habits")} />
+          <FormRow icon="dollar-sign" label="Exchange rates" onPress={() => router.push("/rates")} />
+          <FormRow icon="link" label="Integrations" onPress={() => router.push("/integrations")}>
+            {integrationsHasError && (
+              <View accessibilityLabel="Needs attention" className="size-2 rounded-full bg-rose-500" />
+            )}
+          </FormRow>
           <FormRow icon="settings" label="Settings" onPress={() => router.push("/settings")} last />
         </FormSection>
       </ScrollView>

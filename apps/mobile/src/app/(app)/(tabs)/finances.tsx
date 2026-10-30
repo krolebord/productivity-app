@@ -30,11 +30,14 @@ import { DashboardRangePicker } from "../../../components/dashboard-range-picker
 import { type OverviewChart, OverviewCharts } from "../../../components/overview-charts";
 import { ScreenHeader } from "../../../components/screen-header";
 import { TransactionRow } from "../../../components/transaction-row";
+import { ActionSheet } from "../../../components/ui/action-sheet";
 import { Icon, type IconName } from "../../../components/ui/icon";
 import { IconButton } from "../../../components/ui/icon-button";
+import { StatusNotice } from "../../../components/ui/notice";
 import { Segmented } from "../../../components/ui/segmented";
 import { amountAccentClass, TRANSACTION_TYPE_STYLE, useDisplayCurrency } from "../../../lib/finance";
 import { useCurrentDayKey } from "../../../lib/use-current-day";
+import { useRefreshBalances, useRefreshRates } from "../../../lib/use-finance-refresh";
 import { cn } from "../../../lib/utils";
 
 const RECENT_LIMIT = 12;
@@ -57,6 +60,9 @@ export default function FinancesScreen() {
   const [rangeOpen, setRangeOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rates = useRefreshRates();
+  const balances = useRefreshBalances();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: currentDayKey only exists so the range rolls over at midnight.
   const range = useMemo(() => {
@@ -132,7 +138,11 @@ export default function FinancesScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <ScreenHeader title="Finances" subtitle={range.spanLabel} />
+      <ScreenHeader
+        title="Finances"
+        subtitle={range.spanLabel}
+        actions={<IconButton icon="more-horizontal" label="More actions" onPress={() => setMenuOpen(true)} />}
+      />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ gap: 24, paddingHorizontal: 20, paddingTop: 4, paddingBottom: contentInset }}
@@ -161,6 +171,13 @@ export default function FinancesScreen() {
               <QuickAction key={type} type={type} primary={index === 0} onPress={() => newTransaction(type)} />
             ))}
           </View>
+          <StatusNotice
+            status={rates.status}
+            pendingLabel="Refreshing exchange rates…"
+            onRetry={rates.refresh}
+            onDismiss={rates.reset}
+          />
+          <StatusNotice status={balances.status} pendingLabel="Refreshing balances…" onDismiss={balances.reset} />
         </View>
 
         {!latestRate && (
@@ -291,6 +308,22 @@ export default function FinancesScreen() {
           </View>
         </Section>
       </ScrollView>
+      {/* Workspace-level actions, as the web's finance header menu. */}
+      <ActionSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={[
+          { label: "New account", icon: "plus", onPress: newAccount },
+          { label: "Exchange rates", icon: "dollar-sign", onPress: () => router.push("/rates") },
+          { label: "Refresh balances", icon: "refresh-cw", onPress: balances.refresh },
+          {
+            label: "Refresh rates",
+            icon: "trending-up",
+            onPress: rates.refresh,
+            disabled: rates.status.state === "pending",
+          },
+        ]}
+      />
       <CurrencySheet
         visible={currencyOpen}
         title="Display currency"

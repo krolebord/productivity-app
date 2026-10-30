@@ -1,9 +1,26 @@
 import Feather from "@expo/vector-icons/Feather";
+import { usePathname, useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
+import { useEffect, useRef } from "react";
 import { Platform, View } from "react-native";
 import { useCSSVariable } from "uniwind";
 import { AssistantButton } from "../../../components/assistant-button";
+import { getPreferences } from "../../../lib/preferences";
 import { useSession } from "../../../lib/session";
+
+/**
+ * Opens the default home tab once the tabs mount, like the web's redirect from "/". The tab order
+ * is fixed by the triggers, so it switches tabs rather than changing the initial route; a launch
+ * that deep-linked somewhere else is left alone.
+ */
+function useOpenDefaultHome() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const initialPath = useRef(pathname).current;
+  useEffect(() => {
+    if (initialPath === "/" && getPreferences().defaultHome === "finances") router.navigate("/finances");
+  }, [initialPath, router]);
+}
 
 export default function TabsLayout() {
   const [primary, muted, mutedForeground, accent, accentForeground, ripple] = useCSSVariable([
@@ -16,6 +33,7 @@ export default function TabsLayout() {
   ]) as (string | undefined)[];
   const { state } = useSession();
   const assistantEnabled = state.status === "signed-in" && state.user.assistantEnabled;
+  useOpenDefaultHome();
 
   return (
     <View className="flex-1">

@@ -1,4 +1,6 @@
 import "../global.css";
+// Applies the saved theme before the first frame.
+import "../lib/preferences";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";

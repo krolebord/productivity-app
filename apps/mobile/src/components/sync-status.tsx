@@ -2,6 +2,7 @@ import { useDb, useDbEvent, useDbState } from "@productivity/core/user-db/db-con
 import { useEffect, useState } from "react";
 import { Alert, Animated, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { API_URL } from "../lib/config";
 import { cn } from "../lib/utils";
 import { Icon } from "./ui/icon";
 
@@ -142,8 +143,18 @@ export function SyncStatusMonitor() {
 
 const REMOTE_STATE_LABEL = { online: "Connected", connecting: "Connecting…", offline: "Offline" } as const;
 
-/** Colored dot plus label for the sync connection. */
+const REMOTE_STATE_DETAIL = {
+  online: "Changes sync in the background as you make them.",
+  connecting: "Trying to reach the server. Your changes are saved on this device and sync once it's back.",
+  offline: "Not syncing right now. Your changes are saved on this device and sync once you're back online.",
+} as const;
+
+/**
+ * Colored dot plus label for the sync connection. Tapping it explains the state and offers the
+ * matching fix: sync or pause when connected, retry when not, reset when the data diverged.
+ */
 export function SyncStatus() {
+  const db = useDb();
   const { remoteState, deSynced } = useDbState();
   const color = deSynced
     ? "bg-rose-500"
@@ -152,12 +163,48 @@ export function SyncStatus() {
       : remoteState === "connecting"
         ? "bg-amber-500"
         : "bg-rose-500";
+  const label = deSynced ? "Out of sync" : REMOTE_STATE_LABEL[remoteState];
+  const host = API_URL.replace(/^https?:\/\//, "");
+
+  const showDetails = () => {
+    if (deSynced) {
+      Alert.alert(
+        "Your data is out of sync",
+        "This device's copy no longer matches the server. Reset local data to download it again; changes that haven't synced yet are lost.",
+        [
+          { text: "Later", style: "cancel" },
+          { text: "Reset local data", style: "destructive", onPress: () => void db.requestReload({ clean: true }) },
+        ],
+      );
+      return;
+    }
+    const message = `${REMOTE_STATE_DETAIL[remoteState]}\n\nServer: ${host}`;
+    if (remoteState === "online") {
+      Alert.alert(label, message, [
+        { text: "Close", style: "cancel" },
+        { text: "Go offline", onPress: () => void db.state.goOffline() },
+        { text: "Sync now", onPress: () => db.state.sync() },
+      ]);
+      return;
+    }
+    Alert.alert(label, message, [
+      { text: "Close", style: "cancel" },
+      { text: remoteState === "offline" ? "Go online" : "Retry now", onPress: () => void db.state.goOnline() },
+    ]);
+  };
+
   return (
-    <View className="flex-row items-center gap-1.5">
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Sync status: ${label}`}
+      accessibilityHint="Shows details and sync actions"
+      onPress={showDetails}
+      hitSlop={8}
+      className="flex-row items-center gap-1.5 rounded-full py-1 active:opacity-60"
+    >
       <View className={cn("size-2 rounded-full", color)} />
-      <Text className="text-muted-foreground text-sm">
-        {deSynced ? "Out of sync" : REMOTE_STATE_LABEL[remoteState]}
-      </Text>
-    </View>
+      <Text className="text-muted-foreground text-sm">{label}</Text>
+      <Icon name="chevron-right" size={14} colorClassName="accent-muted-foreground" />
+    </Pressable>
   );
 }

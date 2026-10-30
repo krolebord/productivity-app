@@ -11,12 +11,12 @@ import {
 import { getMonobankConnectionByUserId } from "@/lib/monobank/connection-store";
 import { buildMonobankWebhookUrl, getUserDbStub, mapClientAccountsToMetadata } from "@/lib/monobank/server";
 import { trySetMonobankWebhook } from "@/lib/monobank/webhook-renewal";
+import { authMiddleware } from "../common/auth";
+import { contractApi } from "../common/contract";
 import { protectedProcedure } from "../common/procedure";
 import { googleCalendarRouter } from "./google-calendar.router";
 
-const tokenInput = z.object({
-  token: z.string().trim().min(20, "That does not look like a valid Monobank token."),
-});
+const api = contractApi.integrations.monobank;
 
 async function validateToken(
   token: string,
@@ -32,7 +32,7 @@ async function validateToken(
   }
 }
 
-const connect = protectedProcedure.input(tokenInput).handler(async ({ input, context, errors }) => {
+const connect = api.connect.use(authMiddleware).handler(async ({ input, context, errors }) => {
   const token = input.token.trim();
   const userId = context.auth.userId;
 
@@ -93,7 +93,7 @@ const connect = protectedProcedure.input(tokenInput).handler(async ({ input, con
   return { success: true as const };
 });
 
-const replaceToken = protectedProcedure.input(tokenInput).handler(async ({ input, context, errors }) => {
+const replaceToken = api.replaceToken.use(authMiddleware).handler(async ({ input, context, errors }) => {
   const token = input.token.trim();
   const userId = context.auth.userId;
 
@@ -147,7 +147,7 @@ const replaceToken = protectedProcedure.input(tokenInput).handler(async ({ input
   return { success: true as const };
 });
 
-const refreshAccounts = protectedProcedure.handler(async ({ context, errors }) => {
+const refreshAccounts = api.refreshAccounts.use(authMiddleware).handler(async ({ context, errors }) => {
   const userId = context.auth.userId;
   const existing = await getMonobankConnectionByUserId(userId);
   if (!existing) {
@@ -194,7 +194,7 @@ const refreshAccounts = protectedProcedure.handler(async ({ context, errors }) =
   return { success: true as const };
 });
 
-const disconnect = protectedProcedure.handler(async ({ context }) => {
+const disconnect = api.disconnect.use(authMiddleware).handler(async ({ context }) => {
   const userId = context.auth.userId;
   const existing = await getMonobankConnectionByUserId(userId);
   if (!existing) {

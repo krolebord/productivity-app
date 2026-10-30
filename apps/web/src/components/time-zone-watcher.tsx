@@ -1,4 +1,4 @@
-import { canonicalTimeZone } from "@productivity/core/time-zone";
+import { deviceTimeZone as readDeviceTimeZone, timeZoneMismatch } from "@productivity/core/time-zone";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -7,10 +7,6 @@ import { orpc } from "@/orpc/orpc-client";
 
 const TIME_ZONE_TOAST_ID = "time-zone-mismatch";
 const DISMISSED_MISMATCH_KEY = "productivity-time-zone-dismissed";
-
-function readDeviceTimeZone() {
-  return canonicalTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-}
 
 /**
  * Saves the device's timezone when none is saved yet, and offers to switch when this device's zone
@@ -31,19 +27,18 @@ export function TimeZoneWatcher() {
 
   useEffect(() => {
     if (!savedTimeZone) return;
-    const saved = canonicalTimeZone(savedTimeZone);
-    if (saved === deviceTimeZone) {
+    const mismatch = timeZoneMismatch(savedTimeZone, deviceTimeZone);
+    if (!mismatch) {
       toast.dismiss(TIME_ZONE_TOAST_ID);
       return;
     }
 
-    const mismatch = `${saved}→${deviceTimeZone}`;
-    if (localStorage.getItem(DISMISSED_MISMATCH_KEY) === mismatch) return;
-    const dismiss = () => localStorage.setItem(DISMISSED_MISMATCH_KEY, mismatch);
+    if (localStorage.getItem(DISMISSED_MISMATCH_KEY) === mismatch.key) return;
+    const dismiss = () => localStorage.setItem(DISMISSED_MISMATCH_KEY, mismatch.key);
 
     toast.info("This device is in a different timezone", {
       id: TIME_ZONE_TOAST_ID,
-      description: `Saved: ${saved}. This device: ${deviceTimeZone}. Switch the saved timezone?`,
+      description: `Saved: ${mismatch.saved}. This device: ${mismatch.device}. Switch the saved timezone?`,
       duration: Number.POSITIVE_INFINITY,
       action: { label: "Switch", onClick: () => setTimeZone(deviceTimeZone) },
       cancel: { label: "Keep", onClick: dismiss },

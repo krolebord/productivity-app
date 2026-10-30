@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { canonicalTimeZone, dateKeyInZone, hourInZone, isValidTimeZone, timeInZone, zonedTimeMs } from "./time-zone";
+import {
+  canonicalTimeZone,
+  dateKeyInZone,
+  hourInZone,
+  isValidTimeZone,
+  timeInZone,
+  timeZoneMismatch,
+  zonedTimeMs,
+} from "./time-zone";
 
 describe("zonedTimeMs", () => {
   it("reads a wall-clock time in the given zone", () => {
@@ -38,5 +46,24 @@ describe("canonicalTimeZone", () => {
   it("maps aliases to one name and leaves unknown zones alone", () => {
     expect(canonicalTimeZone("Europe/Kyiv")).toBe(canonicalTimeZone("Europe/Kiev"));
     expect(canonicalTimeZone("Mars/Olympus")).toBe("Mars/Olympus");
+  });
+});
+
+describe("timeZoneMismatch", () => {
+  it("is null while no zone is saved", () => {
+    expect(timeZoneMismatch("", "Europe/Kyiv")).toBeNull();
+  });
+
+  it("treats aliases of the same zone as a match", () => {
+    expect(timeZoneMismatch("Europe/Kiev", canonicalTimeZone("Europe/Kyiv"))).toBeNull();
+  });
+
+  it("reports both zones and a stable key for a real difference", () => {
+    const mismatch = timeZoneMismatch("Europe/Kyiv", "America/New_York");
+    expect(mismatch).toEqual({
+      saved: canonicalTimeZone("Europe/Kyiv"),
+      device: "America/New_York",
+      key: `${canonicalTimeZone("Europe/Kyiv")}→America/New_York`,
+    });
   });
 });

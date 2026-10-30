@@ -55,6 +55,29 @@ export function canonicalTimeZone(timeZone: string): string {
   }
 }
 
+/** The device's own zone, canonicalized; the same `Intl` read works on the web and on Hermes. */
+export function deviceTimeZone(): string {
+  return canonicalTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+}
+
+export type TimeZoneMismatch = {
+  saved: string;
+  device: string /** Identifies the pair, for "don't ask again". */;
+  key: string;
+};
+
+/**
+ * Whether a device should offer to switch the saved zone to its own. Null while nothing is saved
+ * (the device initializes it instead) or when both name the same zone, aliases included.
+ */
+export function timeZoneMismatch(savedTimeZone: string, deviceZone: string): TimeZoneMismatch | null {
+  if (!savedTimeZone) return null;
+  const saved = canonicalTimeZone(savedTimeZone);
+  const device = canonicalTimeZone(deviceZone);
+  if (saved === device) return null;
+  return { saved, device, key: `${saved}→${device}` };
+}
+
 /**
  * Epoch ms of the wall-clock time `hours:minutes` on `dateKey` ("YYYY-MM-DD") in `timeZone`.
  * The offset is resolved twice because the first guess can land on the wrong side of a DST
