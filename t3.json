@@ -1,0 +1,21 @@
+{
+  "$schema": "https://t3.codes/schema/t3.json",
+  "iconPath": "apps/web/public/pwa-192x192.png",
+  "scripts": [
+    {
+      "name": "Dev server",
+      "command": "pnpm dev",
+      "icon": "play"
+    },
+    {
+      "name": "Dev server (Tailnet)",
+      "command": "ts-serve 3302:3301 && DEV_PORT=3302 DEV_ALLOWED_HOSTS=agent-ui-vps.tailc07dd9.ts.net pnpm dev",
+      "icon": "play"
+    },
+    {
+      "name": "Mobile dev client (Tailnet)",
+      "command": "APP_VARIANT=development REACT_NATIVE_PACKAGER_HOSTNAME=agent-ui-vps.tailc07dd9.ts.net EXPO_PUBLIC_API_URL=https://agent-ui-vps.tailc07dd9.ts.net:3301 pnpm dev:mobile -- --dev-client --lan --port 3303",
+      "icon": "play"
+    }
+  ]
+}
