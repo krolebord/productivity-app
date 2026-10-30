@@ -159,6 +159,20 @@ function DetailRow({ color, label, hint, value }: { color?: string; label: strin
   );
 }
 
+/** The series key under the cash-flow chart, as the web's chart legend. */
+function Legend({ items }: { items: readonly { color: string; label: string }[] }) {
+  return (
+    <View className="flex-row flex-wrap justify-center gap-x-3 gap-y-1">
+      {items.map((item) => (
+        <View key={item.label} className="flex-row items-center gap-1.5">
+          <View className="size-2.5 rounded-[2px]" style={{ backgroundColor: item.color }} />
+          <Text className="text-muted-foreground text-xs">{item.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function CashFlowChart({ data, baseCurrency }: { data: CashFlowPoint[]; baseCurrency: string }) {
   const theme = useChartTheme();
   const { state } = useChartPressState({
@@ -208,6 +222,12 @@ function CashFlowChart({ data, baseCurrency }: { data: CashFlowPoint[]; baseCurr
           }}
         </CartesianChart>
       </View>
+      <Legend
+        items={[
+          { color: FLOW_COLOR.income, label: "Income" },
+          ...IMPORTANCE_TIERS.map((tier) => ({ color: IMPORTANCE_CHART_COLOR[tier], label: IMPORTANCE_LABELS[tier] })),
+        ]}
+      />
       {row && (
         <Details title={row.label}>
           <DetailRow color={FLOW_COLOR.income} label="Income" value={formatBalance(row.income, baseCurrency)} />

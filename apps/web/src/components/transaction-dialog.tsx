@@ -5,6 +5,8 @@ import {
   useTransaction,
 } from "@productivity/core/data/transactions";
 import { formatDateTimeLocal, parseDateTimeLocal } from "@productivity/core/date-time";
+import { inferCategoryImportance } from "@productivity/core/finance/category-importance";
+import { formatTransferRate } from "@productivity/core/finance/transfer-rate";
 import { createDynamicValidationLogic, dynamicZodValidators } from "@productivity/core/form-schemas";
 import {
   createTransaction,
@@ -157,17 +159,6 @@ function isNonZeroAmount(amount: string) {
   return Number.isFinite(value) && value !== 0;
 }
 
-function formatRate(amount: string, counterpartyAmount: string, currency: string, counterpartyCurrency: string) {
-  const sent = Number.parseFloat(amount);
-  const received = Number.parseFloat(counterpartyAmount);
-  if (!(sent > 0 && received > 0)) return null;
-
-  const format = (rate: number) => rate.toLocaleString(undefined, { maximumFractionDigits: rate >= 10 ? 2 : 4 });
-  return sent >= received
-    ? `1 ${counterpartyCurrency} = ${format(sent / received)} ${currency}`
-    : `1 ${currency} = ${format(received / sent)} ${counterpartyCurrency}`;
-}
-
 function AmountInput({
   value,
   onChange,
@@ -261,18 +252,7 @@ function TransactionDialogContent({ amountInputRef }: { amountInputRef: RefObjec
   const categories = useRecentTransactionCategories();
 
   const importanceRows = useCategoryImportanceCounts();
-  const importanceByCategory = useMemo(() => {
-    const best = new Map<string, { importance: ImportanceTier; count: number }>();
-    for (const row of importanceRows) {
-      if (!row.importance) continue;
-      const count = Number(row.count);
-      const current = best.get(row.category);
-      if (!current || count > current.count) {
-        best.set(row.category, { importance: row.importance as ImportanceTier, count });
-      }
-    }
-    return new Map([...best].map(([category, value]) => [category, value.importance] as const));
-  }, [importanceRows]);
+  const importanceByCategory = useMemo(() => inferCategoryImportance(importanceRows), [importanceRows]);
 
   const existing = mode === "edit" ? existingTransaction : undefined;
   const selectedType = (existing?.type ?? draft?.type ?? "expense") as TransactionType;
@@ -392,7 +372,12 @@ function TransactionDialogContent({ amountInputRef }: { amountInputRef: RefObjec
     !(sourceAccount && destinationAccount && sourceAccount.currency === destinationAccount.currency);
   const rate =
     hasCounterpartyAmount && sourceAccount && destinationAccount
-      ? formatRate(values.amount, values.counterpartyAmount, sourceAccount.currency, destinationAccount.currency)
+      ? formatTransferRate(
+          Number.parseFloat(values.amount),
+          Number.parseFloat(values.counterpartyAmount),
+          sourceAccount.currency,
+          destinationAccount.currency,
+        )
       : null;
 
   const defaultValues = form.options.defaultValues;

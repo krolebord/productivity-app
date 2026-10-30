@@ -10,6 +10,15 @@ import {
 } from "@productivity/core/data/transactions";
 import type { AmountConverter } from "@productivity/core/finance/overview";
 import {
+  formatDayHeader,
+  formatTimeRangeLabel,
+  groupTransactionsByDay,
+  TIME_RANGE_PRESETS,
+  TRANSACTION_FILTER_KEYS,
+  TRANSACTION_SORT_LABELS,
+  type TransactionFilterKey,
+} from "@productivity/core/finance/transaction-list";
+import {
   getDisplayAmountForAccount,
   IMPORTANCE_TIERS,
   TRANSACTION_TYPES,
@@ -18,7 +27,7 @@ import {
 import { useDebounceCallback } from "@productivity/core/use-debounced-callback";
 import type { AccountItem } from "@productivity/core/user-db/migrations";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { endOfDay, format, isToday, isYesterday, startOfDay, startOfYear, subDays } from "date-fns";
+import { endOfDay, startOfDay } from "date-fns";
 import {
   ArrowUpDownIcon,
   CheckIcon,
@@ -71,81 +80,7 @@ export const Route = createFileRoute("/_app/finances/transactions")({
   validateSearch: transactionsSearchSchema,
 });
 
-const SORT_LABELS = {
-  date_desc: "Newest first",
-  date_asc: "Oldest first",
-  amount_desc: "Amount high to low",
-  amount_asc: "Amount low to high",
-  title_asc: "Title A to Z",
-  title_desc: "Title Z to A",
-} satisfies Record<TransactionSort, string>;
-
-const TIME_RANGE_PRESETS = [
-  {
-    id: "7d",
-    label: "Last 7d",
-    getRange: () => {
-      const now = new Date();
-      return {
-        from: startOfDay(subDays(now, 6)).getTime(),
-        to: endOfDay(now).getTime(),
-      };
-    },
-  },
-  {
-    id: "30d",
-    label: "Last 30d",
-    getRange: () => {
-      const now = new Date();
-      return {
-        from: startOfDay(subDays(now, 29)).getTime(),
-        to: endOfDay(now).getTime(),
-      };
-    },
-  },
-  {
-    id: "year",
-    label: "Start of year",
-    getRange: () => {
-      const now = new Date();
-      return {
-        from: startOfYear(now).getTime(),
-        to: endOfDay(now).getTime(),
-      };
-    },
-  },
-] as const;
-
-function formatDayHeader(timestamp: number) {
-  if (isToday(timestamp)) {
-    return "Today";
-  }
-
-  if (isYesterday(timestamp)) {
-    return "Yesterday";
-  }
-
-  return format(timestamp, "EEEE, MMM d, yyyy");
-}
-
-function formatTimeRangeLabel(from?: number, to?: number) {
-  if (from && to) {
-    return `${format(from, "MMM d, yyyy")} - ${format(to, "MMM d, yyyy")}`;
-  }
-
-  if (from) {
-    return `From ${format(from, "MMM d, yyyy")}`;
-  }
-
-  if (to) {
-    return `Until ${format(to, "MMM d, yyyy")}`;
-  }
-
-  return "All time";
-}
-
-const FILTER_ORDER = ["account", "currency", "time", "type", "importance", "category"] as const;
-type FilterKey = (typeof FILTER_ORDER)[number];
+type FilterKey = TransactionFilterKey;
 
 const capitalize = (value: string) => value[0].toUpperCase() + value.slice(1);
 
@@ -295,21 +230,10 @@ function TransactionsPage() {
 
   const { transactions: visibleTransactions, hasMore } = useTransactionPage(search, sort, limit);
 
-  const groupByDay = sort === "date_desc" || sort === "date_asc";
-  const dayGroups: { key: string; label: string; transactions: typeof visibleTransactions }[] = [];
-  if (groupByDay) {
-    for (const transaction of visibleTransactions) {
-      const key = format(transaction.effectiveAt, "yyyy-MM-dd");
-      const lastGroup = dayGroups.at(-1);
-      if (lastGroup?.key === key) {
-        lastGroup.transactions.push(transaction);
-      } else {
-        dayGroups.push({ key, label: formatDayHeader(transaction.effectiveAt), transactions: [transaction] });
-      }
-    }
-  } else {
-    dayGroups.push({ key: "__all__", label: "", transactions: visibleTransactions });
-  }
+  const dayGroups = groupTransactionsByDay(visibleTransactions, sort).map((group) => ({
+    ...group,
+    label: group.timestamp === null ? "" : formatDayHeader(group.timestamp),
+  }));
 
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
   const selectedAccount = search.accountId ? accountMap.get(search.accountId) : undefined;
@@ -463,7 +387,7 @@ function TransactionsPage() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => patchSearch(preset.getRange())}
+                  onClick={() => patchSearch(preset.getRange(new Date()))}
                 >
                   {preset.label}
                 </Button>
@@ -496,8 +420,8 @@ function TransactionsPage() {
     }
   }
 
-  const activeFilters = FILTER_ORDER.filter((key) => filterMeta[key].value !== null);
-  const inactiveFilters = FILTER_ORDER.filter((key) => filterMeta[key].value === null);
+  const activeFilters = TRANSACTION_FILTER_KEYS.filter((key) => filterMeta[key].value !== null);
+  const inactiveFilters = TRANSACTION_FILTER_KEYS.filter((key) => filterMeta[key].value === null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -520,7 +444,7 @@ function TransactionsPage() {
         </div>
 
         <Select
-          items={SORT_LABELS}
+          items={TRANSACTION_SORT_LABELS}
           value={sort}
           onValueChange={(value) => patchSearch({ sort: value as TransactionSort })}
         >
@@ -531,7 +455,7 @@ function TransactionsPage() {
           <SelectContent>
             {TRANSACTION_SORTS.map((sortOption) => (
               <SelectItem key={sortOption} value={sortOption}>
-                {SORT_LABELS[sortOption]}
+                {TRANSACTION_SORT_LABELS[sortOption]}
               </SelectItem>
             ))}
           </SelectContent>

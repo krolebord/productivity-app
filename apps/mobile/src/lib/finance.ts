@@ -2,9 +2,14 @@ import { getCurrencyOptions } from "@productivity/core/currency/convert";
 import { APP_CURRENCIES } from "@productivity/core/currency/currencies";
 import { useLatestCurrencyRate } from "@productivity/core/data/currency-rates";
 import { useDashboardSettings } from "@productivity/core/data/dashboard-settings";
-import { amountTone, type FinanceTone, TRANSACTION_TYPE_META } from "@productivity/core/finance/appearance";
+import {
+  amountTone,
+  type FinanceTone,
+  IMPORTANCE_LABELS,
+  TRANSACTION_TYPE_META,
+} from "@productivity/core/finance/appearance";
 import { createAmountConverter } from "@productivity/core/finance/overview";
-import type { TransactionType } from "@productivity/core/transactions";
+import type { ImportanceTier, TransactionType } from "@productivity/core/transactions";
 import { useMemo } from "react";
 import type { IconName } from "../components/ui/icon";
 
@@ -26,6 +31,33 @@ export const TRANSACTION_TYPE_STYLE = {
   transfer: { ...TRANSACTION_TYPE_META.transfer, ...TONE_STYLE.transfer, icon: "repeat" },
   adjustment: { ...TRANSACTION_TYPE_META.adjustment, ...TONE_STYLE.adjustment, icon: "sliders" },
 } satisfies Record<TransactionType, { label: string; shortLabel: string; icon: IconName; accent: string }>;
+
+/**
+ * Importance badges use the web's traffic-light ramp with investment set apart. RN can't
+ * inherit text colour from a View, so the badge's background and text classes are split.
+ */
+export const IMPORTANCE_STYLE = {
+  fixed: {
+    label: IMPORTANCE_LABELS.fixed,
+    badge: "bg-red-50 dark:bg-red-950/50",
+    badgeText: "text-red-700 dark:text-red-400",
+  },
+  flexible: {
+    label: IMPORTANCE_LABELS.flexible,
+    badge: "bg-amber-50 dark:bg-amber-950/50",
+    badgeText: "text-amber-700 dark:text-amber-400",
+  },
+  optional: {
+    label: IMPORTANCE_LABELS.optional,
+    badge: "bg-lime-50 dark:bg-lime-950/50",
+    badgeText: "text-lime-700 dark:text-lime-400",
+  },
+  investment: {
+    label: IMPORTANCE_LABELS.investment,
+    badge: "bg-blue-50 dark:bg-blue-950/50",
+    badgeText: "text-blue-700 dark:text-blue-400",
+  },
+} satisfies Record<ImportanceTier, { label: string; badge: string; badgeText: string }>;
 
 /**
  * Reads a typed amount, or NaN when it isn't a plain number. Either "." or "," can be the

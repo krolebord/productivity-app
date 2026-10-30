@@ -5,6 +5,8 @@ import {
   useTransaction,
 } from "@productivity/core/data/transactions";
 import { IMPORTANCE_LABELS } from "@productivity/core/finance/appearance";
+import { inferCategoryImportance } from "@productivity/core/finance/category-importance";
+import { formatTransferRate } from "@productivity/core/finance/transfer-rate";
 import {
   createTransaction,
   deleteTransaction,
@@ -18,18 +20,20 @@ import {
 } from "@productivity/core/transactions";
 import { useDb } from "@productivity/core/user-db/db-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
-import { Alert, Platform, Text, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Alert, Pressable, Text, type TextInputInstance, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
 import { DateTimeField } from "../../../components/date-time-field";
 import { SheetHeader } from "../../../components/screen-header";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { FieldError, FormRow, FormSection } from "../../../components/ui/form";
+import { Icon } from "../../../components/ui/icon";
 import { Input } from "../../../components/ui/input";
 import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { Segmented } from "../../../components/ui/segmented";
 import { SelectField } from "../../../components/ui/select-sheet";
 import { parseAmountInput, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
+import { cn } from "../../../lib/utils";
 
 const DEFAULT_IMPORTANCE: ImportanceTier = "flexible";
 
@@ -38,6 +42,20 @@ const TYPE_OPTIONS = TRANSACTION_TYPES.map((type) => ({
   label: TRANSACTION_TYPE_STYLE[type].shortLabel,
 }));
 const IMPORTANCE_OPTIONS = IMPORTANCE_TIERS.map((tier) => ({ value: tier, label: IMPORTANCE_LABELS[tier] }));
+
+const TITLE_PLACEHOLDER: Record<TransactionType, string> = {
+  expense: "What was it?",
+  income: "Where from?",
+  transfer: "Between accounts",
+  adjustment: "Manual correction",
+};
+
+/** Typing a sign into the amount: "-" or "+" anywhere in it, as the web's amount input reads it. */
+function typedSign(text: string): "+" | "-" | null {
+  if (/[-\u2212]/.test(text)) return "-";
+  if (text.includes("+")) return "+";
+  return null;
+}
 
 type FormState = {
   type: TransactionType;
@@ -53,7 +71,8 @@ type FormState = {
 };
 
 export default function TransactionScreen() {
-  const { id, accountId } = useLocalSearchParams<{ id: string; accountId?: string }>();
+  // `type` presets a new entry, as the overview's Expense / Income / Transfer actions do.
+  const { id, accountId, type } = useLocalSearchParams<{ id: string; accountId?: string; type?: string }>();
   const router = useRouter();
   const isNew = id === "new";
   const existing = useTransaction(isNew ? null : id);
@@ -75,12 +94,25 @@ export default function TransactionScreen() {
       </View>
     );
   }
-  return <TransactionForm existing={existing} defaultAccountId={accountId || accounts[0]?.id || ""} />;
+  return (
+    <TransactionForm
+      existing={existing}
+      defaultAccountId={accountId || accounts[0]?.id || ""}
+      defaultType={
+        (TRANSACTION_TYPES as readonly string[]).includes(type ?? "") ? (type as TransactionType) : "expense"
+      }
+    />
+  );
 }
 
-function initialState(existing: TransactionRow | undefined, defaultAccountId: string, otherAccountId: string) {
+function initialState(
+  existing: TransactionRow | undefined,
+  defaultAccountId: string,
+  otherAccountId: string,
+  defaultType: TransactionType,
+) {
   return {
-    type: (existing?.type as TransactionType | undefined) ?? "expense",
+    type: (existing?.type as TransactionType | undefined) ?? defaultType,
     accountId: existing?.accountId ?? defaultAccountId,
     counterpartyAccountId: existing?.counterpartyAccountId || otherAccountId,
     amount: existing
@@ -145,9 +177,11 @@ function toInput(form: FormState, needsCounterpartyAmount: boolean): Transaction
 function TransactionForm({
   existing,
   defaultAccountId,
+  defaultType,
 }: {
   existing: TransactionRow | undefined;
   defaultAccountId: string;
+  defaultType: TransactionType;
 }) {
   const db = useDb();
   const router = useRouter();
@@ -155,21 +189,14 @@ function TransactionForm({
   const categories = useRecentTransactionCategories();
   const importanceRows = useCategoryImportanceCounts();
   const otherAccountId = accounts.find((account) => account.id !== defaultAccountId)?.id ?? "";
-  const [initial] = useState<FormState>(() => initialState(existing, defaultAccountId, otherAccountId));
+  const [initial] = useState<FormState>(() => initialState(existing, defaultAccountId, otherAccountId, defaultType));
   const [form, setForm] = useState<FormState>(initial);
   const [importanceTouched, setImportanceTouched] = useState(existing != null);
   const [error, setError] = useState<string | null>(null);
+  const [savedCount, setSavedCount] = useState(0);
+  const amountRef = useRef<TextInputInstance>(null);
 
-  const importanceByCategory = useMemo(() => {
-    const best = new Map<string, { importance: ImportanceTier; count: number }>();
-    for (const row of importanceRows) {
-      if (!row.importance) continue;
-      const count = Number(row.count);
-      const current = best.get(row.category);
-      if (!current || count > current.count) best.set(row.category, { importance: row.importance, count });
-    }
-    return best;
-  }, [importanceRows]);
+  const importanceByCategory = useMemo(() => inferCategoryImportance(importanceRows), [importanceRows]);
 
   const accountOptions = accounts.map((account) => ({
     value: account.id,
@@ -191,7 +218,7 @@ function TransactionForm({
   };
 
   const changeCategory = (category: string) => {
-    const suggested = importanceByCategory.get(category.trim())?.importance ?? DEFAULT_IMPORTANCE;
+    const suggested = importanceByCategory.get(category.trim()) ?? DEFAULT_IMPORTANCE;
     update(importanceTouched ? { category } : { category, importance: suggested });
   };
 
@@ -199,7 +226,38 @@ function TransactionForm({
     update({ type, amount: type !== "adjustment" ? form.amount.replace(/^-/, "") : form.amount });
   };
 
-  const save = () => {
+  const isNegative = form.amount.startsWith("-");
+
+  const changeAmount = (text: string) => {
+    const sign = typedSign(text);
+    const amount = text.replace(/[-+\u2212]/g, "");
+    if (form.type === "adjustment") {
+      update({ amount: (sign ? sign === "-" : isNegative) && amount ? `-${amount}` : amount });
+    } else if (sign && (form.type === "expense" || form.type === "income")) {
+      // As on the web, typing a sign flips an expense to income and back.
+      update({ amount, type: sign === "+" ? "income" : "expense" });
+    } else {
+      update({ amount });
+    }
+  };
+
+  const toggleSign = () => {
+    if (form.type === "adjustment") {
+      update({ amount: isNegative ? form.amount.slice(1) : `-${form.amount}` });
+    } else if (form.type === "expense" || form.type === "income") {
+      changeType(form.type === "expense" ? "income" : "expense");
+    }
+  };
+
+  const swapAccounts = () =>
+    update({
+      accountId: form.counterpartyAccountId,
+      counterpartyAccountId: form.accountId,
+      amount: needsCounterpartyAmount ? form.counterpartyAmount : form.amount,
+      counterpartyAmount: needsCounterpartyAmount ? form.amount : form.counterpartyAmount,
+    });
+
+  const save = (addAnother = false) => {
     if (unchanged) return;
     const message = validate(form, needsCounterpartyAmount, accounts.length);
     if (message) {
@@ -210,6 +268,14 @@ function TransactionForm({
       const input = toInput(form, needsCounterpartyAmount);
       if (existing) updateTransaction(db.db, existing.id, input);
       else createTransaction(db.db, input);
+      if (!existing && addAnother) {
+        // Keeps the type, accounts, category and date for a run of similar entries, as the web's
+        // "Create & add another" does.
+        update({ amount: "", counterpartyAmount: "", title: "", notes: "" });
+        setSavedCount((count) => count + 1);
+        amountRef.current?.focus();
+        return;
+      }
       router.back();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -232,6 +298,33 @@ function TransactionForm({
   };
 
   const currency = source?.currency ?? "";
+  const rate =
+    needsCounterpartyAmount && source && destination
+      ? formatTransferRate(
+          parseAmountInput(form.amount),
+          parseAmountInput(form.counterpartyAmount),
+          source.currency,
+          destination.currency,
+        )
+      : null;
+  const sign =
+    form.type === "expense"
+      ? "−"
+      : form.type === "income"
+        ? "+"
+        : form.type === "adjustment"
+          ? isNegative
+            ? "−"
+            : "+"
+          : null;
+  const signLabel =
+    form.type === "expense"
+      ? "Switch to income"
+      : form.type === "income"
+        ? "Switch to expense"
+        : isNegative
+          ? "Make positive"
+          : "Make negative";
 
   return (
     <KeyboardScreen
@@ -239,7 +332,7 @@ function TransactionForm({
         <SheetHeader
           title={existing ? "Edit transaction" : "New transaction"}
           onCancel={() => router.back()}
-          onDone={save}
+          onDone={() => save()}
           doneLabel="Save"
           doneDisabled={unchanged || (form.type === "transfer" && !canTransfer)}
         />
@@ -248,21 +341,40 @@ function TransactionForm({
       <Segmented options={TYPE_OPTIONS} value={form.type} onChange={changeType} />
 
       <View className="items-center gap-1 py-2">
-        <View className="flex-row items-baseline gap-2">
+        <View className="flex-row items-center gap-1">
+          {sign && (
+            // The +/− shortcut: flips an expense to income and back, or an adjustment's direction.
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={signLabel}
+              onPress={toggleSign}
+              hitSlop={8}
+              className="h-12 min-w-10 items-center justify-center rounded-lg bg-muted px-2 active:opacity-60"
+            >
+              <Text className={cn("font-semibold text-3xl", TRANSACTION_TYPE_STYLE[form.type].accent)}>{sign}</Text>
+            </Pressable>
+          )}
           <Input
-            value={form.amount}
-            onChangeText={(amount) => update({ amount })}
+            ref={amountRef}
+            accessibilityLabel={form.type === "adjustment" ? "Balance change" : "Amount"}
+            value={form.amount.replace(/^-/, "")}
+            onChangeText={changeAmount}
             placeholder="0.00"
-            keyboardType={
-              form.type === "adjustment" && Platform.OS === "ios" ? "numbers-and-punctuation" : "decimal-pad"
-            }
+            keyboardType="decimal-pad"
             className={`min-w-24 text-center font-semibold text-4xl ${TRANSACTION_TYPE_STYLE[form.type].accent}`}
             autoFocus={!existing}
           />
           <Text className="font-medium text-muted-foreground text-xl">{currency}</Text>
         </View>
         {form.type === "adjustment" && (
-          <Text className="text-muted-foreground text-xs">Use a negative amount to lower the balance.</Text>
+          <Text className="text-muted-foreground text-xs">
+            Tap {isNegative ? "−" : "+"} to lower or raise the balance.
+          </Text>
+        )}
+        {savedCount > 0 && !existing && (
+          <Text className="text-emerald-600 text-xs dark:text-emerald-400">
+            Saved {savedCount} {savedCount === 1 ? "entry" : "entries"} · add the next one
+          </Text>
         )}
       </View>
 
@@ -272,6 +384,21 @@ function TransactionForm({
         </Text>
       )}
 
+      {form.type === "transfer" && canTransfer && (
+        <View className="-mb-3 flex-row items-center justify-between px-1">
+          <Text className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Accounts</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Swap accounts"
+            onPress={swapAccounts}
+            hitSlop={8}
+            className="flex-row items-center gap-1 active:opacity-60"
+          >
+            <Icon name="repeat" size={13} colorClassName="accent-blue-600 dark:accent-blue-400" />
+            <Text className="font-medium text-blue-600 text-sm dark:text-blue-400">Swap</Text>
+          </Pressable>
+        </View>
+      )}
       <FormSection>
         <SelectField
           label={form.type === "transfer" && canTransfer ? "From" : "Account"}
@@ -302,13 +429,14 @@ function TransactionForm({
           </FormRow>
         )}
       </FormSection>
+      {rate && <Text className="-mt-3 px-1 text-center text-muted-foreground text-xs">{rate}</Text>}
 
       <FormSection>
         <FormRow label="Title">
           <Input
             value={form.title}
             onChangeText={(title) => update({ title })}
-            placeholder={TRANSACTION_TYPE_STYLE[form.type].label}
+            placeholder={TITLE_PLACEHOLDER[form.type]}
             className="h-10 min-w-40 text-right"
           />
         </FormRow>
@@ -362,9 +490,13 @@ function TransactionForm({
 
       <FieldError message={error} />
 
-      {existing && (
+      {existing ? (
         <View className="flex-row">
           <ActionButton icon="trash-2" label="Delete" destructive onPress={confirmDelete} />
+        </View>
+      ) : (
+        <View className="flex-row">
+          <ActionButton icon="plus" label="Create & add another" onPress={() => save(true)} />
         </View>
       )}
     </KeyboardScreen>

@@ -150,6 +150,22 @@ export function useTransactionCategories() {
   return data.map((row) => row.category);
 }
 
+/** Distinct currencies on either leg of any transaction, including ones no account uses anymore. */
+export function useTransactionCurrencies() {
+  const { data } = useDbQuery((db) =>
+    db
+      .selectFrom("transaction_entry")
+      .select("accountCurrency as currency")
+      .union(
+        db
+          .selectFrom("transaction_entry")
+          .select("counterpartyCurrency as currency")
+          .where("counterpartyCurrency", "!=", ""),
+      ),
+  );
+  return data.map((row) => row.currency);
+}
+
 /** Distinct non-empty categories, most recently used first. */
 export function useRecentTransactionCategories() {
   const { data } = useDbQuery((query) =>

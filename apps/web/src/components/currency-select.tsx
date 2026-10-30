@@ -1,12 +1,10 @@
-import { APP_CURRENCIES, type AppCurrencyCode } from "@productivity/core/currency/currencies";
+import { APP_CURRENCIES, type AppCurrencyCode, currencyOptions } from "@productivity/core/currency/currencies";
 import { CheckIcon, ChevronsUpDownIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-
-const PRIORITY_CURRENCIES = ["CHF", "UAH", "USD", "EUR"] as const satisfies readonly AppCurrencyCode[];
 
 type CurrencySelectProps = {
   value: string;
@@ -21,32 +19,6 @@ type CurrencySelectProps = {
   "aria-invalid"?: boolean;
   "aria-labelledby"?: string;
 };
-
-function getCurrencyName(currency: string): string {
-  try {
-    return new Intl.DisplayNames(undefined, { type: "currency" }).of(currency) ?? currency;
-  } catch {
-    return currency;
-  }
-}
-
-function sortCurrencies(currencies: readonly AppCurrencyCode[]): AppCurrencyCode[] {
-  const available = new Set(currencies);
-  const priority = PRIORITY_CURRENCIES.filter((currency) => available.has(currency));
-  const rest = currencies.filter((currency) => !PRIORITY_CURRENCIES.some((priority) => priority === currency));
-  return [...priority, ...rest];
-}
-
-function useCurrencyOptions(currencies: readonly AppCurrencyCode[]) {
-  return useMemo(
-    () =>
-      sortCurrencies(currencies).map((currency) => ({
-        currency,
-        name: getCurrencyName(currency),
-      })),
-    [currencies],
-  );
-}
 
 export function CurrencySelect({
   value,
@@ -63,7 +35,7 @@ export function CurrencySelect({
 }: CurrencySelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const options = useCurrencyOptions(currencies);
+  const options = useMemo(() => currencyOptions(currencies), [currencies]);
   const selected = options.find((option) => option.currency === value);
 
   const filtered = useMemo(() => {

@@ -1,4 +1,4 @@
-import { APP_CURRENCIES, type AppCurrencyCode } from "@productivity/core/currency/currencies";
+import { APP_CURRENCIES } from "@productivity/core/currency/currencies";
 import {
   createAccount,
   deleteAccount,
@@ -13,13 +13,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
+import { CurrencyField } from "../../../components/currency-field";
 import { SheetHeader } from "../../../components/screen-header";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { FieldError, FormRow, FormSection, FormSwitch } from "../../../components/ui/form";
 import { Icon } from "../../../components/ui/icon";
 import { Input } from "../../../components/ui/input";
 import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
-import { SelectField } from "../../../components/ui/select-sheet";
 import { parseAmountInput } from "../../../lib/finance";
 
 const LABEL_COLORS = [
@@ -33,8 +33,6 @@ const LABEL_COLORS = [
   "#ec4899",
   "#09090b",
 ];
-
-const CURRENCY_OPTIONS = APP_CURRENCIES.map((code) => ({ value: code, label: code }));
 
 export default function AccountScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -135,10 +133,9 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
             autoFocus={!account}
           />
         </FormRow>
-        <SelectField
-          label="Currency"
-          value={form.currency as AppCurrencyCode}
-          options={CURRENCY_OPTIONS}
+        <CurrencyField
+          value={form.currency}
+          currencies={APP_CURRENCIES}
           onChange={(currency) => update({ currency })}
         />
         <FormRow label="Balance" last>
@@ -153,6 +150,12 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
       {account && (
         <Text className="-mt-3 px-1 text-muted-foreground text-xs">
           Changing the balance records an adjustment transaction.
+        </Text>
+      )}
+      {account && hasTransactions && form.currency !== account.currency && (
+        <Text className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          Changing the account currency only affects future transactions. Existing transaction amounts keep their
+          original currency.
         </Text>
       )}
 
@@ -191,12 +194,6 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
             label="Include in totals"
             value={form.includeInTotals}
             onValueChange={(includeInTotals) => update({ includeInTotals })}
-          />
-          <FormRow
-            label="View transactions"
-            onPress={() =>
-              router.push({ pathname: "/transactions", params: { accountId: account.id, presentation: "sheet" } })
-            }
             last
           />
         </FormSection>

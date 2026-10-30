@@ -58,12 +58,13 @@ export function SelectField<T extends string>({
   );
 }
 
-function SelectSheet<T extends string>({
+/** The option list on its own, for triggers other than a form row. */
+export function SelectSheet<T extends string>({
   visible,
   title,
   value,
   options,
-  allowCustom,
+  allowCustom = false,
   clearLabel,
   onClose,
   onSelect,
@@ -72,7 +73,7 @@ function SelectSheet<T extends string>({
   title: string;
   value: string;
   options: readonly SelectOption<T>[];
-  allowCustom: boolean;
+  allowCustom?: boolean;
   clearLabel?: string;
   onClose: () => void;
   onSelect: (value: string) => void;
@@ -80,7 +81,11 @@ function SelectSheet<T extends string>({
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
-  const filtered = q ? options.filter((option) => option.label.toLowerCase().includes(q)) : options;
+  const filtered = q
+    ? options.filter(
+        (option) => option.label.toLowerCase().includes(q) || option.description?.toLowerCase().includes(q),
+      )
+    : options;
   const showCustom = allowCustom && q.length > 0 && !options.some((option) => option.label.toLowerCase() === q);
   const searchable = allowCustom || options.length > SEARCH_THRESHOLD;
 

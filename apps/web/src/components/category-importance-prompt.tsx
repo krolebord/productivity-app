@@ -1,9 +1,8 @@
 import { useUnclassifiedExpenseCount } from "@productivity/core/data/transactions";
+import { IMPORTANCE_PROMPT_THRESHOLD } from "@productivity/core/finance/category-importance";
 import { InfoIcon, TagsIcon } from "lucide-react";
 import { useOpenCategoryImportanceDialog } from "@/components/category-importance-dialog";
 import { Button } from "@/components/ui/button";
-
-const IMPORTANCE_PROMPT_THRESHOLD = 5;
 
 export function CategoryImportancePrompt() {
   const openCategoryImportanceDialog = useOpenCategoryImportanceDialog();

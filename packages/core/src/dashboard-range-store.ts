@@ -19,7 +19,8 @@ export interface DashboardRangeConfig {
 
 export const clampDashboardRangeValue = (value: number) => Math.min(31, Math.max(1, Math.round(value || 0)));
 
-function ordinal(n: number) {
+/** "1st", "22nd", "11th". */
+export function ordinal(n: number) {
   const suffixes = ["th", "st", "nd", "rd"];
   const v = n % 100;
   return `${n}${suffixes[(v - 20) % 10] ?? suffixes[v] ?? suffixes[0]}`;

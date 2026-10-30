@@ -6,8 +6,15 @@ import {
 } from "@productivity/core/data/transactions";
 import { formatDateTimeDisplay } from "@productivity/core/date-time";
 import {
+  adjacentImportance,
+  type CategoryCount,
+  type CategoryImportanceSummary,
+  inferCategoryImportance,
+  sortCategoryCounts,
+  summarizeCategoryImportance,
+} from "@productivity/core/finance/category-importance";
+import {
   changeCategoryImportanceDefault,
-  IMPORTANCE_TIERS,
   type ImportanceTier,
   type TransactionRow,
 } from "@productivity/core/transactions";
@@ -49,15 +56,8 @@ export function useOpenCategoryImportanceDialog() {
 
 type DialogMode = "backfill" | "manage";
 
-type CategoryCandidate = {
-  category: string;
-  count: number;
-};
-
-type CategorySummary = CategoryCandidate & {
-  inferredImportance: ImportanceTier | null;
-  unclassifiedCount: number;
-};
+type CategoryCandidate = CategoryCount;
+type CategorySummary = CategoryImportanceSummary;
 
 type ExampleTransaction = Pick<TransactionRow, "id" | "title" | "amount" | "accountCurrency" | "effectiveAt" | "type">;
 
@@ -67,16 +67,6 @@ const AMOUNT_ACCENT: Record<string, string> = {
   transfer: "text-blue-600 dark:text-blue-400",
   adjustment: "text-amber-600 dark:text-amber-400",
 };
-
-function getAdjacentImportance(current: ImportanceTier | null, direction: -1 | 1) {
-  if (!current) {
-    return direction > 0 ? IMPORTANCE_TIERS[0] : IMPORTANCE_TIERS[IMPORTANCE_TIERS.length - 1];
-  }
-
-  const currentIndex = IMPORTANCE_TIERS.indexOf(current);
-  const nextIndex = (currentIndex + direction + IMPORTANCE_TIERS.length) % IMPORTANCE_TIERS.length;
-  return IMPORTANCE_TIERS[nextIndex];
-}
 
 function CategoryExamples({ category }: { category: string }) {
   const exampleTransactions = useCategoryExamples(category);
@@ -155,7 +145,7 @@ function BackfillCategoryImportanceView({
     if (!currentCategory || saving) return;
     setSelection({
       category: currentCategory,
-      importance: getAdjacentImportance(selectedImportance, direction),
+      importance: adjacentImportance(selectedImportance, direction),
     });
   }
 
@@ -428,47 +418,16 @@ function CategoryImportanceDialogContent() {
   const allCategoryRows = useExpenseCategoryCounts({ unclassifiedOnly: false });
   const importanceRows = useCategoryImportanceCounts();
 
-  const backfillCategories = useMemo<CategoryCandidate[]>(
+  const backfillCategories = useMemo(() => sortCategoryCounts(categoryRows), [categoryRows]);
+  const inferredImportanceByCategory = useMemo(() => inferCategoryImportance(importanceRows), [importanceRows]);
+  const manageCategories = useMemo(
     () =>
-      categoryRows
-        .map((row) => ({ category: row.category, count: Number(row.count) }))
-        .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category)),
-    [categoryRows],
-  );
-  const allCategories = useMemo<CategoryCandidate[]>(
-    () =>
-      allCategoryRows
-        .map((row) => ({ category: row.category, count: Number(row.count) }))
-        .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category)),
-    [allCategoryRows],
-  );
-  const unclassifiedCountByCategory = useMemo(
-    () => new Map(backfillCategories.map((category) => [category.category, category.count] as const)),
-    [backfillCategories],
-  );
-  const inferredImportanceByCategory = useMemo(() => {
-    const best = new Map<string, { importance: ImportanceTier; count: number }>();
-
-    for (const row of importanceRows) {
-      if (!row.importance) continue;
-
-      const count = Number(row.count);
-      const currentBest = best.get(row.category);
-      if (!currentBest || count > currentBest.count) {
-        best.set(row.category, { importance: row.importance as ImportanceTier, count });
-      }
-    }
-
-    return new Map([...best].map(([category, value]) => [category, value.importance] as const));
-  }, [importanceRows]);
-  const manageCategories = useMemo<CategorySummary[]>(
-    () =>
-      allCategories.map((category) => ({
-        ...category,
-        inferredImportance: inferredImportanceByCategory.get(category.category) ?? null,
-        unclassifiedCount: unclassifiedCountByCategory.get(category.category) ?? 0,
-      })),
-    [allCategories, inferredImportanceByCategory, unclassifiedCountByCategory],
+      summarizeCategoryImportance({
+        categories: sortCategoryCounts(allCategoryRows),
+        unclassified: backfillCategories,
+        inferred: inferredImportanceByCategory,
+      }),
+    [allCategoryRows, backfillCategories, inferredImportanceByCategory],
   );
 
   useEffect(() => {

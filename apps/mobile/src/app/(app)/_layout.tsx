@@ -42,6 +42,7 @@ export default function AppLayout() {
         <Stack.Screen name="habit/[id]" options={modal} />
         <Stack.Screen name="transaction/[id]" options={modal} />
         <Stack.Screen name="account/[id]" options={modal} />
+        <Stack.Screen name="category-importance" options={modal} />
       </Stack>
       {/* After the stack so it floats over every screen pushed on it. */}
       <OfflineBanner />

@@ -1,6 +1,7 @@
 import { generateId } from "@sqlite-sync/core";
+import { useCallback, useState } from "react";
 import { createTransactionInTransaction } from "../transactions";
-import { type UserDbDatabase, useDbQuery } from "../user-db/db-context";
+import { type UserDbDatabase, useDb, useDbQuery } from "../user-db/db-context";
 import type { AccountItem } from "../user-db/migrations";
 
 export type AccountFields = Pick<AccountItem, "currency" | "description" | "labelColor" | "labelText"> & {
@@ -176,4 +177,29 @@ export function saveAccountOrder(db: UserDbDatabase, changes: readonly { id: str
       trx.executeKysely((q) => q.updateTable("account").set({ order }).where("id", "=", id));
     }
   });
+}
+
+/**
+ * Accounts plus `moveAccount(from, to)`, which inserts the account at `from` at index `to`.
+ * Reordering paints from local state until the query catches up, otherwise the row snaps
+ * back to its old slot for a frame. Web wires it to dnd-kit, mobile to a drag gesture.
+ */
+export function useReorderableAccounts() {
+  const db = useDb();
+  const list = useTimestampedAccounts();
+
+  const [optimisticList, setOptimisticList] = useState(list);
+  const accounts = list.timestamp > optimisticList.timestamp ? list.accounts : optimisticList.accounts;
+
+  const moveAccount = useCallback(
+    (from: number, to: number) => {
+      if (from === to || from < 0 || to < 0 || from >= accounts.length || to >= accounts.length) return;
+      const { ordered, changes } = reorderAccounts(accounts, from, to);
+      setOptimisticList({ accounts: ordered, timestamp: Date.now() });
+      saveAccountOrder(db.db, changes);
+    },
+    [accounts, db],
+  );
+
+  return { accounts, moveAccount };
 }

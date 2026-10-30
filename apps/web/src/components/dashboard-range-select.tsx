@@ -1,4 +1,4 @@
-import { type DashboardRangeMode, resolveDashboardRange } from "@productivity/core/dashboard-range-store";
+import { type DashboardRangeMode, ordinal, resolveDashboardRange } from "@productivity/core/dashboard-range-store";
 import { CalendarRangeIcon, ChevronsUpDownIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,18 +75,10 @@ export function DashboardRangeSelect({ className }: { className?: string }) {
               value={cycleDay}
               onChange={(e) => setCycleDay(e.target.valueAsNumber)}
             />
-            <p className="text-muted-foreground text-xs">
-              From the most recent {ordinalLabel(cycleDay)} through today.
-            </p>
+            <p className="text-muted-foreground text-xs">From the most recent {ordinal(cycleDay)} through today.</p>
           </div>
         )}
       </PopoverContent>
     </Popover>
   );
-}
-
-function ordinalLabel(n: number) {
-  const suffixes = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return `${n}${suffixes[(v - 20) % 10] ?? suffixes[v] ?? suffixes[0]}`;
 }
