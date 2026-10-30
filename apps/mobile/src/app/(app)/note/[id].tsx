@@ -24,14 +24,18 @@ import { FormSection } from "../../../components/ui/form";
 import { Input } from "../../../components/ui/input";
 import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { useAutosave } from "../../../lib/use-autosave";
+import { useCloseWhenDeleted } from "../../../lib/use-close-when-deleted";
 
 export default function NoteScreen() {
   // "New note" opens a fresh id with `draft` set: the row is only inserted once it has content.
   const { id, draft, tags } = useLocalSearchParams<{ id: string; draft?: string; tags?: string }>();
   const router = useRouter();
   const note = useItem(id);
+  // Once seen, a missing row is handled by the editor (it closes); this is for a stale link.
+  const seen = useRef(!!note);
+  if (note) seen.current = true;
 
-  if (!note && !draft) {
+  if (!note && !draft && !seen.current) {
     return (
       <View className="flex-1 bg-background">
         <SheetHeader title="Note" onDone={() => router.back()} />
@@ -65,6 +69,13 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
     if (saveNote(db.db, id, value, { draft: isDraft.current, ...options })) isDraft.current = false;
   };
   const autosave = useAutosave((value: NoteFields) => save(value));
+  const { expectDeletion } = useCloseWhenDeleted(note, {
+    message: "This note was deleted elsewhere",
+    onClose: () => {
+      autosave.discard();
+      router.back();
+    },
+  });
 
   // Runs after useAutosave's unmount flush: a note opened blank and left blank is discarded.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only on unmount.
@@ -115,6 +126,7 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
         onPress: () => {
           // Also stops the tag editor's unmount commit from re-inserting the deleted row.
           autosave.discard();
+          expectDeletion();
           deleteItem(db.db, id);
           router.back();
         },

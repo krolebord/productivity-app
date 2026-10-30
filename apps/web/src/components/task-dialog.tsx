@@ -1,14 +1,23 @@
-import { deleteItem, type ItemFieldsPatch, updateItem, useItem } from "@productivity/core/data/items";
-import { createTask, detachTaskFromCalendar, useTaskTagSuggestions } from "@productivity/core/data/tasks";
+import { deleteItem, isBlankItem, useItem } from "@productivity/core/data/items";
+import {
+  detachTaskFromCalendar,
+  discardTaskIfBlank,
+  saveTask,
+  type TaskFields,
+  useTaskTagSuggestions,
+} from "@productivity/core/data/tasks";
 import { localMidnightMs } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
 import { parseTags, serializeTags } from "@productivity/core/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@productivity/core/use-debounced-callback";
 import { useDb } from "@productivity/core/user-db/db-context";
+import { generateId } from "@sqlite-sync/core";
 import { CalendarClock, CheckIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
-import { type RefObject, useCallback, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { toast } from "sonner";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
+import { useFlushOnHide } from "@/lib/use-flush-on-hide";
 import { cn } from "@/lib/utils";
 import { NoteEditor, type NoteEditorHandle } from "./note-editor";
 import { TagInput, type TagInputHandle } from "./tag-input";
@@ -32,36 +41,48 @@ export const useTaskDialogStore = create(
   ),
 );
 
+/** Opens a new task; like new notes, its row is only inserted once it gets a title or details. */
 export function useCreateTask() {
-  const db = useDb();
   const openTaskDialog = useTaskDialogStore((s) => s.open);
 
   return useCallback(() => {
-    const id = createTask(db.db);
-
-    openTaskDialog(id);
-  }, [db, openTaskDialog]);
+    openTaskDialog(generateId());
+  }, [openTaskDialog]);
 }
 
-type TaskFields = ItemFieldsPatch;
+type DraftFlag = { current: boolean };
+
+type TaskDialogContentHandle = {
+  /** Commits pending tag text and returns the fields to save. */
+  commit: () => TaskFields;
+  /** Opened as a new or empty task, so closing it while still blank discards it. */
+  openedBlank: boolean;
+  /** A new task whose row hasn't been inserted yet (see saveItemDraft). */
+  draft: DraftFlag;
+};
 
 function TaskDialogContent({
+  ref,
   taskId,
-  tagInputRef,
-  saveTask,
+  queueSave,
   onClose,
   onDelete,
   onDetach,
+  onDeletedElsewhere,
 }: {
+  ref: Ref<TaskDialogContentHandle>;
   taskId: string;
-  tagInputRef: RefObject<TagInputHandle | null>;
-  saveTask: DebouncedCallback<[TaskFields]>;
+  queueSave: DebouncedCallback<[string, TaskFields, DraftFlag]>;
   onClose: () => void;
   onDelete: () => void;
   onDetach: () => void;
+  onDeletedElsewhere: () => void;
 }) {
   const task = useItem(taskId);
   const tagSuggestions = useTaskTagSuggestions();
+  const tagInputRef = useRef<TagInputHandle>(null);
+  const [openedBlank] = useState(() => isBlankItem(task ?? {}));
+  const draft = useRef(!task);
 
   const [title, setTitle] = useState(task?.title ?? "");
   const [tags, setTags] = useState<string[]>(() => parseTags(task?.tags));
@@ -69,7 +90,7 @@ function TaskDialogContent({
   const [hasDueTime, setHasDueTime] = useState(task?.hasDueTime ?? false);
   const [completedAt, setCompletedAt] = useState<number | null>(task?.completedAt ?? null);
   const editorRef = useRef<NoteEditorHandle>(null);
-  const fieldsRef = useRef({
+  const fieldsRef = useRef<TaskFields>({
     title: task?.title ?? "",
     content: task?.content ?? "",
     tags: task?.tags ?? "[]",
@@ -78,11 +99,30 @@ function TaskDialogContent({
     completedAt: task?.completedAt ?? null,
   });
 
-  const updateTask = (fields: TaskFields) => {
+  useImperativeHandle(ref, () => ({
+    commit: () => {
+      tagInputRef.current?.commit();
+      return { ...fieldsRef.current };
+    },
+    openedBlank,
+    draft,
+  }));
+
+  // The row disappearing once it was seen means the task was deleted, e.g. on another device.
+  // Not `draft`: that clears on the first insert, before the query may have picked the row up.
+  const rowSeen = useRef(!!task);
+  if (task) rowSeen.current = true;
+  const deletedElsewhere = !task && rowSeen.current;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: react to the deletion only.
+  useEffect(() => {
+    if (deletedElsewhere) onDeletedElsewhere();
+  }, [deletedElsewhere]);
+
+  const updateTask = (fields: Partial<TaskFields>) => {
     if (fields.title !== undefined) setTitle(fields.title);
     if (fields.completedAt !== undefined) setCompletedAt(fields.completedAt);
     fieldsRef.current = { ...fieldsRef.current, ...fields };
-    saveTask({ ...fieldsRef.current });
+    queueSave(taskId, { ...fieldsRef.current }, draft);
   };
 
   const handleScheduleChange = (fields: TaskScheduleFields) => {
@@ -92,7 +132,7 @@ function TaskDialogContent({
   };
 
   const deleteConfirm = useInlineConfirm({ onConfirm: onDelete });
-  const isNew = !task?.title?.trim() && !task?.content?.trim();
+  const isNew = isBlankItem(task ?? {});
 
   function toggleCompleted() {
     if (completedAt != null) {
@@ -187,21 +227,33 @@ export function TaskDialog() {
   const openRevision = useTaskDialogStore((s) => s.openRevision);
   const closeDialog = useTaskDialogStore((s) => s.close);
 
-  const saveTask = useDebounceCallback((fields: TaskFields) => {
-    if (taskId) updateItem(db.db, taskId, fields);
+  const contentRef = useRef<TaskDialogContentHandle>(null);
+
+  const queueSave = useDebounceCallback((id: string, fields: TaskFields, draft: DraftFlag) => {
+    if (saveTask(db.db, id, fields, { draft: draft.current })) draft.current = false;
   }, 1000);
-  const tagInputRef = useRef<TagInputHandle>(null);
+  useFlushOnHide(queueSave.flush);
 
   function saveAndClose() {
-    tagInputRef.current?.commit();
-    saveTask.flush();
+    const content = contentRef.current;
+    content?.commit();
+    queueSave.flush();
+    if (taskId && content?.openedBlank) discardTaskIfBlank(db.db, taskId);
     closeDialog();
   }
 
   function deleteAndClose() {
-    saveTask.cancel();
+    queueSave.cancel();
     if (taskId) deleteItem(db.db, taskId);
     closeDialog();
+  }
+
+  function closeDeletedTask() {
+    // Our own delete (or discarding a blank task) closes the dialog first.
+    if (!useTaskDialogStore.getState().isOpen) return;
+    queueSave.cancel();
+    closeDialog();
+    toast.info("This task was deleted elsewhere");
   }
 
   function detachFromCalendar() {
@@ -214,12 +266,13 @@ export function TaskDialog() {
         {taskId ? (
           <TaskDialogContent
             key={openRevision}
+            ref={contentRef}
             taskId={taskId}
-            tagInputRef={tagInputRef}
-            saveTask={saveTask}
+            queueSave={queueSave}
             onClose={saveAndClose}
             onDelete={deleteAndClose}
             onDetach={detachFromCalendar}
+            onDeletedElsewhere={closeDeletedTask}
           />
         ) : (
           <DialogTitle>Edit task</DialogTitle>

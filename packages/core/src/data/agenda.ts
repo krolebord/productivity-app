@@ -6,6 +6,7 @@ import {
   type AgendaTask,
   addLocalDays,
   buildAgendaSections,
+  compareHabits,
   dayHasIncompleteTasks,
   getDayHabitProgress,
   getHabitPeriodDays,
@@ -28,13 +29,15 @@ import { setHabitEntryValue as writeHabitEntryValue } from "./habits";
 import { createTask as insertTask, rescheduleTask, scheduleAllDayTask, setTaskCompleted } from "./tasks";
 
 export function useAgendaHabits(): AgendaHabit[] {
-  const { data: habitsRaw } = useDbQuery((q) => q.selectFrom("habit").selectAll().orderBy("order", "asc"));
+  const { data: habitsRaw } = useDbQuery((q) => q.selectFrom("habit").selectAll());
 
   return useMemo(
     () =>
-      habitsRaw.map((h) =>
-        toAgendaHabit(h, parseScheduleWeekdays(h.scheduleWeekdays), parseScheduleMonthDays(h.scheduleMonthDays)),
-      ),
+      habitsRaw
+        .map((h) =>
+          toAgendaHabit(h, parseScheduleWeekdays(h.scheduleWeekdays), parseScheduleMonthDays(h.scheduleMonthDays)),
+        )
+        .sort(compareHabits),
     [habitsRaw],
   );
 }

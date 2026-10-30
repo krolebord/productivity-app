@@ -5,7 +5,7 @@ import { combineLocalDateAndTime, localMidnightMs } from "../date-time";
 import { DETACHED_PROVIDER_TYPE } from "../google-calendar/mapping";
 import { parseTags } from "../tags";
 import { type UserDbDatabase, useDbQuery } from "../user-db/db-context";
-import { nextItemOrder } from "./items";
+import { discardItemIfBlank, nextItemOrder, saveItemDraft } from "./items";
 
 export function useTaskTagSuggestions() {
   const { data } = useDbQuery((q) => q.selectFrom("item").select("tags"), {
@@ -48,6 +48,33 @@ export function createTask(
   });
 
   return id;
+}
+
+export type TaskFields = {
+  title: string;
+  content: string;
+  tags: string;
+  dueAt: number | null;
+  hasDueTime: boolean;
+  completedAt: number | null;
+};
+
+/**
+ * Saves a task editor's fields. Like notes, "New task" opens on a fresh id with `draft` set
+ * and the row is only inserted once the task has a title or details (see saveItemDraft).
+ */
+export function saveTask(
+  db: UserDbDatabase,
+  id: string,
+  fields: TaskFields,
+  options?: { draft?: boolean; insertBlank?: boolean },
+): boolean {
+  return saveItemDraft(db, id, "task", fields, options);
+}
+
+/** Deletes the task if it has no title or details, for editors closing on a task opened blank. */
+export function discardTaskIfBlank(db: UserDbDatabase, id: string) {
+  discardItemIfBlank(db, id, "task");
 }
 
 export function setTaskCompleted(db: UserDbDatabase, id: string, completed: boolean) {

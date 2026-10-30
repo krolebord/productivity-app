@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
 import { useTabContentInset } from "../../../components/assistant-button";
+import { GlobalActions } from "../../../components/global-actions";
 import { ScreenHeader } from "../../../components/screen-header";
 import { Chip } from "../../../components/ui/chip";
 import { EmptyState } from "../../../components/ui/empty-state";
@@ -86,7 +87,15 @@ export default function NotesScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <ScreenHeader title="Notes" actions={<IconButton icon="plus" label="New note" onPress={create} />}>
+      <ScreenHeader
+        title="Notes"
+        actions={
+          <>
+            <GlobalActions showNew={false} />
+            <IconButton icon="plus" label="New note" onPress={create} />
+          </>
+        }
+      >
         <View className="h-10 flex-row items-center gap-2 rounded-lg bg-muted px-3">
           <Icon name="search" size={16} colorClassName="accent-muted-foreground" />
           <Input

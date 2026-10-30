@@ -340,6 +340,50 @@
     margin: 0.75rem 0;
   }
 
+  /* The editor wraps tables in .tableWrapper; the static preview renders a bare table. */
+  .note-prose .tableWrapper {
+    margin: 0.375rem 0;
+    overflow-x: auto;
+  }
+
+  .note-prose table {
+    border-collapse: collapse;
+    margin: 0.375rem 0;
+    table-layout: auto;
+  }
+
+  .note-prose .tableWrapper table {
+    margin: 0;
+  }
+
+  .note-prose th,
+  .note-prose td {
+    border: 1px solid var(--color-border);
+    min-width: 3rem;
+    padding: 0.125rem 0.5rem;
+    position: relative;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .note-prose th {
+    background: var(--color-muted);
+    font-weight: 600;
+  }
+
+  .note-prose th > p,
+  .note-prose td > p {
+    margin: 0;
+  }
+
+  .note-prose .selectedCell::after {
+    background: color-mix(in oklab, var(--color-primary) 15%, transparent);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+  }
+
   .note-prose ul[data-type="taskList"] {
     list-style: none;
     padding-left: 0;

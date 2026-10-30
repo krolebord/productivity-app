@@ -1,10 +1,17 @@
 import { habitTargetPeriodLabel, parseScheduleMonthDays, parseScheduleWeekdays } from "@productivity/core/agenda";
-import { createHabit, type HabitInput, setHabitArchived, updateHabit, useHabit } from "@productivity/core/data/habits";
+import {
+  createHabit,
+  deleteArchivedHabit,
+  type HabitInput,
+  setHabitArchived,
+  updateHabit,
+  useHabit,
+} from "@productivity/core/data/habits";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { HabitItem } from "@productivity/core/user-db/migrations";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
 import { SheetHeader } from "../../../components/screen-header";
 import { EmptyState } from "../../../components/ui/empty-state";
@@ -251,7 +258,7 @@ function HabitForm({ habit }: { habit: HabitItem | undefined }) {
       </View>
 
       {habit && (
-        <View className="flex-row">
+        <View className="flex-row gap-3">
           <ActionButton
             icon="archive"
             label={archived ? "Restore habit" : "Archive habit"}
@@ -260,6 +267,26 @@ function HabitForm({ habit }: { habit: HabitItem | undefined }) {
               router.back();
             }}
           />
+          {/* Only archived habits can be deleted: it erases their history. */}
+          {archived && (
+            <ActionButton
+              icon="trash-2"
+              label="Delete"
+              destructive
+              onPress={() =>
+                Alert.alert("Delete habit?", "Its entries are deleted too. This can't be undone.", [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => {
+                      if (deleteArchivedHabit(db.db, habit.id)) router.back();
+                    },
+                  },
+                ])
+              }
+            />
+          )}
         </View>
       )}
     </KeyboardScreen>

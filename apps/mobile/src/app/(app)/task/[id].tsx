@@ -1,6 +1,12 @@
 import { parseDateKey } from "@productivity/core/agenda";
-import { deleteItem, type ItemFieldsPatch, updateItem, useItem } from "@productivity/core/data/items";
-import { detachTaskFromCalendar, useTaskTagSuggestions } from "@productivity/core/data/tasks";
+import { deleteItem, isBlankItem, useItem } from "@productivity/core/data/items";
+import {
+  detachTaskFromCalendar,
+  discardTaskIfBlank,
+  saveTask,
+  type TaskFields,
+  useTaskTagSuggestions,
+} from "@productivity/core/data/tasks";
 import { localMidnightMs } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
 import { setMarkdownTaskChecked } from "@productivity/core/note-text";
@@ -8,7 +14,7 @@ import { parseTags, serializeTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
 import { Markdown } from "../../../components/markdown";
@@ -21,13 +27,18 @@ import { Icon } from "../../../components/ui/icon";
 import { Input } from "../../../components/ui/input";
 import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { useAutosave } from "../../../lib/use-autosave";
+import { useCloseWhenDeleted } from "../../../lib/use-close-when-deleted";
 
 export default function TaskScreen() {
-  const { id, day } = useLocalSearchParams<{ id: string; day?: string }>();
+  // "New task" opens a fresh id with `draft` set: the row is only inserted once it has content.
+  const { id, day, draft } = useLocalSearchParams<{ id: string; day?: string; draft?: string }>();
   const router = useRouter();
   const task = useItem(id);
+  // Once seen, a missing row is handled by the editor (it closes); this is for a stale link.
+  const seen = useRef(!!task);
+  if (task) seen.current = true;
 
-  if (!task) {
+  if (!task && !draft && !seen.current) {
     return (
       <View className="flex-1 bg-background">
         <SheetHeader title="Task" onDone={() => router.back()} />
@@ -35,24 +46,46 @@ export default function TaskScreen() {
       </View>
     );
   }
-  return <TaskEditor task={task} defaultDay={day ? parseDateKey(day) : undefined} />;
+  return <TaskEditor id={id} task={task} defaultDay={day ? parseDateKey(day) : undefined} />;
 }
 
-function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date }) {
+function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | undefined; defaultDay?: Date }) {
   const db = useDb();
   const router = useRouter();
   const tagSuggestions = useTaskTagSuggestions();
-  const [fields, setFields] = useState({
-    title: task.title,
-    content: task.content ?? "",
-    tags: parseTags(task.tags),
-    dueAt: task.dueAt ?? null,
-    hasDueTime: task.hasDueTime,
-    completedAt: task.completedAt ?? null,
-  });
+  const [openedBlank] = useState(() => isBlankItem(task ?? {}));
+  const [fields, setFields] = useState(() => ({
+    title: task?.title ?? "",
+    content: task?.content ?? "",
+    tags: parseTags(task?.tags),
+    dueAt: task?.dueAt ?? null,
+    hasDueTime: task?.hasDueTime ?? false,
+    completedAt: task?.completedAt ?? null,
+  }));
   const fieldsRef = useRef(fields);
-  const [editingDetails, setEditingDetails] = useState(!task.content?.trim());
-  const autosave = useAutosave((patch: ItemFieldsPatch) => updateItem(db.db, task.id, patch));
+  const [editingDetails, setEditingDetails] = useState(!task?.content?.trim());
+  // Until its first save inserts it, a new task has no row; after that (or for a task opened
+  // from its row) a missing row means it was deleted elsewhere, and saves mustn't recreate it.
+  const isDraft = useRef(!task);
+  const autosave = useAutosave((value: TaskFields) => {
+    if (saveTask(db.db, id, value, { draft: isDraft.current })) isDraft.current = false;
+  });
+  const { expectDeletion } = useCloseWhenDeleted(task, {
+    message: "This task was deleted elsewhere",
+    onClose: () => {
+      autosave.discard();
+      router.back();
+    },
+  });
+
+  // Runs after useAutosave's unmount flush: a task opened blank and left blank is discarded.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only on unmount.
+  useEffect(
+    () => () => {
+      if (openedBlank) discardTaskIfBlank(db.db, id);
+    },
+    [],
+  );
 
   const update = (patch: Partial<typeof fields>) => {
     const next = { ...fieldsRef.current, ...patch };
@@ -91,7 +124,9 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
         onPress: () => {
           // Also stops the tag editor's unmount commit from re-inserting the deleted row.
           autosave.discard();
-          deleteItem(db.db, task.id);
+          expectDeletion();
+          // A new task that was never saved has no row; there's nothing to delete.
+          if (!isDraft.current) deleteItem(db.db, id);
           router.back();
         },
       },
@@ -103,7 +138,7 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
     <KeyboardScreen
       header={
         <SheetHeader
-          title="Task"
+          title={openedBlank ? "New task" : "Task"}
           onCancel={() => setEditingDetails(!editingDetails)}
           cancelLabel={editingDetails ? "Preview" : "Edit"}
           onDone={() => router.back()}
@@ -118,7 +153,7 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
           className={`font-semibold text-xl ${completed ? "line-through opacity-60" : ""}`}
           multiline
           submitBehavior="blurAndSubmit"
-          autoFocus={!task.title && !task.content}
+          autoFocus={openedBlank}
         />
         {editingDetails ? (
           <Input
@@ -129,7 +164,7 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
             multiline
             textAlignVertical="top"
             // Opening the editor from a rendered task focuses it; a new task focuses the title instead.
-            autoFocus={!!task.content?.trim()}
+            autoFocus={!!task?.content?.trim()}
           />
         ) : fields.content.trim() ? (
           <Markdown markdown={fields.content} onToggleTask={toggleChecklistItem} />
@@ -153,7 +188,7 @@ function TaskEditor({ task, defaultDay }: { task: NoteItem; defaultDay?: Date })
         onChange={update}
       />
 
-      {isCalendarBackedTask(task) && (
+      {task && isCalendarBackedTask(task) && (
         <View className="flex-row items-start gap-2 px-1">
           <Icon name="calendar" size={14} colorClassName="accent-muted-foreground" />
           <Text className="flex-1 text-muted-foreground text-sm">

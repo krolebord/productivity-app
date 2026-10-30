@@ -108,7 +108,7 @@ function RouteComponent() {
             <Panel id="main" minSize="40%">
               {/* pb clears the mobile FABs so the last rows stay readable. The
                   assistant page hides them and fills the height itself. */}
-              <main className={cn("h-full overflow-auto", !isAssistantPage && "pb-36 md:pb-0")}>
+              <main className={cn("h-full overflow-auto", !isAssistantPage && "pb-20 md:pb-0")}>
                 <Outlet />
               </main>
             </Panel>

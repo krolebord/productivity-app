@@ -5,6 +5,7 @@ import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { Trash2 } from "lucide-react";
 import { NoteMarkdown } from "@/components/note-markdown";
+import { useInlineConfirm } from "@/components/ui/inline-confirm";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,8 @@ export function NoteCard({ note, onOpen, onTagClick, activeTags, reorderDisabled
   const db = useDb();
   const { isContextKeyHeld, getAttachClickHandler } = useAttachToAssistant();
   const attachRef = { table: "item", id: note.id } as const;
+  // Click once to arm, again to delete, like the delete buttons in the editors.
+  const deleteConfirm = useInlineConfirm({ onConfirm: () => deleteItem(db.db, note.id) });
 
   return (
     <div className="group">
@@ -97,17 +100,25 @@ export function NoteCard({ note, onOpen, onTagClick, activeTags, reorderDisabled
         {...draggable.attributes}
         {...draggable.listeners}
       >
-        <div className="absolute top-1.5 right-1.5 hidden opacity-0 transition-opacity group-hover:opacity-100 md:block">
+        <div
+          className={cn(
+            "absolute top-1.5 right-1.5 z-10 hidden transition-opacity group-hover:opacity-100 md:block",
+            deleteConfirm.armed ? "opacity-100" : "opacity-0",
+          )}
+        >
           <button
             type="button"
-            className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
-            aria-label="Delete note"
-            onClick={(e) => {
-              e.stopPropagation();
-              deleteItem(db.db, note.id);
-            }}
+            className={cn(
+              "flex items-center gap-1 rounded-md p-1.5 text-xs transition-colors",
+              deleteConfirm.armed
+                ? "bg-destructive font-medium text-white hover:bg-destructive/90"
+                : "text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive",
+            )}
+            aria-label={deleteConfirm.armed ? "Confirm delete note" : "Delete note"}
+            {...deleteConfirm.getButtonProps()}
           >
             <Trash2 className="size-3.5" />
+            {deleteConfirm.armed && <span>Delete?</span>}
           </button>
         </div>
 

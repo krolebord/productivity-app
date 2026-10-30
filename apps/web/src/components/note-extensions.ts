@@ -1,8 +1,17 @@
 import { generateId } from "@sqlite-sync/core";
+import { Document } from "@tiptap/extension-document";
+import { Heading } from "@tiptap/extension-heading";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { renderTableToMarkdown, Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { Markdown, MarkdownManager } from "@tiptap/markdown";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { type JSONContent, ReactNodeViewRenderer } from "@tiptap/react";
+import {
+  type JSONContent,
+  type MarkdownParseHelpers,
+  type MarkdownRendererHelpers,
+  type MarkdownToken,
+  ReactNodeViewRenderer,
+} from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TaskItemView } from "./task-item-view";
 
@@ -53,10 +62,120 @@ const DraggableTaskItem = TaskItem.extend({
   },
 });
 
+const BLOCK_SEPARATOR = "\u0000block\u0000";
+
+/**
+ * Heading that remembers whether the source had no blank line before/after it ("# Title\ntext",
+ * as typed on mobile), so serializing doesn't add one. Set by parseNoteMarkdown, never
+ * rendered, and not copied when a heading is split.
+ */
+const NoteHeading = Heading.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      tightBefore: { default: false, rendered: false, keepOnSplit: false },
+      tightAfter: { default: false, rendered: false, keepOnSplit: false },
+    };
+  },
+});
+
+const isEmptyParagraph = (node: JSONContent | undefined) => node?.type === "paragraph" && !node.content?.length;
+
+/**
+ * Joins top-level blocks with a blank line like the stock Document, except next to a tight
+ * heading. An ATX heading always takes exactly its own line, so a single newline is safe
+ * on either side of it whatever the neighbouring block is (but an empty paragraph needs
+ * the blank lines that encode it).
+ */
+const NoteDocument = Document.extend({
+  renderMarkdown: (node, h) => {
+    const children = [...(node.content ?? [])];
+    // The editor keeps an empty paragraph after a trailing list or table (TrailingNode);
+    // it isn't content, so don't save it as trailing blank lines.
+    while (children.length > 1 && isEmptyParagraph(children[children.length - 1])) children.pop();
+    const parts = h.renderChildren(children, BLOCK_SEPARATOR).split(BLOCK_SEPARATOR);
+    return parts.reduce((out, part, i) => {
+      if (i === 0) return part;
+      const [prev, next] = [children[i - 1], children[i]];
+      const tight =
+        !isEmptyParagraph(prev) &&
+        !isEmptyParagraph(next) &&
+        ((prev?.type === "heading" && prev.attrs?.tightAfter) || (next?.type === "heading" && next.attrs?.tightBefore));
+      return out + (tight ? "\n" : "\n\n") + part;
+    }, "");
+  },
+});
+
+/**
+ * The stock GFM table serializer, minus the blank lines it wraps the table in (the document
+ * already separates blocks) and with alignment colons fitted into the column width, so a
+ * table it wrote parses and serializes back unchanged.
+ */
+function renderNoteTable(node: JSONContent, h: MarkdownRendererHelpers) {
+  const lines = renderTableToMarkdown(node, h)
+    .replace(/^\n+|\n+$/g, "")
+    .split("\n");
+  if (lines.length < 2) return lines.join("\n");
+  const widths = lines[0]
+    .slice(2, -2)
+    .split(" | ")
+    .map((cell) => cell.length);
+  const delimiters = lines[1].slice(2, -2).split(" | ");
+  if (delimiters.length === widths.length) {
+    const fitted = delimiters.map((delimiter, i) => {
+      const left = delimiter.startsWith(":") ? ":" : "";
+      const right = delimiter.endsWith(":") ? ":" : "";
+      return left + "-".repeat(Math.max(1, widths[i] - left.length - right.length)) + right;
+    });
+    lines[1] = `| ${fitted.join(" | ")} |`;
+  }
+  return lines.join("\n");
+}
+
+const isBreakTag = (token: MarkdownToken) => token.type === "html" && /^<br\s*\/?>$/i.test(token.raw ?? "");
+
+/**
+ * Cells have to stay on one line, so the serializer writes a line break in a cell (Shift+Enter)
+ * as `<br>`. Turn those inline HTML tokens back into hard breaks while parsing a cell: code
+ * spans and escaped `&lt;br&gt;` are other token types and stay text.
+ */
+function withCellBreaks(helpers: MarkdownParseHelpers): MarkdownParseHelpers {
+  return {
+    ...helpers,
+    parseInline: (tokens) => {
+      const segments: MarkdownToken[][] = [[]];
+      for (const inline of tokens) {
+        if (isBreakTag(inline)) segments.push([]);
+        else segments[segments.length - 1].push(inline);
+      }
+      return segments.flatMap((segment, i) => [
+        ...(i > 0 ? [{ type: "hardBreak" }] : []),
+        ...(segment.length ? helpers.parseInline(segment) : []),
+      ]);
+    },
+  };
+}
+
+const NoteTable = Table.extend({
+  parseMarkdown(token, helpers) {
+    // biome-ignore lint/style/noNonNullAssertion: Table defines parseMarkdown.
+    return this.parent!(token, withCellBreaks(helpers));
+  },
+  renderMarkdown: renderNoteTable,
+});
+
 export const noteExtensions = [
-  StarterKit.configure({ underline: false }),
+  StarterKit.configure({ underline: false, document: false, heading: false }),
+  NoteDocument,
+  NoteHeading,
   TaskList,
   DraggableTaskItem.configure({ nested: true }),
+  // GFM tables, so tables written elsewhere (e.g. on mobile) survive a web edit.
+  // Tab moves between cells and adds a row after the last one.
+  NoteTable.configure({ resizable: false }),
+  TableRow,
+  TableHeader,
+  TableCell,
   Markdown.configure({ markedOptions: { gfm: true } }),
 ];
 
@@ -67,7 +186,35 @@ const markdownManager = new MarkdownManager({
 
 export function parseNoteMarkdown(markdown: string): JSONContent {
   const doc = markdownManager.parse(markdown);
-  return { ...doc, content: stampDragIds(splitMisparsedTaskItems(doc.content ?? [])) };
+  const content = stampDragIds(splitMisparsedTaskItems(doc.content ?? []));
+  return { ...doc, content: markTightHeadings(markdown, content) };
+}
+
+/**
+ * Flags top-level headings that have no blank line before/after them in the source. The
+ * parsed tokens no longer carry the spacing, so lex again and pair heading tokens with
+ * heading nodes in order (only top-level heading tokens produce top-level headings).
+ */
+function markTightHeadings(markdown: string, nodes: JSONContent[]): JSONContent[] {
+  const { Lexer, defaults } = markdownManager.instance;
+  const tokens = new Lexer(defaults).lex(markdown);
+  // marked folds a block's trailing newlines into its raw text or a following space token.
+  const tightAfter = (i: number) => {
+    const next = tokens[i + 1];
+    return next != null && next.type !== "space" && !/\n\n$/.test(tokens[i].raw);
+  };
+  const headings: { tightBefore: boolean; tightAfter: boolean }[] = [];
+  tokens.forEach((token, i) => {
+    if (token.type === "heading") headings.push({ tightBefore: i > 0 && tightAfter(i - 1), tightAfter: tightAfter(i) });
+  });
+  if (headings.length !== nodes.filter((node) => node.type === "heading").length) return nodes;
+
+  let index = 0;
+  return nodes.map((node) => {
+    if (node.type !== "heading") return node;
+    const tight = headings[index++];
+    return tight.tightBefore || tight.tightAfter ? { ...node, attrs: { ...node.attrs, ...tight } } : node;
+  });
 }
 
 export function noteContentToPlainText(markdown: string, maxLength?: number): string {

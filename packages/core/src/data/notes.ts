@@ -1,6 +1,6 @@
 import { parseTags } from "../tags";
 import { type UserDbDatabase, useDbQuery } from "../user-db/db-context";
-import { nextItemOrder } from "./items";
+import { discardItemIfBlank, isBlankItem, saveItemDraft } from "./items";
 
 export function useNotesList() {
   const { data } = useDbQuery(
@@ -32,56 +32,21 @@ export function useNoteTagSuggestions() {
 export type NoteFields = { title: string; content: string; tags: string };
 
 /** A note with no title or body; tags alone (e.g. prefilled from a filter) don't count. */
-export const isBlankNote = (note: { title?: string | null; content?: string | null }) =>
-  !note.title?.trim() && !note.content?.trim();
+export const isBlankNote = isBlankItem;
 
-/**
- * Saves a note editor's fields and returns whether the note's row exists afterwards.
- * "New note" opens an editor on a fresh id without a row (`draft`), and the row is only
- * inserted once the note gets a title or body, so an abandoned new note never reaches
- * the database (or syncs to other devices). `insertBlank` inserts a draft regardless,
- * for actions that need the row (Make task). Outside a draft a missing row means the
- * note was deleted, e.g. on another device, and saving doesn't bring it back; editors
- * stop passing `draft` once this returns true.
- */
+/** Saves a note editor's fields; see saveItemDraft for how drafts and deleted notes are handled. */
 export function saveNote(
   db: UserDbDatabase,
   id: string,
   fields: NoteFields,
-  { draft = false, insertBlank = false }: { draft?: boolean; insertBlank?: boolean } = {},
+  options?: { draft?: boolean; insertBlank?: boolean },
 ): boolean {
-  return db.executeTransaction((trx) => {
-    const [existing] = trx.executeKysely((q) => q.selectFrom("item").select("id").where("id", "=", id)).rows;
-    if (existing) {
-      trx.executeKysely((q) => q.updateTable("item").set(fields).where("id", "=", id));
-      return true;
-    }
-    if (!draft || (!insertBlank && isBlankNote(fields))) return false;
-
-    const order = nextItemOrder(trx, "note");
-    trx.executeKysely((q) =>
-      q.insertInto("item").values({
-        id,
-        type: "note",
-        ...fields,
-        order,
-        createdAt: Date.now(),
-        hasDueTime: false,
-        tombstone: false,
-      }),
-    );
-    return true;
-  });
+  return saveItemDraft(db, id, "note", fields, options);
 }
 
 /** Deletes the note if it's blank, for editors closing on a note that was opened blank. */
 export function discardNoteIfBlank(db: UserDbDatabase, id: string) {
-  db.executeTransaction((trx) => {
-    const [note] = trx.executeKysely((q) =>
-      q.selectFrom("item").select(["title", "content"]).where("id", "=", id).where("type", "=", "note"),
-    ).rows;
-    if (note && isBlankNote(note)) trx.executeKysely((q) => q.deleteFrom("item").where("id", "=", id));
-  });
+  discardItemIfBlank(db, id, "note");
 }
 
 export function convertNoteToTask(db: UserDbDatabase, id: string) {

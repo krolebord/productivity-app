@@ -2,6 +2,7 @@ import { useIntegrationsHasError } from "@productivity/core/data/integrations";
 import { useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
 import { useAssistantEnabled, useTabContentInset } from "../../../components/assistant-button";
+import { GlobalActions } from "../../../components/global-actions";
 import { ScreenHeader } from "../../../components/screen-header";
 import { SyncStatus } from "../../../components/sync-status";
 import { FormRow, FormSection } from "../../../components/ui/form";
@@ -14,7 +15,7 @@ export default function MoreScreen() {
   const assistantEnabled = useAssistantEnabled();
   return (
     <View className="flex-1 bg-background">
-      <ScreenHeader title="More" />
+      <ScreenHeader title="More" actions={<GlobalActions />} />
       <ScrollView
         className="flex-1"
         contentContainerClassName="gap-6 px-5 pt-1"

@@ -455,9 +455,11 @@ function SidebarContent({
 /**
  * The floating buttons ride above --bottom-inset, which a page sets when it pins
  * something to the bottom edge itself — the assistant composer (see useBottomInset).
+ * They share one row along the bottom edge, so on a narrow phone they don't cover the
+ * right-aligned content (amounts, the last tab) higher up the page; the main area's
+ * bottom padding lets the end of a page scroll clear of that row.
  */
 const FAB_BOTTOM = "bottom-[calc(1rem_+_var(--bottom-inset))]";
-const FAB_BOTTOM_STACKED = "bottom-[calc(4.75rem_+_var(--bottom-inset))]";
 
 function MobileSidebar() {
   const [open, setOpen] = useState(false);
@@ -465,7 +467,7 @@ function MobileSidebar() {
   const hasIntegrationError = useIntegrationsHasError();
   const location = useSidebarLocation();
   const assistantEnabled = useAssistantEnabled();
-  // On Today the stacked FAB would only re-open the same page, so it becomes
+  // On Today the second FAB would only re-open the same page, so it becomes
   // the assistant shortcut instead. That's the pair you hop between on a phone.
   const stackedToAssistant = location.isPath("/today") && assistantEnabled;
 
@@ -511,7 +513,7 @@ function MobileSidebar() {
         className={buttonVariants({
           variant: "secondary",
           size: "icon",
-          className: cn("!rounded-full fixed right-4 z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM_STACKED),
+          className: cn("!rounded-full fixed right-[4.25rem] z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM),
         })}
         aria-label={stackedToAssistant ? "Open assistant" : "Open today"}
       >

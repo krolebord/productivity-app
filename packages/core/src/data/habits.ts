@@ -1,4 +1,5 @@
 import { generateId } from "@sqlite-sync/core";
+import { compareHabits } from "../agenda";
 import { type UserDbDatabase, useDbQuery } from "../user-db/db-context";
 import type { HabitItem } from "../user-db/migrations";
 
@@ -14,16 +15,9 @@ export type HabitInput = Pick<
   | "unit"
 >;
 
-function sortHabits(habits: HabitItem[]) {
-  return [...habits].sort((a, b) => {
-    if (a.order !== b.order) return a.order - b.order;
-    return a.createdAt - b.createdAt;
-  });
-}
-
 export function useHabitsList() {
-  const { data } = useDbQuery((q) => q.selectFrom("habit").selectAll().orderBy("order", "asc"), {
-    mapData: (habits) => ({ habits: sortHabits(habits), timestamp: Date.now() }),
+  const { data } = useDbQuery((q) => q.selectFrom("habit").selectAll(), {
+    mapData: (habits) => ({ habits: [...habits].sort(compareHabits), timestamp: Date.now() }),
   });
   return data;
 }
@@ -88,6 +82,23 @@ export function setHabitArchived(db: UserDbDatabase, id: string, archived: boole
   );
 }
 
+/**
+ * Permanently deletes an archived habit and all of its entries (archive first, so a habit's
+ * history is never one click from gone). Returns whether it was deleted. Both are soft
+ * deletes that sync like any other.
+ */
+export function deleteArchivedHabit(db: UserDbDatabase, id: string): boolean {
+  return db.executeTransaction((trx) => {
+    const [habit] = trx.executeKysely((q) =>
+      q.selectFrom("habit").select("archivedAt").where("id", "=", id).where("archivedAt", "is not", null),
+    ).rows;
+    if (!habit) return false;
+    trx.executeKysely((q) => q.deleteFrom("habit_entry").where("habitId", "=", id));
+    trx.executeKysely((q) => q.deleteFrom("habit").where("id", "=", id));
+    return true;
+  });
+}
+
 export function setHabitOrder(db: UserDbDatabase, id: string, order: number) {
   db.executeKysely((q) => q.updateTable("habit").set({ order, updatedAt: Date.now() }).where("id", "=", id));
 }
@@ -104,6 +115,15 @@ export function reorderHabits(db: UserDbDatabase, orderedIds: readonly string[])
           .where("id", "=", id),
       );
     });
+  });
+}
+
+export function saveHabitOrder(db: UserDbDatabase, changes: readonly { id: string; order: number }[]) {
+  db.executeTransaction((trx) => {
+    const now = Date.now();
+    for (const { id, order } of changes) {
+      trx.executeKysely((q) => q.updateTable("habit").set({ order, updatedAt: now }).where("id", "=", id));
+    }
   });
 }
 

@@ -1,5 +1,6 @@
 import { generateId } from "@sqlite-sync/core";
 import { useCallback, useState } from "react";
+import { reorderByOrder } from "../reorder";
 import { createTransactionInTransaction } from "../transactions";
 import { type UserDbDatabase, useDb, useDbQuery } from "../user-db/db-context";
 import type { AccountItem } from "../user-db/migrations";
@@ -126,44 +127,10 @@ export function setAccountExcludedFromDashboard(db: UserDbDatabase, accountId: s
 }
 
 /**
- * Moves the account at `from` to index `to`. Returns the reordered list with updated `order`
- * values (for painting before the query catches up) and the order writes to persist with
+ * Moves the account at `from` to index `to`; see reorderByOrder. Persist the changes with
  * `saveAccountOrder`.
  */
-export function reorderAccounts<T extends Pick<AccountItem, "id" | "order">>(
-  accounts: readonly T[],
-  from: number,
-  to: number,
-): { ordered: T[]; changes: { id: string; order: number }[] } {
-  const moved = accounts.slice();
-  moved.splice(to, 0, moved.splice(from, 1)[0]);
-  const movedId = accounts[from].id;
-
-  // Slot the moved row between its new neighbours when there is room, so a
-  // single drag writes a single row instead of renumbering the whole list.
-  const prevOrder = to > 0 ? moved[to - 1].order : undefined;
-  const nextOrder = to < moved.length - 1 ? moved[to + 1].order : undefined;
-  let movedOrder: number | null = null;
-  if (typeof prevOrder === "number" && typeof nextOrder === "number") {
-    const mid = (prevOrder + nextOrder) / 2;
-    if (mid > prevOrder && mid < nextOrder) movedOrder = mid;
-  } else if (typeof prevOrder === "number" && nextOrder === undefined) {
-    movedOrder = prevOrder + 1;
-  } else if (typeof nextOrder === "number" && prevOrder === undefined) {
-    movedOrder = nextOrder - 1;
-  }
-
-  if (movedOrder !== null) {
-    const order = movedOrder;
-    return {
-      ordered: moved.map((a) => (a.id === movedId ? { ...a, order } : a)),
-      changes: [{ id: movedId, order }],
-    };
-  }
-
-  const ordered = moved.map((a, i) => ({ ...a, order: i + 1 }));
-  return { ordered, changes: ordered.map((a) => ({ id: a.id, order: a.order })) };
-}
+export const reorderAccounts = reorderByOrder;
 
 export function saveAccountOrder(db: UserDbDatabase, changes: readonly { id: string; order: number }[]) {
   if (changes.length === 1) {

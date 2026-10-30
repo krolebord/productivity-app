@@ -27,6 +27,7 @@ import { AccountList } from "../../../components/account-list";
 import { useTabContentInset } from "../../../components/assistant-button";
 import { CurrencySheet } from "../../../components/currency-field";
 import { DashboardRangePicker } from "../../../components/dashboard-range-picker";
+import { GlobalActions } from "../../../components/global-actions";
 import { type OverviewChart, OverviewCharts } from "../../../components/overview-charts";
 import { ScreenHeader } from "../../../components/screen-header";
 import { TransactionRow } from "../../../components/transaction-row";
@@ -141,7 +142,12 @@ export default function FinancesScreen() {
       <ScreenHeader
         title="Finances"
         subtitle={range.spanLabel}
-        actions={<IconButton icon="more-horizontal" label="More actions" onPress={() => setMenuOpen(true)} />}
+        actions={
+          <>
+            <GlobalActions />
+            <IconButton icon="more-horizontal" label="More actions" onPress={() => setMenuOpen(true)} />
+          </>
+        }
       />
       <ScrollView
         style={{ flex: 1 }}

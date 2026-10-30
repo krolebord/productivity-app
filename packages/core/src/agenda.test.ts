@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AgendaHabit,
   buildAgendaSections,
+  compareHabits,
   getDayHabitProgress,
   getOverdueHabitOccurrence,
   isHabitDueOnDay,
@@ -314,6 +315,24 @@ describe("getOverdueHabitOccurrence", () => {
     expect(
       getOverdueHabitOccurrence(habit({ id: "n", scheduleType: "everyNDays", scheduleInterval: 3 }), today, undefined),
     ).toBeNull();
+  });
+});
+
+describe("compareHabits", () => {
+  it("orders by manual order, then creation time, then id", () => {
+    const habits = [
+      habit({ id: "c", scheduleType: "daily", order: 1, createdAt: 5 }),
+      habit({ id: "b", scheduleType: "daily", order: 1, createdAt: 3 }),
+      habit({ id: "a", scheduleType: "daily", order: 1, createdAt: 3 }),
+      habit({ id: "z", scheduleType: "daily", order: 0, createdAt: 9 }),
+    ];
+    expect([...habits].sort(compareHabits).map((h) => h.id)).toEqual(["z", "a", "b", "c"]);
+  });
+
+  it("ignores names, so renaming a habit doesn't move it", () => {
+    const first = habit({ id: "1", name: "Zebra", scheduleType: "daily", createdAt: 1 });
+    const second = habit({ id: "2", name: "Apple", scheduleType: "daily", createdAt: 2 });
+    expect([second, first].sort(compareHabits).map((h) => h.id)).toEqual(["1", "2"]);
   });
 });
 

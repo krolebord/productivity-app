@@ -5,17 +5,25 @@ import {
   type AgendaSection,
   type AgendaTask,
   type AgendaTaskRow,
+  type DayHabitProgress,
   parseDateKey,
 } from "@productivity/core/agenda";
 import { type CalendarDayInfo, useAgenda } from "@productivity/core/data/agenda";
+import { saveItemOrder } from "@productivity/core/data/items";
 import { formatDueDateLabel } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
 import { markdownToPlainText } from "@productivity/core/note-text";
+import { useReorderable } from "@productivity/core/use-reorderable";
+import { useDb } from "@productivity/core/user-db/db-context";
 import { differenceInCalendarDays, format } from "date-fns";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { Canvas, Path, Skia } from "react-native-skia";
+import { useCSSVariable } from "uniwind";
 import { useTabContentInset } from "../../../components/assistant-button";
+import { GlobalActions } from "../../../components/global-actions";
+import { type DragHandle, ReorderableList } from "../../../components/reorderable-list";
 import { ScreenHeader } from "../../../components/screen-header";
 import { CheckCircle } from "../../../components/ui/check-circle";
 import { EmptyState } from "../../../components/ui/empty-state";
@@ -46,6 +54,7 @@ export default function TodayScreen() {
   const agenda = useAgenda(useCurrentDayKey());
   const router = useRouter();
   const [showCompleted, setShowCompleted] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const headerLabel = agenda.isSelectedToday ? "Today" : format(agenda.selectedDate, "EEE, MMM d");
   const activeSections = useMemo(
@@ -69,6 +78,7 @@ export default function TodayScreen() {
         subtitle={daySubtitle(agenda.selectedDate, agenda.todayKey)}
         actions={
           <>
+            <GlobalActions />
             {/* Hidden rather than removed on today, so the title keeps its width. */}
             <Pressable
               accessibilityRole="button"
@@ -101,6 +111,7 @@ export default function TodayScreen() {
         contentContainerStyle={{ paddingBottom: contentInset }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        scrollEnabled={!dragging}
       >
         <QuickAddTask selectedLabel={headerLabel} onCreate={agenda.createTask} />
 
@@ -119,15 +130,25 @@ export default function TodayScreen() {
             {activeSections.map((section) => (
               <View key={section.bucket} className="gap-1">
                 <SectionTitle label={section.label} destructive={section.bucket === "overdue"} />
-                {section.rows.map((row) => (
-                  <AgendaRowView
-                    key={`${row.kind}:${row.id}:${row.kind === "habit" ? row.dateKey : ""}`}
-                    row={row}
-                    overdue={section.bucket === "overdue"}
-                    agenda={agenda}
+                {section.bucket === "anytime" && (
+                  <ReorderableTasks
+                    rows={section.rows}
                     onOpenTask={openTask}
+                    onToggle={(id, completed) => agenda.toggleTaskCompleted(id, completed)}
+                    onDraggingChange={setDragging}
                   />
-                ))}
+                )}
+                {section.rows
+                  .filter((row) => section.bucket !== "anytime" || !isManuallyOrdered(row))
+                  .map((row) => (
+                    <AgendaRowView
+                      key={`${row.kind}:${row.id}:${row.kind === "habit" ? row.dateKey : ""}`}
+                      row={row}
+                      overdue={section.bucket === "overdue"}
+                      agenda={agenda}
+                      onOpenTask={openTask}
+                    />
+                  ))}
               </View>
             ))}
             {completedRows.length > 0 && (
@@ -153,6 +174,52 @@ export default function TodayScreen() {
         )}
       </ScrollView>
     </View>
+  );
+}
+
+/** Untimed open tasks of a day keep the manual order set by dragging them, as on web. */
+const isManuallyOrdered = (row: AgendaRow): row is AgendaTaskRow =>
+  row.kind === "task" && !row.completed && !row.task.hasDueTime;
+
+const TASK_ROW_HEIGHT = 48;
+
+function ReorderableTasks({
+  rows,
+  onOpenTask,
+  onToggle,
+  onDraggingChange,
+}: {
+  rows: readonly AgendaRow[];
+  onOpenTask: (id: string) => void;
+  onToggle: (id: string, completed: boolean) => void;
+  onDraggingChange: (dragging: boolean) => void;
+}) {
+  const db = useDb();
+  const tasks = useMemo(
+    () => rows.filter(isManuallyOrdered).map((row) => ({ id: row.id, order: row.task.order ?? 0, row })),
+    [rows],
+  );
+  const save = useCallback((changes: { id: string; order: number }[]) => saveItemOrder(db.db, changes), [db]);
+  const { items, move } = useReorderable(tasks, save);
+  if (items.length === 0) return null;
+
+  return (
+    <ReorderableList
+      items={items}
+      rowHeight={TASK_ROW_HEIGHT}
+      onMove={move}
+      onDraggingChange={onDraggingChange}
+      rowClassName="bg-background"
+      renderItem={({ row }, handle) => (
+        <TaskRow
+          row={row}
+          overdue={false}
+          handle={handle}
+          onOpen={() => onOpenTask(row.id)}
+          onToggle={(completed) => onToggle(row.id, completed)}
+        />
+      )}
+    />
   );
 }
 
@@ -189,8 +256,20 @@ function CollapsibleSectionTitle({
   );
 }
 
+type RingColors = { fill: string; selectedFill: string; track: string };
+
 function CalendarStrip({ agenda }: { agenda: Agenda }) {
   const { dayInfos, calendarExpanded, selectedDate, selectedKey, todayKey } = agenda;
+  const [primary, primaryForeground, mutedForeground] = useCSSVariable([
+    "--color-primary",
+    "--color-primary-foreground",
+    "--color-muted-foreground",
+  ]) as (string | undefined)[];
+  const ringColors: RingColors = {
+    fill: primary ?? "#8b5cf6",
+    selectedFill: primaryForeground ?? "#ffffff",
+    track: mutedForeground ?? "#71717a",
+  };
   const weeks = useMemo(() => {
     const rows: CalendarDayInfo[][] = [];
     for (let i = 0; i < dayInfos.length; i += 7) rows.push(dayInfos.slice(i, i + 7));
@@ -236,6 +315,7 @@ function CalendarStrip({ agenda }: { agenda: Agenda }) {
               selected={day.dateKey === selectedKey}
               isToday={day.dateKey === todayKey}
               muted={calendarExpanded && day.date.getMonth() !== selectedDate.getMonth()}
+              ringColors={ringColors}
               onSelect={agenda.selectDateKey}
             />
           ))}
@@ -250,47 +330,89 @@ function DayCell({
   selected,
   isToday,
   muted,
+  ringColors,
   onSelect,
 }: {
   day: CalendarDayInfo;
   selected: boolean;
   isToday: boolean;
   muted: boolean;
+  ringColors: RingColors;
   onSelect: (dateKey: string) => void;
 }) {
   const progress = day.habitProgress;
-  const allHabitsDone = progress != null && progress.done >= progress.due;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={format(day.date, "EEEE, MMMM d")}
+      accessibilityLabel={`${format(day.date, "EEEE, MMMM d")}${
+        progress ? `, ${progress.done} of ${progress.due} habits done` : ""
+      }`}
       accessibilityState={{ selected }}
       onPress={() => onSelect(day.dateKey)}
-      className={`mx-0.5 flex-1 items-center gap-1 rounded-lg py-1.5 ${selected ? "bg-primary" : "active:bg-muted"} ${
+      className={`mx-0.5 flex-1 items-center gap-0.5 rounded-lg py-1 ${selected ? "bg-primary" : "active:bg-muted"} ${
         muted && !selected ? "opacity-40" : ""
       }`}
     >
-      <Text
-        className={`font-semibold text-base ${
-          selected ? "text-primary-foreground" : isToday ? "text-primary" : "text-foreground"
-        }`}
-      >
-        {day.date.getDate()}
-      </Text>
-      <View className="h-1 flex-row gap-0.5">
-        {day.hasIncompleteTasks && (
-          <View className={`size-1 rounded-full ${selected ? "bg-primary-foreground" : "bg-primary"}`} />
-        )}
-        {progress && (
-          <View
-            className={`size-1 rounded-full ${
-              allHabitsDone ? "bg-emerald-500" : selected ? "bg-primary-foreground/50" : "bg-muted-foreground/40"
-            }`}
-          />
-        )}
+      <View className="size-8 items-center justify-center">
+        {progress && <HabitProgressRing progress={progress} selected={selected} colors={ringColors} />}
+        <Text
+          className={`font-semibold text-base ${
+            selected ? "text-primary-foreground" : isToday ? "text-primary" : "text-foreground"
+          }`}
+        >
+          {day.date.getDate()}
+        </Text>
       </View>
+      <View
+        className={`size-1 rounded-full ${
+          day.hasIncompleteTasks ? (selected ? "bg-primary-foreground" : "bg-primary") : "bg-transparent"
+        }`}
+      />
     </Pressable>
+  );
+}
+
+const RING_SIZE = 32;
+const RING_STROKE = 2;
+
+/** The day's habits done so far as a ring around the date, filling clockwise from the top (as on web). */
+function HabitProgressRing({
+  progress,
+  selected,
+  colors,
+}: {
+  progress: DayHabitProgress;
+  selected: boolean;
+  colors: RingColors;
+}) {
+  const ratio = progress.due > 0 ? Math.min(1, progress.done / progress.due) : 0;
+  const { track, arc } = useMemo(() => {
+    const inset = RING_STROKE / 2;
+    const oval = Skia.XYWHRect(inset, inset, RING_SIZE - RING_STROKE, RING_SIZE - RING_STROKE);
+    const arc = Skia.PathBuilder.Make();
+    if (ratio >= 1) arc.addArc(oval, -90, 359.99);
+    else if (ratio > 0) arc.addArc(oval, -90, 360 * ratio);
+    return { track: Skia.Path.Oval(oval), arc: arc.detach() };
+  }, [ratio]);
+
+  return (
+    <Canvas pointerEvents="none" style={{ position: "absolute", width: RING_SIZE, height: RING_SIZE }}>
+      <Path
+        path={track}
+        style="stroke"
+        strokeWidth={RING_STROKE}
+        color={selected ? colors.selectedFill : colors.track}
+        opacity={selected ? 0.3 : 0.25}
+      />
+      <Path
+        path={arc}
+        style="stroke"
+        strokeWidth={RING_STROKE}
+        strokeCap="round"
+        color={selected ? colors.selectedFill : colors.fill}
+      />
+    </Canvas>
   );
 }
 
@@ -333,6 +455,15 @@ function QuickAddTask({
         iconClassName={toInbox ? "accent-primary" : "accent-muted-foreground"}
         size={18}
         className={toInbox ? "bg-accent" : ""}
+      />
+      <IconButton
+        icon="arrow-up"
+        label="Add task"
+        onPress={submit}
+        disabled={!title.trim()}
+        iconClassName="accent-primary-foreground"
+        size={18}
+        className="size-9 bg-primary active:bg-primary/80"
       />
     </View>
   );
@@ -419,11 +550,11 @@ function taskLabel(task: AgendaTask) {
   return task.title.trim() || markdownToPlainText(task.content, 100) || "Untitled";
 }
 
-function TaskTitle({ task, completed = false }: { task: AgendaTask; completed?: boolean }) {
+function TaskTitle({ task, completed = false, lines = 2 }: { task: AgendaTask; completed?: boolean; lines?: number }) {
   const hasTitle = task.title.trim().length > 0;
   return (
     <Text
-      numberOfLines={2}
+      numberOfLines={lines}
       className={`text-base ${hasTitle ? "text-foreground" : "text-muted-foreground"} ${completed ? "line-through" : ""}`}
     >
       {taskLabel(task)}
@@ -434,22 +565,25 @@ function TaskTitle({ task, completed = false }: { task: AgendaTask; completed?: 
 function TaskRow({
   row,
   overdue,
+  handle,
   onOpen,
   onToggle,
   onMoveToToday,
 }: {
   row: AgendaTaskRow;
   overdue: boolean;
+  /** Set for rows in a reorderable list: a one-line row with a grip at the end. */
+  handle?: DragHandle;
   onOpen: () => void;
   onToggle: (completed: boolean) => void;
-  onMoveToToday: () => void;
+  onMoveToToday?: () => void;
 }) {
   const { task, completed } = row;
   const timeLabel = task.hasDueTime && task.dueAt != null ? format(task.dueAt, "HH:mm") : null;
   const dueLabel = overdue && task.dueAt != null ? formatDueDateLabel(task.dueAt, task.hasDueTime) : null;
 
   return (
-    <View className={`min-h-11 flex-row items-center gap-3 ${completed ? "opacity-60" : ""}`}>
+    <View className={cn("min-h-11 flex-row items-center gap-3", handle && "h-full", completed && "opacity-60")}>
       <CheckCircle
         checked={completed}
         label={completed ? "Mark incomplete" : "Mark complete"}
@@ -458,14 +592,21 @@ function TaskRow({
       <Pressable className="flex-1 py-2" onPress={onOpen}>
         <View className="flex-row items-center gap-2">
           <View className="shrink">
-            <TaskTitle task={task} completed={completed} />
+            <TaskTitle task={task} completed={completed} lines={handle ? 1 : 2} />
           </View>
           {isCalendarBackedTask(task) && <Icon name="calendar" size={12} colorClassName="accent-muted-foreground" />}
-          {timeLabel && !overdue && <Text className="text-muted-foreground text-sm">{timeLabel}</Text>}
+          {timeLabel && !overdue && (
+            <Text
+              className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground text-xs"
+              style={{ fontVariant: ["tabular-nums"] }}
+            >
+              {timeLabel}
+            </Text>
+          )}
         </View>
         {dueLabel && <Text className="mt-0.5 text-destructive text-xs">{dueLabel}</Text>}
       </Pressable>
-      {overdue && (
+      {overdue && onMoveToToday && (
         <IconButton
           icon="corner-down-left"
           label="Move to today"
@@ -474,6 +615,15 @@ function TaskRow({
           size={16}
           className="size-8"
         />
+      )}
+      {handle?.(
+        <View
+          accessibilityLabel={`Reorder ${taskLabel(task)}`}
+          accessibilityHint="Hold and drag to move"
+          className="h-full justify-center pr-1 pl-2"
+        >
+          <Icon name="menu" size={16} colorClassName="accent-muted-foreground/60" />
+        </View>,
       )}
     </View>
   );

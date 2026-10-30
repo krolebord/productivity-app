@@ -20,12 +20,13 @@ import { z } from "zod";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { CurrencySelect } from "@/components/currency-select";
+import { useDashboardSettings } from "@/lib/dashboard-settings";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
 import { useAppForm } from "./ui/form";
 
 const accountFormSchema = z.object({
-  labelText: z.string(),
+  labelText: z.string().refine((value) => value.trim().length > 0, "Name is required."),
   labelColor: z.string(),
   currency: z.string().min(1, "Currency is required."),
   balance: finiteAmountString("Balance"),
@@ -93,6 +94,7 @@ function AccountDialogContent() {
   const account = useAccount(accountId);
   const existing = mode === "edit" ? account : undefined;
   const hasTransactionHistory = useAccountHasTransactions(accountId);
+  const { baseCurrency } = useDashboardSettings();
 
   function persistAccount(value: {
     balance: number;
@@ -139,7 +141,8 @@ function AccountDialogContent() {
     defaultValues: {
       labelText: existing?.labelText ?? "",
       labelColor: existing?.labelColor ?? "#8b5cf6",
-      currency: existing?.currency ?? "USD",
+      // New accounts default to the display currency, as on mobile.
+      currency: existing?.currency ?? baseCurrency,
       balance: String(mode === "edit" ? (existing?.balance ?? 0) : 0),
       description: existing?.description ?? "",
     },
@@ -149,7 +152,7 @@ function AccountDialogContent() {
         currency: value.currency,
         description: value.description,
         labelColor: value.labelColor,
-        labelText: value.labelText,
+        labelText: value.labelText.trim(),
       });
     },
   });
@@ -168,10 +171,12 @@ function AccountDialogContent() {
       >
         <form.AppField name="labelText">
           {(field) => (
-            <field.FormInput
-              placeholder="Account name"
-              className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
-            />
+            <field.FieldContainer>
+              <field.FormInput
+                placeholder="Account name"
+                className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
+              />
+            </field.FieldContainer>
           )}
         </form.AppField>
 

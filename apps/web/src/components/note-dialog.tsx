@@ -13,9 +13,11 @@ import { useDb } from "@productivity/core/user-db/db-context";
 import { generateId } from "@sqlite-sync/core";
 import { useMatches } from "@tanstack/react-router";
 import { ListTodoIcon, Trash2Icon } from "lucide-react";
-import { type Ref, useCallback, useImperativeHandle, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { toast } from "sonner";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
+import { useFlushOnHide } from "@/lib/use-flush-on-hide";
 import { cn } from "@/lib/utils";
 import { NoteEditor, type NoteEditorHandle } from "./note-editor";
 import { TagInput, type TagInputHandle } from "./tag-input";
@@ -84,6 +86,7 @@ function NoteDialogContent({
   onClose,
   onDelete,
   onConvertToTask,
+  onDeletedElsewhere,
 }: {
   ref: Ref<NoteDialogContentHandle>;
   noteId: string;
@@ -92,6 +95,7 @@ function NoteDialogContent({
   onClose: () => void;
   onDelete: () => void;
   onConvertToTask: () => void;
+  onDeletedElsewhere: () => void;
 }) {
   const note = useItem(noteId);
   const tagSuggestions = useNoteTagSuggestions();
@@ -107,6 +111,16 @@ function NoteDialogContent({
     content: note?.content ?? "",
     tags: note?.tags ?? draftTags ?? "[]",
   });
+
+  // The row disappearing once it was seen means the note was deleted, e.g. on another device.
+  // Not `draft`: that clears on the first insert, before the query may have picked the row up.
+  const rowSeen = useRef(!!note);
+  if (note) rowSeen.current = true;
+  const deletedElsewhere = !note && rowSeen.current;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: react to the deletion only.
+  useEffect(() => {
+    if (deletedElsewhere) onDeletedElsewhere();
+  }, [deletedElsewhere]);
 
   const updateNote = (fields: Partial<NoteFields>) => {
     if (fields.title !== undefined) setTitle(fields.title);
@@ -210,6 +224,7 @@ export function NoteDialog() {
   const queueSave = useDebounceCallback((id: string, fields: NoteFields, draft: DraftFlag) => {
     if (saveNote(db.db, id, fields, { draft: draft.current })) draft.current = false;
   }, 1000);
+  useFlushOnHide(queueSave.flush);
 
   function saveAndClose() {
     const content = contentRef.current;
@@ -223,6 +238,14 @@ export function NoteDialog() {
     queueSave.cancel();
     if (noteId) deleteItem(db.db, noteId);
     closeDialog();
+  }
+
+  function closeDeletedNote() {
+    // Our own delete (or discarding a blank note) closes the dialog first.
+    if (!useNoteDialogStore.getState().isOpen) return;
+    queueSave.cancel();
+    closeDialog();
+    toast.info("This note was deleted elsewhere");
   }
 
   function convertToTask() {
@@ -250,6 +273,7 @@ export function NoteDialog() {
             onClose={saveAndClose}
             onDelete={deleteAndClose}
             onConvertToTask={convertToTask}
+            onDeletedElsewhere={closeDeletedNote}
           />
         ) : (
           <DialogTitle>Edit note</DialogTitle>

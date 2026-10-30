@@ -1,10 +1,16 @@
 import { habitTargetPeriodLabel, parseScheduleMonthDays, parseScheduleWeekdays } from "@productivity/core/agenda";
-import { createHabit, setHabitArchived, updateHabit, useHabit } from "@productivity/core/data/habits";
+import {
+  createHabit,
+  deleteArchivedHabit,
+  setHabitArchived,
+  updateHabit,
+  useHabit,
+} from "@productivity/core/data/habits";
 import { createDynamicValidationLogic, dynamicZodValidators } from "@productivity/core/form-schemas";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { HabitItem } from "@productivity/core/user-db/migrations";
 import { useStore } from "@tanstack/react-form";
-import { Archive, ArchiveRestore } from "lucide-react";
+import { Archive, ArchiveRestore, Trash2Icon } from "lucide-react";
 import { useCallback } from "react";
 import { z } from "zod";
 import { create } from "zustand";
@@ -13,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./ui/dialog";
 import { useAppForm } from "./ui/form";
+import { useInlineConfirm } from "./ui/inline-confirm";
 import { SelectItem } from "./ui/select";
 
 export type HabitScheduleType = HabitItem["scheduleType"];
@@ -169,6 +176,13 @@ function HabitDialogContent() {
     setHabitArchived(db.db, habitId, !isArchived);
     closeDialog();
   }
+
+  // Only archived habits can be deleted, and it takes a second click: it erases their history.
+  const deleteConfirm = useInlineConfirm({
+    onConfirm: () => {
+      if (habitId && deleteArchivedHabit(db.db, habitId)) closeDialog();
+    },
+  });
 
   const form = useAppForm({
     validationLogic: createDynamicValidationLogic(),
@@ -374,6 +388,21 @@ function HabitDialogContent() {
           <Button type="button" variant="outline" className="w-full justify-start gap-2" onClick={toggleArchive}>
             {isArchived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
             {isArchived ? "Unarchive habit" : "Archive habit"}
+          </Button>
+        )}
+
+        {mode === "edit" && isArchived && (
+          <Button
+            type="button"
+            variant={deleteConfirm.armed ? "destructive" : "outline"}
+            className={cn(
+              "w-full justify-start gap-2",
+              !deleteConfirm.armed && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+            )}
+            {...deleteConfirm.getButtonProps()}
+          >
+            <Trash2Icon className="size-4" />
+            {deleteConfirm.armed ? "Click again to delete the habit and all its entries" : "Delete habit"}
           </Button>
         )}
 

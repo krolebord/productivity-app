@@ -9,6 +9,12 @@ catalogs:
     '@orpc/client':
       specifier: ^1.15.4
       version: 1.15.4
+    '@orpc/contract':
+      specifier: ^1.15.4
+      version: 1.15.4
+    '@orpc/server':
+      specifier: ^1.15.4
+      version: 1.15.4
     '@sqlite-sync/core':
       specifier: ^0.13.3
       version: 0.13.3
@@ -18,7 +24,16 @@ catalogs:
     '@sqlite-sync/react-native':
       specifier: ^0.13.3
       version: 0.13.3
+    '@tanstack/react-form':
+      specifier: ^1.33.5
+      version: 1.33.5
+    '@types/node':
+      specifier: ^26.6.4
+      version: 26.6.4
     '@types/react':
+      specifier: ^19.3.0
+      version: 19.3.0
+    '@types/react-dom':
       specifier: ^19.3.0
       version: 19.3.0
     date-fns:
@@ -30,12 +45,24 @@ catalogs:
     react:
       specifier: 19.3.0
       version: 19.3.0
+    react-dom:
+      specifier: 19.3.0
+      version: 19.3.0
     tailwindcss:
       specifier: ^4.3.3
       version: 4.3.3
+    tsx:
+      specifier: ^4.23.15
+      version: 4.23.15
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
+    vitest:
+      specifier: ^4.1.11
+      version: 4.1.11
+    zod:
+      specifier: ^4.6.5
+      version: 4.6.5
 
 patchedDependencies:
   '@cloudflare/think@0.16.0':
@@ -278,8 +305,17 @@ importers:
       '@tavily/ai-sdk':
         specifier: ^0.5.0
         version: 0.5.0(ai@6.0.300(zod@4.6.5))(zod@4.6.5)
+      '@tiptap/extension-document':
+        specifier: 3.31.4
+        version: 3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))
+      '@tiptap/extension-heading':
+        specifier: 3.31.4
+        version: 3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))
       '@tiptap/extension-list':
         specifier: ^3.31.4
+        version: 3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))(@tiptap/pm@3.31.4)
+      '@tiptap/extension-table':
+        specifier: 3.31.4
         version: 3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))(@tiptap/pm@3.31.4)
       '@tiptap/extensions':
         specifier: ^3.31.4
@@ -4393,6 +4429,12 @@ packages:
     resolution: {integrity: sha512-4MBr63TJIMqxCjE+gAPdlY1IdELgvbAP516K3Ntn/BkcpEbEoPMEYVz+XTxULyHQEuARDO6jsXPPxRXpA74jaw==}
     peerDependencies:
       '@tiptap/core': 3.31.4
+
+  '@tiptap/extension-table@3.31.4':
+    resolution: {integrity: sha512-ai7DLwg/xmhlUas3LgWaPQdPlZ8StliY6Dn+iUH6eyZ/TQqRDY/oeIsKWaHpXq22T5M5dMlZPTg172ZdtwKswQ==}
+    peerDependencies:
+      '@tiptap/core': 3.31.4
+      '@tiptap/pm': 3.31.4
 
   '@tiptap/extension-text@3.31.4':
     resolution: {integrity: sha512-WL2ZRpFksgQcXJN05/UQH09YCH9LlhdLrSEcviASvEH/aAfsKiJlDrouN8PET+YAWK/F5xFc5/Q1z0xj+I23jw==}
@@ -12949,6 +12991,11 @@ snapshots:
   '@tiptap/extension-strike@3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))':
     dependencies:
       '@tiptap/core': 3.31.4(@tiptap/pm@3.31.4)
+
+  '@tiptap/extension-table@3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))(@tiptap/pm@3.31.4)':
+    dependencies:
+      '@tiptap/core': 3.31.4(@tiptap/pm@3.31.4)
+      '@tiptap/pm': 3.31.4
 
   '@tiptap/extension-text@3.31.4(@tiptap/core@3.31.4(@tiptap/pm@3.31.4))':
     dependencies:

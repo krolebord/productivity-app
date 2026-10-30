@@ -424,6 +424,19 @@ export function getDayHabitProgress(
   return { due, done };
 }
 
+/**
+ * The one habit ordering, for every habit list and the agenda on both apps: manual order,
+ * then oldest first, then id so ties never depend on query order.
+ */
+export function compareHabits(
+  a: { order: number; createdAt: number; id: string },
+  b: { order: number; createdAt: number; id: string },
+): number {
+  if (a.order !== b.order) return a.order - b.order;
+  if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
 function compareAgendaRows(a: AgendaRow, b: AgendaRow): number {
   if (a.kind === "task" ? a.completed : a.done) {
     if (!(b.kind === "task" ? b.completed : b.done)) return 1;
@@ -446,10 +459,7 @@ function compareAgendaRows(a: AgendaRow, b: AgendaRow): number {
     return (a.task.order ?? 0) - (b.task.order ?? 0);
   }
 
-  if (a.kind === "habit" && b.kind === "habit") {
-    if (a.habit.order !== b.habit.order) return a.habit.order - b.habit.order;
-    return a.habit.name.localeCompare(b.habit.name);
-  }
+  if (a.kind === "habit" && b.kind === "habit") return compareHabits(a.habit, b.habit);
 
   return 0;
 }
