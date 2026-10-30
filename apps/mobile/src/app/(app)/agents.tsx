@@ -80,7 +80,8 @@ export default function AgentsScreen() {
           {slices.length > 0 ? (
             <View className="h-48">
               <PolarChart data={slices} labelKey="label" valueKey="value" colorKey="color">
-                <Pie.Chart innerRadius="58%" />
+                {/* A ring a little smaller than the 192pt canvas, which otherwise clips its bottom edge. */}
+                <Pie.Chart innerRadius="58%" size={184} />
               </PolarChart>
             </View>
           ) : (

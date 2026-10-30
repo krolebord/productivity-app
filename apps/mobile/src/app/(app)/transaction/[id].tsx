@@ -478,7 +478,7 @@ function TransactionForm({
             onChange={(time) => update({ effectiveAt: withTime(form.effectiveAt, time) })}
           />
         </FormRow>
-        <View className="px-4 py-2">
+        <View className="px-4 py-1">
           <Input
             value={form.notes}
             onChangeText={(notes) => update({ notes })}

@@ -1,17 +1,19 @@
 import { BUILTIN_SKILLS, type BuiltinSkill } from "@productivity/core/agent/builtin-skills";
 import {
-  createSkill,
   deleteSkill,
+  isBlankSkill,
+  type SkillFields,
   type SkillRow,
   type SkillStatus,
+  saveSkill,
   setSkillStatus,
-  updateSkill,
   useSkills,
 } from "@productivity/core/data/skills";
 import { useDb } from "@productivity/core/user-db/db-context";
+import { generateId } from "@sqlite-sync/core";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Alert, Pressable, ScrollView, type ScrollViewInstance, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../components/screen-header";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -40,13 +42,25 @@ function Badge({ label, badge, text }: { label: string; badge: string; text: str
   );
 }
 
-function SmallButton({ label, onPress, primary = false }: { label: string; onPress: () => void; primary?: boolean }) {
+function SmallButton({
+  label,
+  onPress,
+  primary = false,
+  disabled = false,
+}: {
+  label: string;
+  onPress: () => void;
+  primary?: boolean;
+  disabled?: boolean;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
       onPress={onPress}
+      disabled={disabled}
       className={cn(
-        "h-9 items-center justify-center rounded-lg px-3 active:opacity-70",
+        "h-9 items-center justify-center rounded-lg px-3 active:opacity-70 disabled:opacity-40",
         primary ? "bg-primary" : "border border-border bg-card",
       )}
     >
@@ -57,14 +71,35 @@ function SmallButton({ label, onPress, primary = false }: { label: string; onPre
   );
 }
 
-function SkillEditor({ skill, onClose }: { skill: SkillRow; onClose: () => void }) {
+function SkillEditor({
+  skill,
+  draft = false,
+  onFieldsChange,
+  onClose,
+}: {
+  skill: SkillFields & { id: string };
+  /** A new skill without a row yet: Save inserts it once it has content, Cancel leaves nothing. */
+  draft?: boolean;
+  /** Reports every edit, so a draft's text outlives the editor while another skill is open. */
+  onFieldsChange?: (fields: SkillFields) => void;
+  onClose: () => void;
+}) {
   const db = useDb();
-  const [name, setName] = useState(() => skill.name);
-  const [whenToUse, setWhenToUse] = useState(() => skill.whenToUse);
-  const [instructions, setInstructions] = useState(() => skill.instructions);
+  const [fields, setFields] = useState<SkillFields>(() => ({
+    name: skill.name,
+    whenToUse: skill.whenToUse,
+    instructions: skill.instructions,
+  }));
+  const { name, whenToUse, instructions } = fields;
+
+  const update = (patch: Partial<SkillFields>) => {
+    const next = { ...fields, ...patch };
+    setFields(next);
+    onFieldsChange?.(next);
+  };
 
   const save = () => {
-    updateSkill(db.db, skill.id, { name, whenToUse, instructions });
+    saveSkill(db.db, skill.id, fields, { draft });
     onClose();
   };
 
@@ -85,20 +120,20 @@ function SkillEditor({ skill, onClose }: { skill: SkillRow; onClose: () => void 
     <View className="mt-3 gap-2">
       <Input
         value={name}
-        onChangeText={setName}
+        onChangeText={(text) => update({ name: text })}
         placeholder="Skill name"
         className="h-10 rounded-lg border border-border px-3"
       />
       <Input
         value={whenToUse}
-        onChangeText={setWhenToUse}
+        onChangeText={(text) => update({ whenToUse: text })}
         placeholder="When to use this skill…"
         multiline
         className="min-h-10 rounded-lg border border-border px-3 py-2"
       />
       <Input
         value={instructions}
-        onChangeText={setInstructions}
+        onChangeText={(text) => update({ instructions: text })}
         placeholder="Step-by-step instructions (markdown)…"
         multiline
         textAlignVertical="top"
@@ -106,10 +141,18 @@ function SkillEditor({ skill, onClose }: { skill: SkillRow; onClose: () => void 
         style={{ minHeight: 160 }}
       />
       <View className="flex-row items-center gap-2">
-        <IconButton icon="trash-2" label="Delete skill" onPress={remove} iconClassName="accent-destructive" size={18} />
+        {!draft && (
+          <IconButton
+            icon="trash-2"
+            label="Delete skill"
+            onPress={remove}
+            iconClassName="accent-destructive"
+            size={18}
+          />
+        )}
         <View className="ml-auto flex-row gap-2">
           <SmallButton label="Cancel" onPress={onClose} />
-          <SmallButton label="Save" onPress={save} primary />
+          <SmallButton label="Save" onPress={save} primary disabled={draft && isBlankSkill(fields)} />
         </View>
       </View>
     </View>
@@ -167,6 +210,30 @@ function SkillCard({
   );
 }
 
+type SkillDraft = SkillFields & { id: string };
+
+function NewSkillCard({
+  draft,
+  onChange,
+  onClose,
+}: {
+  draft: SkillDraft;
+  onChange: (draft: SkillDraft) => void;
+  onClose: () => void;
+}) {
+  return (
+    <View className="rounded-xl border border-border bg-card p-4">
+      <Text className="font-medium text-base text-foreground">New skill</Text>
+      <SkillEditor
+        skill={draft}
+        draft
+        onFieldsChange={(fields) => onChange({ ...fields, id: draft.id })}
+        onClose={onClose}
+      />
+    </View>
+  );
+}
+
 function BuiltinSkillCard({ skill }: { skill: BuiltinSkill }) {
   const [open, setOpen] = useState(false);
   return (
@@ -206,14 +273,23 @@ function BuiltinSkillCard({ skill }: { skill: BuiltinSkill }) {
 
 export default function SkillsScreen() {
   const router = useRouter();
-  const db = useDb();
   const insets = useSafeAreaInsets();
   // `selected` opens a skill's editor, e.g. from the assistant's "Review" chip on a drafted skill.
   const params = useLocalSearchParams<{ selected?: string }>();
   const [selected, setSelected] = useState(params.selected);
+  // An unsaved new skill, edited in a card above the list until it's saved. Its text lives here,
+  // so editing another skill only hides the card.
+  const [draft, setDraft] = useState<SkillDraft>();
   const skills = useSkills();
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  // One editor at a time: the draft card shows whenever no existing skill's editor is open.
+  const editingExisting = skills.some((skill) => skill.id === selected);
 
-  const newSkill = () => setSelected(createSkill(db.db));
+  const newSkill = () => {
+    setSelected(undefined);
+    if (!draft) setDraft({ id: generateId(), name: "", whenToUse: "", instructions: "" });
+    scrollRef.current?.scrollTo({ y: 0 });
+  };
 
   return (
     <View className="flex-1 bg-background">
@@ -224,6 +300,7 @@ export default function SkillsScreen() {
         actions={<IconButton icon="plus" label="New skill" onPress={newSkill} />}
       />
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
         contentContainerClassName="gap-6 px-5 pt-1"
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
@@ -231,6 +308,10 @@ export default function SkillsScreen() {
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets
       >
+        {draft && !editingExisting && (
+          <NewSkillCard key={draft.id} draft={draft} onChange={setDraft} onClose={() => setDraft(undefined)} />
+        )}
+
         {SECTIONS.map((section) => {
           const items = skills.filter((skill) => skill.status === section.status);
           if (items.length === 0) return null;
@@ -252,7 +333,7 @@ export default function SkillsScreen() {
           );
         })}
 
-        {skills.length === 0 && (
+        {skills.length === 0 && !draft && (
           <EmptyState
             icon="layers"
             title="No skills of your own yet"

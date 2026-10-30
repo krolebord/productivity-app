@@ -18,20 +18,21 @@ export function ScreenHeader({
   children?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  // Children (search fields, segmented controls) share the 20pt gutter of the content below;
+  // only the back chevron pulls out to hug the edge.
   return (
-    <View
-      className={`gap-3 bg-background pb-3 ${onBack ? "pr-5 pl-2" : "px-5"}`}
-      style={{ paddingTop: insets.top + 12 }}
-    >
-      <View className="flex-row items-center gap-2">
+    <View className="gap-3 bg-background px-5 pb-3" style={{ paddingTop: insets.top + 12 }}>
+      {/* The 40pt back and action buttons centre on the 36pt title line (nudged 2pt down so the
+          two line up), not on the title and subtitle together. */}
+      <View className={`flex-row items-start gap-2 ${onBack ? "-ml-3" : ""}`}>
         {onBack && <IconButton icon="chevron-left" label="Back" onPress={onBack} size={26} />}
-        <View className="min-w-0 flex-1">
+        <View className="min-w-0 flex-1 pt-0.5">
           <Text numberOfLines={1} className="font-semibold text-3xl text-foreground">
             {title}
           </Text>
           {subtitle && <Text className="mt-0.5 text-muted-foreground">{subtitle}</Text>}
         </View>
-        {actions && <View className="flex-row items-center gap-1">{actions}</View>}
+        {actions && <View className="h-10 flex-row items-center gap-1">{actions}</View>}
       </View>
       {children}
     </View>

@@ -21,25 +21,32 @@ export function FormRow({
   icon,
   children,
   onPress,
+  destructive = false,
   last = false,
 }: {
   label: string;
   icon?: IconName;
   children?: ReactNode;
   onPress?: () => void;
+  /** A red action row without a chevron, for actions that discard something (behind a confirm). */
+  destructive?: boolean;
   last?: boolean;
 }) {
   const content = (
     <>
       {icon && <Icon name={icon} size={18} colorClassName="accent-muted-foreground" {...decorative} />}
-      <Text className="text-base text-foreground">{label}</Text>
+      <Text className={cn("text-base", destructive ? "text-destructive" : "text-foreground")}>{label}</Text>
       <View className="ml-auto max-w-[65%] shrink flex-row items-center gap-2">
         {children}
-        {onPress && <Icon name="chevron-right" size={18} colorClassName="accent-muted-foreground" {...decorative} />}
+        {onPress && !destructive && (
+          <Icon name="chevron-right" size={18} colorClassName="accent-muted-foreground" {...decorative} />
+        )}
       </View>
     </>
   );
-  const className = cn("min-h-12 flex-row items-center gap-3 px-4 py-2", !last && "border-border border-b");
+  // Barely any vertical padding, so rows holding a 40pt input or a date pill stay 48pt like plain
+  // ones and the dividers in a card stay evenly spaced.
+  const className = cn("min-h-12 flex-row items-center gap-3 px-4 py-0.5", !last && "border-border border-b");
 
   if (!onPress) return <View className={className}>{content}</View>;
   return (

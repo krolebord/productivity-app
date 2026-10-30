@@ -1,14 +1,16 @@
 import { BUILTIN_SKILLS, type BuiltinSkill } from "@productivity/core/agent/builtin-skills";
 import {
-  createSkill,
   deleteSkill,
+  isBlankSkill,
+  type SkillFields,
   type SkillRow,
   type SkillStatus,
+  saveSkill,
   setSkillStatus,
-  updateSkill,
   useSkills,
 } from "@productivity/core/data/skills";
 import { useDb } from "@productivity/core/user-db/db-context";
+import { generateId } from "@sqlite-sync/core";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, PlusIcon, Trash2, Workflow } from "lucide-react";
@@ -35,17 +37,38 @@ const STATUS_META: Record<SkillStatus, { label: string; className: string }> = {
   disabled: { label: "Disabled", className: "bg-muted text-muted-foreground" },
 };
 
-function SkillEditor({ skill, onClose }: { skill: SkillRow; onClose: () => void }) {
+function SkillEditor({
+  skill,
+  draft = false,
+  onFieldsChange,
+  onClose,
+}: {
+  skill: SkillFields & { id: string };
+  /** A new skill without a row yet: Save inserts it once it has content, Cancel leaves nothing. */
+  draft?: boolean;
+  /** Reports every edit, so a draft's text outlives the editor while another skill is open. */
+  onFieldsChange?: (fields: SkillFields) => void;
+  onClose: () => void;
+}) {
   const db = useDb();
   const confirm = useConfirmDialogStore((s) => s.confirm);
-  const [name, setName] = useState(() => skill.name);
-  const [whenToUse, setWhenToUse] = useState(() => skill.whenToUse);
-  const [instructions, setInstructions] = useState(() => skill.instructions);
+  const [fields, setFields] = useState<SkillFields>(() => ({
+    name: skill.name,
+    whenToUse: skill.whenToUse,
+    instructions: skill.instructions,
+  }));
+  const { name, whenToUse, instructions } = fields;
 
   useHotkey("Escape", () => onClose());
 
+  function update(patch: Partial<SkillFields>) {
+    const next = { ...fields, ...patch };
+    setFields(next);
+    onFieldsChange?.(next);
+  }
+
   function save() {
-    updateSkill(db.db, skill.id, { name, whenToUse, instructions });
+    saveSkill(db.db, skill.id, fields, { draft });
     onClose();
   }
 
@@ -63,31 +86,37 @@ function SkillEditor({ skill, onClose }: { skill: SkillRow; onClose: () => void 
 
   return (
     <div className="mt-3 flex flex-col gap-2">
-      <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Skill name" />
-      <Input value={whenToUse} onChange={(e) => setWhenToUse(e.target.value)} placeholder="When to use this skill…" />
+      <Input value={name} onChange={(e) => update({ name: e.target.value })} placeholder="Skill name" />
+      <Input
+        value={whenToUse}
+        onChange={(e) => update({ whenToUse: e.target.value })}
+        placeholder="When to use this skill…"
+      />
       <Textarea
         value={instructions}
-        onChange={(e) => setInstructions(e.target.value)}
+        onChange={(e) => update({ instructions: e.target.value })}
         rows={8}
         placeholder="Step-by-step instructions (markdown)…"
         className="resize-y font-mono text-xs"
       />
-      <div className="flex items-center justify-between gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8 text-muted-foreground hover:text-destructive"
-          aria-label="Delete skill"
-          onClick={remove}
-        >
-          <Trash2 className="size-4" />
-        </Button>
-        <div className="flex gap-2">
+      <div className="flex items-center gap-2">
+        {!draft && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-destructive"
+            aria-label="Delete skill"
+            onClick={remove}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        )}
+        <div className="ml-auto flex gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" onClick={save}>
+          <Button type="button" size="sm" onClick={save} disabled={draft && isBlankSkill(fields)}>
             Save
           </Button>
         </div>
@@ -158,6 +187,30 @@ function SkillCard({
   );
 }
 
+type SkillDraft = SkillFields & { id: string };
+
+function NewSkillCard({
+  draft,
+  onChange,
+  onClose,
+}: {
+  draft: SkillDraft;
+  onChange: (draft: SkillDraft) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <p className="font-medium">New skill</p>
+      <SkillEditor
+        skill={draft}
+        draft
+        onFieldsChange={(fields) => onChange({ ...fields, id: draft.id })}
+        onClose={onClose}
+      />
+    </div>
+  );
+}
+
 function BuiltinSkillCard({ skill }: { skill: BuiltinSkill }) {
   const [open, setOpen] = useState(false);
 
@@ -191,18 +244,23 @@ function BuiltinSkillCard({ skill }: { skill: BuiltinSkill }) {
 }
 
 function SkillsPage() {
-  const db = useDb();
   const { selected } = Route.useSearch();
   const navigate = Route.useNavigate();
+
+  // An unsaved new skill, edited in a card above the list until it's saved. Its text lives here,
+  // so opening another skill (here or from the assistant's "Review" link) only hides the card.
+  const [draft, setDraft] = useState<SkillDraft>();
 
   const setSelected = (id: string | undefined) =>
     navigate({ search: (prev) => ({ ...prev, selected: id }), replace: true });
 
   const skills = useSkills();
+  // One editor at a time: the draft card shows whenever no existing skill's editor is open.
+  const editingExisting = skills.some((skill) => skill.id === selected);
 
   function newSkill() {
-    const id = createSkill(db.db);
-    setSelected(id);
+    setSelected(undefined);
+    if (!draft) setDraft({ id: generateId(), name: "", whenToUse: "", instructions: "" });
   }
 
   const pending = skills.filter((s) => s.status === "pending");
@@ -231,6 +289,10 @@ function SkillsPage() {
       </div>
 
       <div className="flex flex-col gap-6">
+        {draft && !editingExisting && (
+          <NewSkillCard key={draft.id} draft={draft} onChange={setDraft} onClose={() => setDraft(undefined)} />
+        )}
+
         {sections.map(
           (section) =>
             section.items.length > 0 && (
@@ -253,7 +315,7 @@ function SkillsPage() {
             ),
         )}
 
-        {skills.length === 0 && (
+        {skills.length === 0 && !draft && (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card px-6 py-10 text-center">
             <Workflow className="size-8 text-muted-foreground" />
             <div>

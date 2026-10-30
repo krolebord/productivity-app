@@ -150,10 +150,10 @@ const REMOTE_STATE_DETAIL = {
 } as const;
 
 /**
- * Colored dot plus label for the sync connection. Tapping it explains the state and offers the
- * matching fix: sync or pause when connected, retry when not, reset when the data diverged.
+ * The sync connection's label and dot color, plus `showDetails`, which explains the state and
+ * offers the matching fix: sync or pause when connected, retry when not, reset when the data diverged.
  */
-export function SyncStatus() {
+export function useSyncStatus() {
   const db = useDb();
   const { remoteState, deSynced } = useDbState();
   const color = deSynced
@@ -193,6 +193,22 @@ export function SyncStatus() {
     ]);
   };
 
+  return { label, color, showDetails };
+}
+
+/** Colored dot plus label, for rows that handle the tap themselves (Settings' Status row). */
+export function SyncStatusLabel({ label, color }: { label: string; color: string }) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <View className={cn("size-2 rounded-full", color)} />
+      <Text className="text-base text-muted-foreground">{label}</Text>
+    </View>
+  );
+}
+
+/** Tappable sync badge that opens the details from `useSyncStatus`. */
+export function SyncStatus() {
+  const { label, color, showDetails } = useSyncStatus();
   return (
     <Pressable
       accessibilityRole="button"

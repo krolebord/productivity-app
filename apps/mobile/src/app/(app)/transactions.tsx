@@ -26,6 +26,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/screen-header";
 import { TransactionFiltersSheet } from "../../components/transaction-filters-sheet";
 import { TransactionRow } from "../../components/transaction-row";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -110,21 +111,18 @@ export default function TransactionsScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <View className="gap-3 px-4 pb-3" style={{ paddingTop: insets.top + 4 }}>
-        <View className="flex-row items-center gap-1">
-          <IconButton icon="chevron-left" label="Back" onPress={() => router.back()} size={24} />
-          <View className="flex-1">
-            <Text numberOfLines={1} className="font-semibold text-foreground text-xl">
-              {selectedAccount ? selectedAccount.labelText || "Untitled" : "Transactions"}
-            </Text>
-            <Text className="text-muted-foreground text-xs">
-              {count} transaction{count === 1 ? "" : "s"}
-            </Text>
-          </View>
-          {/* Always reachable, like the web's command palette entry; the prompt below only nudges. */}
-          <IconButton icon="tag" label="Category importance" onPress={() => router.push("/category-importance")} />
-          <IconButton icon="plus" label="New transaction" onPress={newExpense} />
-        </View>
+      <ScreenHeader
+        title={selectedAccount ? selectedAccount.labelText || "Untitled" : "Transactions"}
+        subtitle={`${count} transaction${count === 1 ? "" : "s"}`}
+        onBack={router.back}
+        actions={
+          <>
+            {/* Always reachable, like the web's command palette entry; the prompt below only nudges. */}
+            <IconButton icon="tag" label="Category importance" onPress={() => router.push("/category-importance")} />
+            <IconButton icon="plus" label="New transaction" onPress={newExpense} />
+          </>
+        }
+      >
         <View className="h-10 flex-row items-center gap-2 rounded-lg bg-muted px-3">
           <Icon name="search" size={16} colorClassName="accent-muted-foreground" />
           <Input
@@ -139,8 +137,8 @@ export default function TransactionsScreen() {
             clearButtonMode="while-editing"
           />
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-4">
-          <View className="flex-row items-center gap-2 px-4">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-5">
+          <View className="flex-row items-center gap-2 px-5">
             <ToolbarChip icon="sliders" label="Filters" count={chips.length} onPress={() => setFiltersOpen(true)} />
             <ToolbarChip
               icon={sort.endsWith("asc") ? "arrow-up" : "arrow-down"}
@@ -163,14 +161,14 @@ export default function TransactionsScreen() {
             )}
           </View>
         </ScrollView>
-      </View>
+      </ScreenHeader>
 
       <SectionList
         sections={sections}
         keyExtractor={(transaction) => transaction.id}
         keyboardDismissMode="on-drag"
         stickySectionHeadersEnabled={false}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 24 }}
         onEndReachedThreshold={0.5}
         onEndReached={() => hasMore && setLimit((value) => value + PAGE_SIZE)}
         ListHeaderComponent={

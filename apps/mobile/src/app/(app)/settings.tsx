@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, ScrollView, Text, View } from "react-native";
 import { ScreenHeader } from "../../components/screen-header";
-import { SyncStatus } from "../../components/sync-status";
+import { SyncStatusLabel, useSyncStatus } from "../../components/sync-status";
 import { useDeviceTimeZone } from "../../components/time-zone-watcher";
 import { Button } from "../../components/ui/button";
 import { FormRow, FormSection, FormValue } from "../../components/ui/form";
@@ -35,6 +35,7 @@ export default function SettingsScreen() {
   const { timeZone, setTimeZone } = useDashboardSettings();
   const deviceTimeZone = useDeviceTimeZone();
   const mismatch = timeZoneMismatch(timeZone, deviceTimeZone);
+  const syncStatus = useSyncStatus();
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -99,14 +100,14 @@ export default function SettingsScreen() {
           title="Sync"
           footer="Everything is stored on this device first and syncs in the background whenever you're online."
         >
-          <FormRow label="Status">
-            <SyncStatus />
+          <FormRow label="Status" onPress={syncStatus.showDetails}>
+            <SyncStatusLabel label={syncStatus.label} color={syncStatus.color} />
           </FormRow>
           <FormRow label="Server">
             <FormValue muted>{API_URL.replace(/^https?:\/\//, "")}</FormValue>
           </FormRow>
           <FormRow label="Sync now" onPress={() => db.state.sync()} />
-          <FormRow label="Reset local data" onPress={confirmReset} last />
+          <FormRow label="Reset local data" onPress={confirmReset} destructive last />
         </FormSection>
 
         <View className="gap-2">

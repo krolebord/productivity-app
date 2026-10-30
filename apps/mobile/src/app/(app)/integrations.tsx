@@ -141,21 +141,21 @@ function MonobankSection() {
           : "Connect your personal Monobank token to automatically import new transactions into linked accounts."
       }
     >
-      <View className="gap-1 px-4 py-3">
-        <View className="flex-row flex-wrap items-center gap-x-3 gap-y-0.5">
-          <Text className={cn("font-medium text-sm", status.className)}>{status.label}</Text>
-          {connected && webhook && <Text className={cn("text-sm", webhook.className)}>{webhook.label}</Text>}
-          {connected && connection.displayName ? (
-            <Text className="text-muted-foreground text-sm">{connection.displayName}</Text>
-          ) : null}
-        </View>
-        {connected && connection.lastError ? (
-          <Text className="text-rose-600 text-sm dark:text-rose-400">{connection.lastError}</Text>
-        ) : null}
-      </View>
-      <ActionRow>
-        {connected ? (
-          <>
+      {connected ? (
+        <>
+          <View className="gap-1 px-4 py-3">
+            <View className="flex-row flex-wrap items-center gap-x-3 gap-y-0.5">
+              <Text className={cn("font-medium text-sm", status.className)}>{status.label}</Text>
+              {webhook && <Text className={cn("text-sm", webhook.className)}>{webhook.label}</Text>}
+              {connection.displayName ? (
+                <Text className="text-muted-foreground text-sm">{connection.displayName}</Text>
+              ) : null}
+            </View>
+            {connection.lastError ? (
+              <Text className="text-rose-600 text-sm dark:text-rose-400">{connection.lastError}</Text>
+            ) : null}
+          </View>
+          <ActionRow>
             <SmallButton label="Replace token" icon="key" onPress={() => openTokenSheet("replace")} />
             <SmallButton
               label="Refresh accounts"
@@ -169,11 +169,15 @@ function MonobankSection() {
               loading={pending === "disconnect"}
               onPress={confirmDisconnect}
             />
-          </>
-        ) : (
-          <SmallButton label="Connect" icon="plus" primary onPress={() => openTokenSheet("connect")} />
-        )}
-      </ActionRow>
+          </ActionRow>
+        </>
+      ) : (
+        // Same status line + action row as Google Calendar and MCP access below.
+        <>
+          <Text className="border-border border-b px-4 py-3 text-muted-foreground text-sm">Not connected</Text>
+          <FormRow icon="plus" label="Connect" onPress={() => openTokenSheet("connect")} last />
+        </>
+      )}
       {connected &&
         (monoAccounts.length === 0 ? (
           <Text className="border-border border-t px-4 py-3 text-muted-foreground text-sm">
@@ -510,13 +514,11 @@ function SmallButton({
   icon,
   onPress,
   loading = false,
-  primary = false,
 }: {
   label: string;
   icon: IconName;
   onPress: () => void;
   loading?: boolean;
-  primary?: boolean;
 }) {
   return (
     <Pressable
@@ -524,19 +526,14 @@ function SmallButton({
       accessibilityState={{ busy: loading, disabled: loading }}
       disabled={loading}
       onPress={onPress}
-      className={cn(
-        "h-9 flex-row items-center gap-1.5 rounded-lg px-3 active:opacity-70 disabled:opacity-60",
-        primary ? "bg-primary" : "border border-border bg-background",
-      )}
+      className="h-9 flex-row items-center gap-1.5 rounded-lg border border-border bg-background px-3 active:opacity-70 disabled:opacity-60"
     >
       {loading ? (
-        <ActivityIndicator size="small" colorClassName={primary ? "accent-primary-foreground" : "accent-foreground"} />
+        <ActivityIndicator size="small" colorClassName="accent-foreground" />
       ) : (
-        <Icon name={icon} size={14} colorClassName={primary ? "accent-primary-foreground" : "accent-foreground"} />
+        <Icon name={icon} size={14} colorClassName="accent-foreground" />
       )}
-      <Text className={cn("font-medium text-sm", primary ? "text-primary-foreground" : "text-foreground")}>
-        {label}
-      </Text>
+      <Text className="font-medium text-foreground text-sm">{label}</Text>
     </Pressable>
   );
 }

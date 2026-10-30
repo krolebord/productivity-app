@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { format, isSameYear } from "date-fns";
 
 export function formatDateTimeLocal(timestamp: number) {
   return format(timestamp, "yyyy-MM-dd'T'HH:mm");
@@ -6,6 +6,11 @@ export function formatDateTimeLocal(timestamp: number) {
 
 export function formatDateTimeDisplay(timestamp: number) {
   return format(timestamp, "MMM d, yyyy HH:mm");
+}
+
+/** Short date for tight rows: "Oct 28", with the year only outside the current one ("Oct 28, 2025"). */
+export function formatShortDate(timestamp: number, now: number = Date.now()) {
+  return format(timestamp, isSameYear(timestamp, now) ? "MMM d" : "MMM d, yyyy");
 }
 
 export function parseDateTimeLocal(value: string) {

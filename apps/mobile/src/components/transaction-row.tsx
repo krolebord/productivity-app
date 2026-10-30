@@ -1,5 +1,5 @@
 import { formatBalance } from "@productivity/core/currency/format";
-import { formatDateTimeDisplay } from "@productivity/core/date-time";
+import { formatDateTimeDisplay, formatShortDate } from "@productivity/core/date-time";
 import { resolveTransactionType, transactionTitle } from "@productivity/core/finance/appearance";
 import type { AmountConverter } from "@productivity/core/finance/overview";
 import {
@@ -58,12 +58,17 @@ export function TransactionRow({
   const converted = convertedAmount(display.amount, display.currency, baseCurrency, convert);
   const account = accountLabels.get(transaction.accountId) || accountFallback;
   const isTransfer = type === "transfer";
+  const detailed = variant === "detailed";
   const accountPart = isTransfer
     ? `${account} → ${accountLabels.get(transaction.counterpartyAccountId) || "Untitled"}`
     : account;
-  const when = timeOnly ? format(transaction.effectiveAt, "HH:mm") : formatDateTimeDisplay(transaction.effectiveAt);
+  // Compact rows sit beside the amount, where the full date and time would get cut off.
+  const when = timeOnly
+    ? format(transaction.effectiveAt, "HH:mm")
+    : detailed
+      ? formatDateTimeDisplay(transaction.effectiveAt)
+      : formatShortDate(transaction.effectiveAt);
   const importance = transaction.importance as ImportanceTier | null;
-  const detailed = variant === "detailed";
   const pair = detailed && isTransfer && showTransferPair && transaction.counterpartyAmount !== null;
 
   const subtitle = (detailed ? [when, accountPart] : [transaction.category, accountPart, when])
