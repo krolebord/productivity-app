@@ -1,9 +1,21 @@
 import { safe } from "@orpc/client";
+import { createAgentWarmer, needsTranscriptBackfill } from "@productivity/core/agent/agent-warmer";
+import { skillStarterPrompt } from "@productivity/core/agent/builtin-skills";
 import { conversationTurnFilesFromData } from "@productivity/core/agent/conversation-files";
-import { DEFAULT_ASSISTANT_MODEL, getAssistantModel, resolveAssistantModelId } from "@productivity/core/agent/models";
-import { conversationRowStatus, conversationTitle } from "@productivity/core/conversation-list";
+import {
+  type AssistantModelId,
+  type AssistantReasoningEffort,
+  displayedReasoningEffort,
+  getModelReasoningEfforts,
+  modelSupportsSelectableReasoning,
+  preferredConversationReasoningEffort,
+  resolveAssistantModelId,
+} from "@productivity/core/agent/models";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@productivity/core/agent/uploads";
+import { conversationTitle, summarizeConversationActivity } from "@productivity/core/conversation-list";
 import {
   catchUpConversationLastRead,
+  deleteConversation as deleteConversationRow,
   useConversationMessages,
   useConversations,
 } from "@productivity/core/data/conversations";
@@ -11,12 +23,10 @@ import { isSubmitLockHolding, type SubmitLock } from "@productivity/core/submit-
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { ConversationItem, ConversationMessageItem } from "@productivity/core/user-db/migrations";
 import { generateId } from "@sqlite-sync/core";
-import { format, isToday } from "date-fns";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -24,28 +34,49 @@ import {
   ScrollView,
   type ScrollViewInstance,
   Text,
+  type TextInputInstance,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  AttachmentChips,
+  ConversationCost,
+  ModelPicker,
+  ReasoningEffortPicker,
+} from "../../components/assistant/composer-controls";
+import {
+  ActivityBadge,
+  ConversationList,
+  confirmDeleteConversation,
+} from "../../components/assistant/conversation-list";
+import { SkillStarters } from "../../components/assistant/skill-starters";
+import { ToolMessage } from "../../components/assistant/tool-message";
 import { Markdown } from "../../components/markdown";
+import { ActionSheet } from "../../components/ui/action-sheet";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Icon } from "../../components/ui/icon";
 import { IconButton } from "../../components/ui/icon-button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import {
+  appendToAssistantDraft,
+  clearAssistantChat,
   clearAssistantSubmitLock,
   getAssistantChat,
   setAssistantDraft,
+  setAssistantFiles,
   setAssistantSubmitLock,
+  takeComposerFocusRequest,
   useAssistantChat,
+  useComposerFocusNonce,
 } from "../../lib/assistant-chats";
-
-// Reopening the assistant resumes the chat it was last showing, until the app restarts.
-let lastConversationId: string | null = null;
+import { type PickedFile, pickDocuments, pickImages, toUploadFile } from "../../lib/assistant-uploads";
+import { setPreference, usePreference } from "../../lib/preferences";
 
 // Within this distance of the end, new content keeps the transcript pinned to the bottom.
 const STICK_TO_BOTTOM_THRESHOLD = 80;
+
+const warmAgent = createAgentWarmer((conversationId) => api.assistant.ensureProjection({ conversationId }));
 
 function rpcErrorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : "Something went wrong. Try again.";
@@ -53,22 +84,35 @@ function rpcErrorMessage(error: unknown) {
 
 export default function AssistantScreen() {
   const router = useRouter();
+  const db = useDb();
   const insets = useSafeAreaInsets();
   const conversations = useConversations();
-  const [conversationId, setConversationId] = useState(
-    () => lastConversationId ?? conversations[0]?.id ?? generateId(),
-  );
+  const remembered = usePreference("assistantConversationId");
+  // With nothing remembered yet, open on the newest chat.
+  const [initialId] = useState(() => conversations[0]?.id ?? generateId());
+  const conversationId = remembered ?? initialId;
   const [showList, setShowList] = useState(false);
   const conversation = conversations.find((row) => row.id === conversationId) ?? null;
-  const model = getAssistantModel(conversation ? resolveAssistantModelId(conversation.model) : DEFAULT_ASSISTANT_MODEL);
+  const activity = summarizeConversationActivity({ conversations, activeConversationId: conversationId });
 
+  // Remembered across restarts, as the web persists its active chat; attaching context
+  // from elsewhere in the app also lands in whichever chat this is.
   useEffect(() => {
-    lastConversationId = conversationId;
-  }, [conversationId]);
+    if (!remembered) setPreference("assistantConversationId", initialId);
+  }, [remembered, initialId]);
 
   const openConversation = (id: string) => {
-    setConversationId(id);
+    setPreference("assistantConversationId", id);
     setShowList(false);
+  };
+
+  const deleteConversation = (id: string) => {
+    deleteConversationRow(db.db, id);
+    clearAssistantChat(id);
+    if (id === conversationId) {
+      const next = conversations.find((row) => row.id !== id);
+      setPreference("assistantConversationId", next?.id ?? generateId());
+    }
   };
 
   return (
@@ -80,22 +124,26 @@ export default function AssistantScreen() {
         style={{ paddingTop: insets.top + 4 }}
       >
         <IconButton icon="chevron-left" label="Back" onPress={() => router.back()} size={26} />
-        <View className="min-w-0 flex-1 px-1">
-          <Text numberOfLines={1} className="font-semibold text-base text-foreground">
-            {showList ? "Chats" : conversationTitle(conversation ?? { title: "" })}
-          </Text>
-          {!showList && model && (
-            <Text numberOfLines={1} className="text-muted-foreground text-xs">
-              {model.label}
-            </Text>
-          )}
+        <Text numberOfLines={1} className="min-w-0 flex-1 px-1 font-semibold text-base text-foreground">
+          {showList ? "Chats" : conversationTitle(conversation ?? { title: "" })}
+        </Text>
+        {!showList && conversation && (
+          <IconButton
+            icon="trash-2"
+            label="Delete conversation"
+            onPress={() => confirmDeleteConversation(conversation, () => deleteConversation(conversation.id))}
+            iconClassName="accent-muted-foreground"
+          />
+        )}
+        <View>
+          <IconButton
+            icon={showList ? "message-circle" : "list"}
+            label={showList ? "Back to chat" : "Show chats"}
+            onPress={() => setShowList((value) => !value)}
+            iconClassName="accent-muted-foreground"
+          />
+          {!showList && <ActivityBadge activity={activity} />}
         </View>
-        <IconButton
-          icon={showList ? "message-circle" : "list"}
-          label={showList ? "Back to chat" : "Show chats"}
-          onPress={() => setShowList((value) => !value)}
-          iconClassName="accent-muted-foreground"
-        />
         <IconButton
           icon="edit"
           label="New chat"
@@ -104,60 +152,19 @@ export default function AssistantScreen() {
         />
       </View>
       {showList && (
-        <ConversationList conversations={conversations} activeId={conversationId} onOpen={openConversation} />
+        <ConversationList
+          conversations={conversations}
+          activeId={conversationId}
+          onOpen={openConversation}
+          onNew={() => openConversation(generateId())}
+          onDelete={deleteConversation}
+        />
       )}
       {/* Hidden rather than unmounted, so the draft and an in-flight send survive a look at the list. */}
       <View className={showList ? "hidden" : "flex-1"}>
         <Chat key={conversationId} conversationId={conversationId} conversation={conversation} visible={!showList} />
       </View>
     </KeyboardAvoidingView>
-  );
-}
-
-function ConversationList({
-  conversations,
-  activeId,
-  onOpen,
-}: {
-  conversations: ConversationItem[];
-  activeId: string;
-  onOpen: (id: string) => void;
-}) {
-  const insets = useSafeAreaInsets();
-  if (conversations.length === 0) {
-    return <EmptyState icon="message-circle" title="No chats yet" description="Start one with the compose button." />;
-  }
-  return (
-    <FlatList
-      data={conversations}
-      keyExtractor={(row) => row.id}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-      renderItem={({ item }) => {
-        const status = conversationRowStatus(item);
-        const updatedAt = new Date(item.updatedAt);
-        return (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => onOpen(item.id)}
-            className={`flex-row items-center gap-3 border-border border-b px-5 py-3 active:bg-muted ${
-              item.id === activeId ? "bg-muted/60" : ""
-            }`}
-          >
-            <View className="min-w-0 flex-1">
-              <Text numberOfLines={1} className="text-base text-foreground">
-                {conversationTitle(item)}
-              </Text>
-              <Text className="text-muted-foreground text-xs">
-                {isToday(updatedAt) ? format(updatedAt, "HH:mm") : format(updatedAt, "MMM d")}
-              </Text>
-            </View>
-            {status === "running" && <ActivityIndicator size="small" colorClassName="accent-muted-foreground" />}
-            {status === "unread" && <View className="size-2 rounded-full bg-primary" />}
-            {status === "error" && <Icon name="alert-circle" size={16} colorClassName="accent-destructive" />}
-          </Pressable>
-        );
-      }}
-    />
   );
 }
 
@@ -191,12 +198,21 @@ function Chat({
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const messages = useConversationMessages(conversationId);
-  const { draft: input, lock: submitLock } = useAssistantChat(conversationId);
+  const { draft: input, files, lock: submitLock } = useAssistantChat(conversationId);
+  const preferredModel = usePreference("assistantModel");
+  const preferredReasoningEffort = usePreference("assistantReasoningEffort");
+  const focusNonce = useComposerFocusNonce();
   const [rpcError, setRpcError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<ScrollViewInstance>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const nearBottomRef = useRef(true);
-  const warmedRef = useRef(false);
+  const backfillRef = useRef(false);
 
+  const model = conversation ? resolveAssistantModelId(conversation.model) : preferredModel;
+  const reasoningEffort = displayedReasoningEffort(model, conversation?.reasoningEffort, preferredReasoningEffort);
   const isRunning = conversation?.turnStatus === "running";
   const isLockHolding = (lock: SubmitLock | undefined) =>
     isSubmitLockHolding({
@@ -207,6 +223,7 @@ function Chat({
   const lockHolding = isLockHolding(submitLock);
   const isWorking = lockHolding || isRunning;
   const canStop = isRunning || (lockHolding && conversation !== null);
+  const locked = conversation !== null || submitLock != null;
   const turnError = conversation?.turnStatus === "error" ? conversation.turnError : "";
 
   // Drop the lock once the turn has moved past it, so the next send starts clean.
@@ -220,27 +237,55 @@ function Chat({
     if (visible && updatedAt != null) catchUpConversationLastRead(db.db, conversationId);
   }, [db, conversationId, updatedAt, visible]);
 
-  // Older chats may predate the synced transcript; waking the agent backfills it.
-  const needsBackfill = conversation != null && messages.length === 0 && !!conversation.title;
+  // Older chats may predate the synced transcript; waking the agent backfills it. A failed
+  // call is retried the next time this runs, as on the web.
+  const needsBackfill = needsTranscriptBackfill(conversation, messages.length);
   useEffect(() => {
-    if (!needsBackfill) return;
-    void safe(api.assistant.ensureProjection({ conversationId }));
+    if (!needsBackfill || backfillRef.current) return;
+    backfillRef.current = true;
+    void safe(api.assistant.ensureProjection({ conversationId })).then(({ error }) => {
+      if (error) backfillRef.current = false;
+    });
   }, [needsBackfill, conversationId]);
 
-  // Wakes the agent while the user types, so its cold start overlaps composing.
-  const warmAgent = () => {
-    if (warmedRef.current || isWorking) return;
-    warmedRef.current = true;
-    void safe(api.assistant.ensureProjection({ conversationId }));
+  // Attaching context or picking a skill asks for the composer.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the nonce is the trigger.
+  useEffect(() => {
+    if (visible && takeComposerFocusRequest()) inputRef.current?.focus();
+  }, [focusNonce, visible]);
+
+  const warm = () => {
+    if (!isWorking) warmAgent(conversationId);
+  };
+
+  const addFiles = (picked: PickedFile[]) => {
+    if (picked.length === 0) return;
+    setUploadError(null);
+    setAssistantFiles(conversationId, (current) => [...current, ...picked].slice(0, MAX_UPLOAD_FILES));
+    warm();
+  };
+
+  const pick = async (picker: () => Promise<PickedFile[]>) => {
+    try {
+      addFiles(await picker());
+    } catch (error) {
+      setUploadError(rpcErrorMessage(error));
+    }
   };
 
   const submit = async () => {
     const sent = input;
+    const sentFiles = files;
     const text = sent.trim();
     // Read the store, not the render: a quick second tap lands before the lock re-renders.
-    if (!text || isRunning || isLockHolding(getAssistantChat(conversationId).lock)) return;
+    if ((!text && sentFiles.length === 0) || isRunning || isLockHolding(getAssistantChat(conversationId).lock)) return;
 
     setRpcError(null);
+    setUploadError(null);
+    if (uploadTotalBytes(sentFiles) > MAX_UPLOAD_BYTES) {
+      setUploadError("Combined upload is too large.");
+      return;
+    }
     const lock: SubmitLock = {
       kind: "sync",
       messageId: generateId(),
@@ -249,15 +294,17 @@ function Chat({
     setAssistantSubmitLock(conversationId, lock);
     nearBottomRef.current = true;
 
+    const uploads = sentFiles.map(toUploadFile);
     const { error, data } = await safe(
       conversation
-        ? api.assistant.submitTurn({ conversationId, turnId: lock.messageId, text })
+        ? api.assistant.submitTurn({ conversationId, turnId: lock.messageId, text, files: uploads })
         : api.assistant.startConversation({
             conversationId,
             turnId: lock.messageId,
             text,
-            model: DEFAULT_ASSISTANT_MODEL,
-            reasoningEffort: null,
+            model,
+            reasoningEffort: preferredConversationReasoningEffort(model, preferredReasoningEffort),
+            files: uploads,
           }),
     );
     if (error || !data.accepted) {
@@ -265,8 +312,10 @@ function Chat({
       if (error) setRpcError(rpcErrorMessage(error));
       return;
     }
-    // Keep anything typed while the send was in flight.
+    // Keep anything typed or attached while the send was in flight.
     setAssistantDraft(conversationId, (current) => (current === sent ? "" : current));
+    // By identity, so a file removed or added mid-send isn't resent or dropped.
+    setAssistantFiles(conversationId, (current) => current.filter((file) => !sentFiles.includes(file)));
   };
 
   const cancel = async () => {
@@ -275,55 +324,73 @@ function Chat({
     else clearAssistantSubmitLock(conversationId);
   };
 
-  const errorMessage = rpcError ?? turnError;
+  const errorMessage = uploadError ?? rpcError ?? turnError;
 
   return (
     <View className="flex-1">
-      <ScrollView
-        ref={scrollRef}
-        className="flex-1"
-        contentContainerClassName="grow gap-3 px-4 py-4"
-        keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
-        scrollEventThrottle={100}
-        onScroll={({ nativeEvent }) => {
-          const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
-          nearBottomRef.current =
-            contentSize.height - contentOffset.y - layoutMeasurement.height < STICK_TO_BOTTOM_THRESHOLD;
-        }}
-        onContentSizeChange={() => {
-          if (nearBottomRef.current) scrollRef.current?.scrollToEnd({ animated: true });
-        }}
-        // The viewport shrinks when the keyboard opens or the composer grows.
-        onLayout={() => {
-          if (nearBottomRef.current) scrollRef.current?.scrollToEnd({ animated: false });
-        }}
-      >
-        {messages.length === 0 && !isWorking ? (
-          <View className="flex-1 justify-center">
-            <EmptyState
-              icon="message-circle"
-              title="Ask anything"
-              description="About your notes, accounts, or plans."
-            />
-          </View>
-        ) : (
-          messages.map((message, index) => (
-            <MessageRow
-              key={message.id}
-              message={message}
-              // Text grows in place while the turn runs; only the newest message can still be streaming.
-              streaming={isRunning && index === messages.length - 1}
-            />
-          ))
+      <View className="flex-1">
+        <ScrollView
+          ref={scrollRef}
+          className="flex-1"
+          contentContainerClassName="grow gap-3 px-4 py-4"
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={100}
+          onScroll={({ nativeEvent }) => {
+            const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+            const near = contentSize.height - contentOffset.y - layoutMeasurement.height < STICK_TO_BOTTOM_THRESHOLD;
+            nearBottomRef.current = near;
+            setAtBottom(near);
+          }}
+          onContentSizeChange={() => {
+            if (nearBottomRef.current) scrollRef.current?.scrollToEnd({ animated: true });
+          }}
+          // The viewport shrinks when the keyboard opens or the composer grows.
+          onLayout={() => {
+            if (nearBottomRef.current) scrollRef.current?.scrollToEnd({ animated: false });
+          }}
+        >
+          {messages.length === 0 && !isWorking ? (
+            <View className="flex-1 justify-center gap-2">
+              <EmptyState
+                icon="message-circle"
+                title="Ask anything"
+                description="About your notes, accounts, or plans."
+              />
+              <SkillStarters onPick={(skill) => appendToAssistantDraft(conversationId, skillStarterPrompt(skill))} />
+            </View>
+          ) : (
+            messages.map((message, index) => (
+              <MessageRow
+                key={message.id}
+                message={message}
+                conversationId={conversationId}
+                // Text grows in place while the turn runs; only the newest message can still be streaming.
+                streaming={isRunning && index === messages.length - 1}
+              />
+            ))
+          )}
+          {isWorking && (
+            <View className="flex-row items-center gap-2">
+              <ActivityIndicator size="small" colorClassName="accent-muted-foreground" />
+              <Text className="text-muted-foreground text-sm">Thinking…</Text>
+            </View>
+          )}
+        </ScrollView>
+        {!atBottom && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Scroll to bottom"
+            onPress={() => {
+              nearBottomRef.current = true;
+              scrollRef.current?.scrollToEnd({ animated: true });
+            }}
+            className="absolute bottom-3 size-9 items-center justify-center self-center rounded-full border border-border bg-card shadow-md active:bg-muted"
+          >
+            <Icon name="arrow-down" size={18} colorClassName="accent-foreground" />
+          </Pressable>
         )}
-        {isWorking && (
-          <View className="flex-row items-center gap-2">
-            <ActivityIndicator size="small" colorClassName="accent-muted-foreground" />
-            <Text className="text-muted-foreground text-sm">Thinking…</Text>
-          </View>
-        )}
-      </ScrollView>
+      </View>
 
       {!!errorMessage && (
         <View className="mx-4 mb-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2">
@@ -332,56 +399,97 @@ function Chat({
       )}
 
       <View
-        className="flex-row items-end gap-2 border-border border-t px-3 pt-2"
+        className="gap-1.5 border-border border-t pt-2"
         style={{ paddingBottom: keyboardVisible ? 8 : insets.bottom + 8 }}
       >
-        <Input
-          value={input}
-          onChangeText={(text) => {
-            setAssistantDraft(conversationId, text);
-            warmAgent();
-          }}
-          placeholder="Message"
-          multiline
-          className="max-h-32 min-h-10 flex-1 rounded-2xl bg-muted px-4 pt-2.5 pb-2.5"
+        <AttachmentChips
+          files={files}
+          onRemove={(index) => setAssistantFiles(conversationId, (current) => current.filter((_, i) => i !== index))}
         />
-        {canStop ? (
+        <View className="flex-row items-center justify-between gap-2 px-2">
+          <View className="min-w-0 shrink flex-row items-center gap-1">
+            <ModelPicker
+              model={model}
+              locked={locked}
+              onSelect={(next: AssistantModelId) => setPreference("assistantModel", next)}
+            />
+            {modelSupportsSelectableReasoning(model) && (
+              <ReasoningEffortPicker
+                effort={reasoningEffort}
+                efforts={getModelReasoningEfforts(model)}
+                locked={locked}
+                onSelect={(next: AssistantReasoningEffort) => setPreference("assistantReasoningEffort", next)}
+              />
+            )}
+          </View>
+          {conversation && <ConversationCost conversation={conversation} />}
+        </View>
+        <View className="flex-row items-end gap-1 px-2">
           <IconButton
-            icon="square"
-            label="Stop generating"
-            onPress={() => void cancel()}
-            className="bg-muted"
-            size={16}
+            icon="paperclip"
+            label="Attach files"
+            onPress={() => setAttachOpen(true)}
+            disabled={isWorking || files.length >= MAX_UPLOAD_FILES}
+            iconClassName="accent-muted-foreground"
           />
-        ) : (
-          <IconButton
-            icon="arrow-up"
-            label="Send message"
-            onPress={() => void submit()}
-            disabled={isWorking || !input.trim()}
-            className="bg-primary"
-            iconClassName="accent-primary-foreground"
+          <Input
+            ref={inputRef}
+            value={input}
+            onChangeText={(text) => {
+              setAssistantDraft(conversationId, text);
+              warm();
+            }}
+            placeholder="Message"
+            multiline
+            className="max-h-32 min-h-10 flex-1 rounded-2xl bg-muted px-4 pt-2.5 pb-2.5"
           />
-        )}
+          {canStop ? (
+            <IconButton
+              icon="square"
+              label="Stop generating"
+              onPress={() => void cancel()}
+              className="bg-muted"
+              size={16}
+            />
+          ) : (
+            <IconButton
+              icon="arrow-up"
+              label="Send message"
+              onPress={() => void submit()}
+              disabled={isWorking || (!input.trim() && files.length === 0)}
+              className="bg-primary"
+              iconClassName="accent-primary-foreground"
+            />
+          )}
+        </View>
       </View>
+      <ActionSheet
+        visible={attachOpen}
+        title="Attach"
+        onClose={() => setAttachOpen(false)}
+        items={[
+          {
+            label: "Photo library",
+            icon: "image",
+            onPress: () => void pick(() => pickImages(MAX_UPLOAD_FILES - files.length)),
+          },
+          { label: "Files", icon: "file", onPress: () => void pick(pickDocuments) },
+        ]}
+      />
     </View>
   );
 }
 
-function MessageRow({ message, streaming }: { message: ConversationMessageItem; streaming: boolean }) {
-  if (message.kind === "tool") {
-    const failed = message.toolState === "error";
-    return (
-      <View className="flex-row items-center gap-1.5 self-start rounded-md border border-border bg-muted/50 px-2 py-1">
-        <Icon
-          name={failed ? "alert-circle" : "check"}
-          size={12}
-          colorClassName={failed ? "accent-destructive" : "accent-muted-foreground"}
-        />
-        <Text className="font-mono text-muted-foreground text-xs">{message.toolName || "tool"}</Text>
-      </View>
-    );
-  }
+function MessageRow({
+  message,
+  conversationId,
+  streaming,
+}: {
+  message: ConversationMessageItem;
+  conversationId: string;
+  streaming: boolean;
+}) {
+  if (message.kind === "tool") return <ToolMessage message={message} conversationId={conversationId} />;
 
   if (message.role === "user") {
     const files = conversationTurnFilesFromData(message.data);

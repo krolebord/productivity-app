@@ -1,20 +1,7 @@
+import { type AttachRef, formatAttachToken } from "@productivity/core/agent/attach";
 import { useCallback, useSyncExternalStore } from "react";
 import { useAssistantStore } from "./assistant-store";
 import { useAssistantSurface } from "./use-assistant-surface";
-
-/**
- * A row the user can pull into the assistant as context. `table` is the synced
- * SQLite view the assistant queries (see src/user-db/migrations.ts) — note that
- * notes live in `item`, not a `note` table.
- */
-export type AttachRef = {
-  table: "item" | "account" | "transaction_entry";
-  id: string;
-};
-
-function formatAttachToken(ref: AttachRef): string {
-  return `@${ref.table}:${ref.id}`;
-}
 
 let isHeld = false;
 const subscribers = new Set<() => void>();

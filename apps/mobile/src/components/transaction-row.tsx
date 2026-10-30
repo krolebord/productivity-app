@@ -23,6 +23,7 @@ function convertedAmount(amount: number, currency: string, baseCurrency?: string
 export function TransactionRow({
   transaction,
   accountLabels,
+  accountFallback = "Untitled",
   focusAccountId,
   baseCurrency,
   convert,
@@ -34,6 +35,8 @@ export function TransactionRow({
 }: {
   transaction: TransactionRecord;
   accountLabels: ReadonlyMap<string, string>;
+  /** Shown when the account isn't in `accountLabels`; inline rows pass their plain-text label or "". */
+  accountFallback?: string;
   /** Shows the amount from this account's side, e.g. the incoming leg of a transfer. */
   focusAccountId?: string;
   /** With `convert`, adds a "≈" line in the display currency under foreign amounts, as on the web. */
@@ -45,14 +48,15 @@ export function TransactionRow({
   showTransferPair?: boolean;
   /** Under a day header the date is redundant, so only the time is shown. */
   timeOnly?: boolean;
-  onPress: () => void;
+  /** Omitted for rows that aren't in the ledger, like the assistant's example transactions. */
+  onPress?: () => void;
   last?: boolean;
 }) {
   const type = resolveTransactionType(transaction.type);
   const style = TRANSACTION_TYPE_STYLE[type];
   const display = getDisplayAmountForAccount(transaction, focusAccountId);
   const converted = convertedAmount(display.amount, display.currency, baseCurrency, convert);
-  const account = accountLabels.get(transaction.accountId) || "Untitled";
+  const account = accountLabels.get(transaction.accountId) || accountFallback;
   const isTransfer = type === "transfer";
   const accountPart = isTransfer
     ? `${account} → ${accountLabels.get(transaction.counterpartyAccountId) || "Untitled"}`
@@ -68,8 +72,9 @@ export function TransactionRow({
 
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={onPress ? "button" : undefined}
       onPress={onPress}
+      disabled={!onPress}
       className={cn(
         "min-h-14 flex-row gap-3 px-4 py-2.5 active:bg-muted",
         detailed ? "items-start py-3" : "items-center",

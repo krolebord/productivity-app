@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
+import { useAskAssistant, useAssistantEnabled } from "../../../components/assistant-button";
 import { Markdown } from "../../../components/markdown";
 import { SheetHeader } from "../../../components/screen-header";
 import { TagEditor, type TagEditorHandle } from "../../../components/tag-editor";
@@ -45,6 +46,8 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
   const db = useDb();
   const router = useRouter();
   const tagSuggestions = useNoteTagSuggestions();
+  const assistantEnabled = useAssistantEnabled();
+  const ask = useAskAssistant();
   const [openedBlank] = useState(() => isBlankNote(note ?? {}));
   const [editing, setEditing] = useState(openedBlank);
   const [fields, setFields] = useState(() => ({
@@ -85,6 +88,14 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
     if (content === fieldsRef.current.content) return setEditing(true);
     update({ content });
     autosave.flush();
+  };
+
+  const askAssistant = () => {
+    // The assistant reads the synced row, so get the latest text into it first.
+    tagEditor.current?.commit();
+    autosave.cancel();
+    save(toNoteFields(fieldsRef.current), { insertBlank: true });
+    ask({ table: "item", id });
   };
 
   const convertToTask = () => {
@@ -160,6 +171,11 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
         </View>
       </FormSection>
 
+      {assistantEnabled && !isBlankNote(fields) && (
+        <View className="flex-row">
+          <ActionButton icon="message-circle" label="Ask assistant" onPress={askAssistant} />
+        </View>
+      )}
       <View className="flex-row gap-3">
         <ActionButton icon="check-square" label="Make task" onPress={convertToTask} />
         <ActionButton icon="trash-2" label="Delete" destructive onPress={confirmDelete} />

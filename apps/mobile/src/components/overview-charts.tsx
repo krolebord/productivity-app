@@ -22,15 +22,18 @@ import {
 
 export type OverviewChart = "flow" | "networth" | "spending";
 
-const axisFont = matchFont({ fontFamily: Platform.select({ ios: "Helvetica", default: "sans-serif" }), fontSize: 11 });
+export const axisFont = matchFont({
+  fontFamily: Platform.select({ ios: "Helvetica", default: "sans-serif" }),
+  fontSize: 11,
+});
 
 /** Scrubbing starts after a short hold so a swipe over the chart still scrolls the screen. */
-const PRESS_CONFIG = { pan: { activateAfterLongPress: 120 } };
+export const PRESS_CONFIG = { pan: { activateAfterLongPress: 120 } };
 
-const DOMAIN_PADDING = { left: 20, right: 20, top: 12 };
-const ROUNDED = { topLeft: 4, topRight: 4, bottomLeft: 4, bottomRight: 4 };
-const ROUNDED_TOP = { topLeft: 4, topRight: 4 };
-const ROUNDED_BOTTOM = { bottomLeft: 4, bottomRight: 4 };
+export const DOMAIN_PADDING = { left: 20, right: 20, top: 12 };
+export const ROUNDED = { topLeft: 4, topRight: 4, bottomLeft: 4, bottomRight: 4 };
+export const ROUNDED_TOP = { topLeft: 4, topRight: 4 };
+export const ROUNDED_BOTTOM = { bottomLeft: 4, bottomRight: 4 };
 
 const CHART_VARS = [
   "--color-muted-foreground",
@@ -42,7 +45,7 @@ const CHART_VARS = [
   "--color-chart-5",
 ];
 
-function useChartTheme() {
+export function useChartTheme() {
   const [label, grid, ...palette] = useCSSVariable(CHART_VARS) as (string | undefined)[];
   return {
     label: label ?? "#888888",
@@ -57,7 +60,7 @@ function useChartTheme() {
  * back on) until the buckets change, e.g. a new range. The series are rebuilt on every render,
  * so the buckets are compared by label rather than identity.
  */
-function useSelectedIndex(
+export function useSelectedIndex(
   state: { isActive: SharedValue<boolean>; matchedIndex: SharedValue<number> },
   data: readonly { label: string }[],
 ) {
@@ -78,7 +81,7 @@ function useSelectedIndex(
 }
 
 /** Victory spreads these over its defaults, so every key must hold a real value. */
-function axes(theme: ReturnType<typeof useChartTheme>, xTickCount: number) {
+export function axes(theme: ReturnType<typeof useChartTheme>, xTickCount: number) {
   return {
     xAxis: { font: axisFont, labelColor: theme.label, lineWidth: 0, tickCount: xTickCount },
     yAxis: [
@@ -94,7 +97,7 @@ function axes(theme: ReturnType<typeof useChartTheme>, xTickCount: number) {
   };
 }
 
-function slotWidth(points: PointsArray, chartBounds: ChartBounds) {
+export function slotWidth(points: PointsArray, chartBounds: ChartBounds) {
   return points.length > 1 ? points[1].x - points[0].x : chartBounds.right - chartBounds.left;
 }
 
@@ -103,7 +106,7 @@ function shiftPoints(points: PointsArray, dx: number): PointsArray {
 }
 
 /** A soft column behind the touched bucket, standing in for the web's hover cursor. */
-function ColumnHighlight({
+export function ColumnHighlight({
   points,
   index,
   chartBounds,
@@ -137,7 +140,7 @@ function ChartEmptyState({ children }: { children: string }) {
   );
 }
 
-function Details({ title, children }: { title: string; children: ReactNode }) {
+export function Details({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View className="gap-1.5 border-border border-t pt-3">
       <Text className="font-medium text-foreground text-sm">{title}</Text>
@@ -146,7 +149,17 @@ function Details({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function DetailRow({ color, label, hint, value }: { color?: string; label: string; hint?: string; value: string }) {
+export function DetailRow({
+  color,
+  label,
+  hint,
+  value,
+}: {
+  color?: string;
+  label: string;
+  hint?: string;
+  value: string;
+}) {
   return (
     <View className="flex-row items-center gap-2">
       {color && <View className="size-2.5 rounded-[2px]" style={{ backgroundColor: color }} />}
@@ -159,8 +172,8 @@ function DetailRow({ color, label, hint, value }: { color?: string; label: strin
   );
 }
 
-/** The series key under the cash-flow chart, as the web's chart legend. */
-function Legend({ items }: { items: readonly { color: string; label: string }[] }) {
+/** The series key under a chart, as the web's chart legend. */
+export function Legend({ items }: { items: readonly { color: string; label: string }[] }) {
   return (
     <View className="flex-row flex-wrap justify-center gap-x-3 gap-y-1">
       {items.map((item) => (

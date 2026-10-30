@@ -35,6 +35,14 @@
             "backgroundColor": "#171717"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Lets you attach photos to assistant messages.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "extra": {

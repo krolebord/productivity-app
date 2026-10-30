@@ -4,9 +4,8 @@ import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useRef } from "react";
 import { Platform, View } from "react-native";
 import { useCSSVariable } from "uniwind";
-import { AssistantButton } from "../../../components/assistant-button";
+import { AssistantButton, useAssistantEnabled } from "../../../components/assistant-button";
 import { getPreferences } from "../../../lib/preferences";
-import { useSession } from "../../../lib/session";
 
 /**
  * Opens the default home tab once the tabs mount, like the web's redirect from "/". The tab order
@@ -31,8 +30,7 @@ export default function TabsLayout() {
     "--color-accent-foreground",
     "--color-ripple",
   ]) as (string | undefined)[];
-  const { state } = useSession();
-  const assistantEnabled = state.status === "signed-in" && state.user.assistantEnabled;
+  const assistantEnabled = useAssistantEnabled();
   useOpenDefaultHome();
 
   return (

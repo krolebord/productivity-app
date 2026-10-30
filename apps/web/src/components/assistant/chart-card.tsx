@@ -2,6 +2,7 @@ import {
   type CartesianChartSpec,
   ChartSpecSchema,
   type PieChartSpecType,
+  resolveSankey,
   type SankeyChartSpecType,
 } from "@productivity/core/agent/chart-spec";
 import { CircleAlert } from "lucide-react";
@@ -191,26 +192,9 @@ function SankeyNode({ x = 0, y = 0, width = 0, height = 0, index = 0, payload, c
 }
 
 function SankeyChartView({ spec }: { spec: SankeyChartSpecType }) {
-  // Recharts links reference nodes by index; the spec uses names, so resolve
-  // them here and append any link endpoints missing from the explicit node list.
-  const order: string[] = [];
-  const indexByName = new Map<string, number>();
-  const ensure = (name: string) => {
-    const existing = indexByName.get(name);
-    if (existing !== undefined) return existing;
-    const next = order.length;
-    indexByName.set(name, next);
-    order.push(name);
-    return next;
-  };
-
-  for (const node of spec.nodes ?? []) ensure(node.name);
-  const links = spec.links
-    .filter((link) => link.source !== link.target)
-    .map((link) => ({ source: ensure(link.source), target: ensure(link.target), value: link.value }));
-  const nodes = order.map((name) => ({ name }));
-
-  if (nodes.length < 2 || links.length === 0) {
+  // Recharts links reference nodes by index; the spec uses names.
+  const sankey = resolveSankey(spec);
+  if (!sankey) {
     return <ChartError />;
   }
 
@@ -218,7 +202,7 @@ function SankeyChartView({ spec }: { spec: SankeyChartSpecType }) {
     <ChartFrame title={spec.title} description={spec.description}>
       <ChartContainer config={{}} className="aspect-video w-full">
         <Sankey
-          data={{ nodes, links }}
+          data={sankey}
           nodePadding={24}
           margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
           node={<SankeyNode />}

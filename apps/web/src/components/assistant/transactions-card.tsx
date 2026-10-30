@@ -1,43 +1,15 @@
 import {
-  type TransactionInlineItem,
+  inlineTransactionRecord,
   type TransactionsSpec,
   TransactionsSpecSchema,
 } from "@productivity/core/agent/transactions-spec";
 import { useAccountLabels } from "@productivity/core/data/accounts";
 import { useTransactionsByIds } from "@productivity/core/data/transactions";
-import { getDisplayAmountForAccount, type TransactionRow as TransactionRecord } from "@productivity/core/transactions";
+import { getDisplayAmountForAccount } from "@productivity/core/transactions";
 import { CircleAlert } from "lucide-react";
 import { useTransactionDialogStore } from "@/components/transaction-dialog";
 import { TransactionRow } from "@/components/transaction-row";
 import { useDisplayCurrency } from "@/lib/finance/display-currency";
-
-// Reuses the real card by shaping an inline item into a transaction record. The
-// sign follows the type, as stored (negative for expenses and transfer sources).
-function inlineToTransaction(item: TransactionInlineItem): TransactionRecord {
-  const magnitude = Math.abs(item.amount);
-  const amount = item.type === "income" ? magnitude : item.type === "adjustment" ? item.amount : -magnitude;
-  const now = Date.now();
-  return {
-    id: "",
-    type: item.type,
-    accountId: "",
-    accountCurrency: item.currency,
-    amount,
-    counterpartyAccountId: "",
-    counterpartyCurrency: "",
-    counterpartyAmount: null,
-    title: item.title,
-    category: item.category ?? "",
-    importance: item.importance ?? null,
-    notes: item.notes ?? "",
-    effectiveAt: item.effectiveAt ?? now,
-    providerType: null,
-    providerId: null,
-    createdAt: now,
-    updatedAt: now,
-    tombstone: false,
-  };
-}
 
 function TransactionsError() {
   return (
@@ -105,7 +77,8 @@ function TransactionsList({ spec }: { spec: TransactionsSpec }) {
             );
           }
 
-          const transaction = inlineToTransaction(item);
+          // Reuses the real row by shaping the inline item into a transaction record.
+          const transaction = inlineTransactionRecord(item, Date.now());
           const display = getDisplayAmountForAccount(transaction);
           return (
             // Dashed left rule marks an agent-authored row that isn't in the ledger.

@@ -23,6 +23,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useRef, useState } from "react";
 import { Alert, Pressable, Text, type TextInputInstance, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
+import { useAskAssistant, useAssistantEnabled } from "../../../components/assistant-button";
 import { DateTimeField } from "../../../components/date-time-field";
 import { SheetHeader } from "../../../components/screen-header";
 import { EmptyState } from "../../../components/ui/empty-state";
@@ -185,6 +186,8 @@ function TransactionForm({
 }) {
   const db = useDb();
   const router = useRouter();
+  const assistantEnabled = useAssistantEnabled();
+  const ask = useAskAssistant();
   const accounts = useAccounts();
   const categories = useRecentTransactionCategories();
   const importanceRows = useCategoryImportanceCounts();
@@ -257,29 +260,41 @@ function TransactionForm({
       counterpartyAmount: needsCounterpartyAmount ? form.amount : form.counterpartyAmount,
     });
 
-  const save = (addAnother = false) => {
-    if (unchanged) return;
+  /** Validates and writes the form; false (with the error shown) when it can't be saved. */
+  const persist = () => {
+    if (unchanged) return true;
     const message = validate(form, needsCounterpartyAmount, accounts.length);
     if (message) {
       setError(message);
-      return;
+      return false;
     }
     try {
       const input = toInput(form, needsCounterpartyAmount);
       if (existing) updateTransaction(db.db, existing.id, input);
       else createTransaction(db.db, input);
-      if (!existing && addAnother) {
-        // Keeps the type, accounts, category and date for a run of similar entries, as the web's
-        // "Create & add another" does.
-        update({ amount: "", counterpartyAmount: "", title: "", notes: "" });
-        setSavedCount((count) => count + 1);
-        amountRef.current?.focus();
-        return;
-      }
-      router.back();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+      return false;
     }
+  };
+
+  const save = (addAnother = false) => {
+    if (unchanged || !persist()) return;
+    if (!existing && addAnother) {
+      // Keeps the type, accounts, category and date for a run of similar entries, as the web's
+      // "Create & add another" does.
+      update({ amount: "", counterpartyAmount: "", title: "", notes: "" });
+      setSavedCount((count) => count + 1);
+      amountRef.current?.focus();
+      return;
+    }
+    router.back();
+  };
+
+  // The assistant reads the synced row, so pending edits are saved first rather than lost.
+  const askAssistant = () => {
+    if (existing && persist()) ask({ table: "transaction_entry", id: existing.id });
   };
 
   const confirmDelete = () => {
@@ -491,7 +506,8 @@ function TransactionForm({
       <FieldError message={error} />
 
       {existing ? (
-        <View className="flex-row">
+        <View className="flex-row gap-3">
+          {assistantEnabled && <ActionButton icon="message-circle" label="Ask assistant" onPress={askAssistant} />}
           <ActionButton icon="trash-2" label="Delete" destructive onPress={confirmDelete} />
         </View>
       ) : (

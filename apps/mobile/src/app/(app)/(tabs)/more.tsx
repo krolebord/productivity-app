@@ -1,7 +1,7 @@
 import { useIntegrationsHasError } from "@productivity/core/data/integrations";
 import { useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
-import { useTabContentInset } from "../../../components/assistant-button";
+import { useAssistantEnabled, useTabContentInset } from "../../../components/assistant-button";
 import { ScreenHeader } from "../../../components/screen-header";
 import { SyncStatus } from "../../../components/sync-status";
 import { FormRow, FormSection } from "../../../components/ui/form";
@@ -11,6 +11,7 @@ export default function MoreScreen() {
   const contentInset = useTabContentInset();
   const router = useRouter();
   const integrationsHasError = useIntegrationsHasError();
+  const assistantEnabled = useAssistantEnabled();
   return (
     <View className="flex-1 bg-background">
       <ScreenHeader title="More" />
@@ -30,6 +31,13 @@ export default function MoreScreen() {
           </FormRow>
           <FormRow icon="settings" label="Settings" onPress={() => router.push("/settings")} last />
         </FormSection>
+        {assistantEnabled && (
+          <FormSection title="Assistant">
+            <FormRow icon="bar-chart-2" label="Agents" onPress={() => router.push("/agents")} />
+            <FormRow icon="bookmark" label="Memories" onPress={() => router.push("/memories")} />
+            <FormRow icon="layers" label="Skills" onPress={() => router.push("/skills")} last />
+          </FormSection>
+        )}
       </ScrollView>
     </View>
   );

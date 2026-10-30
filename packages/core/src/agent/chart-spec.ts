@@ -102,3 +102,69 @@ export type ChartSpec = z.infer<typeof ChartSpecSchema>;
 export type CartesianChartSpec = Extract<ChartSpec, { type: "line" | "area" | "bar" }>;
 export type PieChartSpecType = Extract<ChartSpec, { type: "pie" }>;
 export type SankeyChartSpecType = Extract<ChartSpec, { type: "sankey" }>;
+
+export type ResolvedSankey = {
+  nodes: { name: string }[];
+  /** Endpoints as indexes into `nodes`. */
+  links: { source: number; target: number; value: number }[];
+};
+
+/**
+ * Sankey layouts reference nodes by index; the spec uses names. Resolves them, appending any
+ * link endpoint missing from the explicit node list and dropping self-links. Null when too
+ * little is left to draw.
+ */
+export function resolveSankey(spec: Pick<SankeyChartSpecType, "nodes" | "links">): ResolvedSankey | null {
+  const order: string[] = [];
+  const indexByName = new Map<string, number>();
+  const ensure = (name: string) => {
+    const existing = indexByName.get(name);
+    if (existing !== undefined) return existing;
+    const next = order.length;
+    indexByName.set(name, next);
+    order.push(name);
+    return next;
+  };
+
+  for (const node of spec.nodes ?? []) ensure(node.name);
+  const links = spec.links
+    .filter((link) => link.source !== link.target)
+    .map((link) => ({ source: ensure(link.source), target: ensure(link.target), value: link.value }));
+  const nodes = order.map((name) => ({ name }));
+
+  if (nodes.length < 2 || links.length === 0) return null;
+  return { nodes, links };
+}
+
+/**
+ * Value-axis bounds for a cartesian chart, always including zero (recharts' default domain).
+ * Stacks grow from zero both ways, so their bounds are the largest positive and negative
+ * running totals per row rather than the extreme single value.
+ */
+export function cartesianValueBounds(
+  rows: readonly (readonly (number | null)[])[],
+  stacked: boolean,
+): { min: number; max: number } {
+  let min = 0;
+  let max = 0;
+  for (const values of rows) {
+    if (stacked) {
+      let positive = 0;
+      let negative = 0;
+      for (const value of values) {
+        if (value == null) continue;
+        if (value > 0) positive += value;
+        else negative += value;
+      }
+      max = Math.max(max, positive);
+      min = Math.min(min, negative);
+    } else {
+      for (const value of values) {
+        if (value == null) continue;
+        max = Math.max(max, value);
+        min = Math.min(min, value);
+      }
+    }
+  }
+  return { min, max };
+}

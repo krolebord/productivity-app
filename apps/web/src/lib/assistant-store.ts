@@ -1,3 +1,4 @@
+import { appendToDraft } from "@productivity/core/agent/attach";
 import {
   type AssistantModelId,
   type AssistantReasoningEffort,
@@ -97,11 +98,7 @@ export const useAssistantStore = create<AssistantStore>()(
       setModel: (model) => set({ model }),
       setReasoningEffort: (reasoningEffort) => set({ reasoningEffort }),
       setInputDraft: (inputDraft) => set({ inputDraft }),
-      appendToInput: (text) =>
-        set((s) => {
-          const needsSpace = s.inputDraft.length > 0 && !/\s$/.test(s.inputDraft);
-          return { inputDraft: `${s.inputDraft}${needsSpace ? " " : ""}${text} ` };
-        }),
+      appendToInput: (text) => set((s) => ({ inputDraft: appendToDraft(s.inputDraft, text) })),
       requestComposerFocus: () => set((s) => ({ composerFocusNonce: s.composerFocusNonce + 1 })),
     }),
     {

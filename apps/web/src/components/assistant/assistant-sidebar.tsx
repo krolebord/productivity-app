@@ -1,19 +1,44 @@
-import { BUILTIN_SKILLS, findBuiltinSkill, isBuiltinSkillId } from "@productivity/core/agent/builtin-skills";
-import { conversationTurnFilesFromData } from "@productivity/core/agent/conversation-files";
+import { needsTranscriptBackfill } from "@productivity/core/agent/agent-warmer";
+import {
+  findBuiltinSkill,
+  isBuiltinSkillId,
+  skillStarterPrompt,
+  skillStarters,
+} from "@productivity/core/agent/builtin-skills";
+import { type ConversationTurnFile, conversationTurnFilesFromData } from "@productivity/core/agent/conversation-files";
+import { formatCost, formatFileSize, formatModelPricing, MODEL_MODALITY_LABELS } from "@productivity/core/agent/format";
 import {
   ASSISTANT_MODELS,
   ASSISTANT_MODELS_BY_PRICE,
-  type AssistantModel,
   type AssistantModelId,
   type AssistantModelInputModality,
   type AssistantReasoningEffort,
+  displayedReasoningEffort,
   formatReasoningEffortLabel,
   getAssistantModel,
   getModelReasoningEfforts,
   modelSupportsSelectableReasoning,
+  preferredConversationReasoningEffort,
   resolveAssistantModelId,
-  resolveAssistantReasoningEffort,
 } from "@productivity/core/agent/models";
+import {
+  assistantDownloadPath,
+  downloadFileFromData,
+  isMemoryToolName,
+  linkHostname,
+  type MemoryToolName,
+  type MemoryToolPayload,
+  memoryToolLabel,
+  parseToolData,
+  type ReadToolPayload,
+  resourceFilename,
+  type SkillToolPayload,
+  type ToolLink,
+  toolLinks,
+  toolPayload,
+  type WebToolPayload,
+  webToolSummary,
+} from "@productivity/core/agent/tool-messages";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@productivity/core/agent/uploads";
 import { conversationTitle } from "@productivity/core/conversation-list";
 import {
@@ -85,13 +110,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 type ConversationRow = ConversationItem;
 type ConversationIdentity = Pick<ConversationRow, "id" | "title">;
 
-type UploadedWorkspaceFile = {
-  filename: string;
-  mediaType: string;
-  size: number;
-  path: string;
-};
-
 // Recharts is heavy; keep it out of the main bundle until a chart is rendered.
 const ChartCard = lazy(() => import("./chart-card"));
 const TransactionsCard = lazy(() => import("./transactions-card"));
@@ -127,26 +145,6 @@ function getPastedImageFiles(event: ClipboardEvent<HTMLTextAreaElement>) {
     .filter((file): file is File => file !== null);
 }
 
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatCost(cost: number) {
-  if (cost > 0 && cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
-}
-
-function formatModelPrice(price: number) {
-  if (price >= 1) return `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`;
-  return `$${price.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}`;
-}
-
-function formatModelPricing(model: AssistantModel) {
-  return `${formatModelPrice(model.pricing.inputPerMillion)} in / ${formatModelPrice(model.pricing.outputPerMillion)} out per 1M`;
-}
-
 /** Artificial Analysis intelligence index, when the model reports one. */
 function ModelIntelligenceScore({ score }: { score: number | undefined }) {
   if (score == null) return null;
@@ -161,20 +159,12 @@ function ModelIntelligenceScore({ score }: { score: number | undefined }) {
   );
 }
 
-function preferredConversationReasoningEffort(
-  modelId: AssistantModelId,
-  preferred: unknown,
-): AssistantReasoningEffort | null {
-  if (!modelSupportsSelectableReasoning(modelId)) return null;
-  return resolveAssistantReasoningEffort(modelId, preferred) ?? null;
-}
-
 function rpcErrorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : "Something went wrong. Try again.";
 }
 
-function DownloadFileChip({ conversationId, file }: { conversationId: string; file: UploadedWorkspaceFile }) {
-  const href = `/api/assistant/download?conversationId=${encodeURIComponent(conversationId)}&path=${encodeURIComponent(file.path)}`;
+function DownloadFileChip({ conversationId, file }: { conversationId: string; file: ConversationTurnFile }) {
+  const href = assistantDownloadPath(conversationId, file.path);
 
   return (
     <a
@@ -204,12 +194,7 @@ function NewChatSkills() {
   const requestComposerFocus = useAssistantStore((s) => s.requestComposerFocus);
   const userSkills = useActiveSkills();
 
-  const builtinSkills = BUILTIN_SKILLS.map((skill) => ({
-    id: skill.id,
-    name: skill.name,
-    whenToUse: skill.whenToUse,
-  }));
-  const skills = [...userSkills, ...builtinSkills];
+  const skills = skillStarters(userSkills);
 
   if (skills.length === 0) return null;
 
@@ -217,7 +202,7 @@ function NewChatSkills() {
     if (!isBuiltinSkillId(skill.id)) {
       markSkillUsed(db.db, skill.id);
     }
-    appendToInput(`Use the "${skill.name || "Untitled"}" skill.`);
+    appendToInput(skillStarterPrompt(skill));
     requestComposerFocus();
   }
 
@@ -255,43 +240,6 @@ function logChartError(error: unknown) {
   console.error("Failed to render assistant chart", error);
 }
 
-function parseJson(data: string): unknown {
-  if (!data) return null;
-  try {
-    return JSON.parse(data);
-  } catch {
-    return null;
-  }
-}
-
-type ToolLink = { title?: string | null; url: string };
-type WebToolPayload = {
-  query?: string;
-  answer?: string;
-  urlCount?: number;
-  results?: ToolLink[];
-  failedResults?: ToolLink[];
-};
-type MemoryToolPayload = { content?: string };
-type ReadToolPayload = { path?: string };
-type SkillToolPayload = { id?: string | null; name?: string };
-
-function toolPayload<T>(data: string): T {
-  return (parseJson(data) ?? {}) as T;
-}
-
-function toolLinks(value: ToolLink[] | undefined): ToolLink[] {
-  return Array.isArray(value) ? value.filter((link) => typeof link?.url === "string") : [];
-}
-
-function hostname(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
 function SourceLink({ url, title }: ToolLink) {
   return (
     <a
@@ -302,8 +250,8 @@ function SourceLink({ url, title }: ToolLink) {
     >
       <ExternalLink className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
       <span className="min-w-0">
-        <span className="block truncate text-foreground">{title || hostname(url)}</span>
-        <span className="block truncate text-muted-foreground/70">{hostname(url)}</span>
+        <span className="block truncate text-foreground">{title || linkHostname(url)}</span>
+        <span className="block truncate text-muted-foreground/70">{linkHostname(url)}</span>
       </span>
     </a>
   );
@@ -333,7 +281,7 @@ function WebToolDetails({ name, payload }: { name: string; payload: WebToolPaylo
       {failedResults.map((result) => (
         <span key={result.url} className="flex items-center gap-1.5 px-1 text-destructive">
           <CircleAlert className="size-3 shrink-0" />
-          <span className="truncate">{hostname(result.url)}</span>
+          <span className="truncate">{linkHostname(result.url)}</span>
         </span>
       ))}
       {results.length === 0 && failedResults.length === 0 && <p className="px-1 text-muted-foreground">No content.</p>}
@@ -345,12 +293,7 @@ function WebToolChip({ name, failed, data }: { name: string; failed: boolean; da
   const [open, setOpen] = useState(false);
   const payload = toolPayload<WebToolPayload>(data);
   const Icon = name === "web_search" ? Search : FileText;
-  const summary =
-    name === "web_search"
-      ? payload.query
-      : payload.urlCount
-        ? `${payload.urlCount} ${payload.urlCount === 1 ? "page" : "pages"}`
-        : undefined;
+  const summary = webToolSummary(name, payload);
 
   return (
     <div className="w-fit max-w-full overflow-hidden rounded-md border bg-muted/50 text-xs">
@@ -377,9 +320,9 @@ function WebToolChip({ name, failed, data }: { name: string; failed: boolean; da
   );
 }
 
-function MemoryChip({ name, failed, data }: { name: string; failed: boolean; data: string }) {
+function MemoryChip({ name, failed, data }: { name: MemoryToolName; failed: boolean; data: string }) {
   const payload = toolPayload<MemoryToolPayload>(data);
-  const label = name === "forget" ? "Forgot a memory" : name === "update_memory" ? "Updated a memory" : "Remembered";
+  const label = memoryToolLabel(name);
 
   return (
     <Link
@@ -393,11 +336,6 @@ function MemoryChip({ name, failed, data }: { name: string; failed: boolean; dat
       )}
     </Link>
   );
-}
-
-function resourceFilename(path: string) {
-  const normalized = path.replaceAll("\\", "/");
-  return normalized.split("/").at(-1) || path;
 }
 
 function ReadFileChip({ failed, data }: { failed: boolean; data: string }) {
@@ -449,19 +387,6 @@ function SkillChip({ failed, data }: { failed: boolean; data: string }) {
   );
 }
 
-function downloadFileFromData(data: string): UploadedWorkspaceFile | null {
-  const parsed = parseJson(data);
-  if (!parsed || typeof parsed !== "object") return null;
-  const file = parsed as Partial<UploadedWorkspaceFile>;
-  if (typeof file.filename !== "string" || typeof file.path !== "string") return null;
-  return {
-    filename: file.filename,
-    mediaType: typeof file.mediaType === "string" ? file.mediaType : "application/octet-stream",
-    size: typeof file.size === "number" ? file.size : 0,
-    path: file.path,
-  };
-}
-
 type MessageGroup = { role: ConversationMessageItem["role"]; messages: ConversationMessageItem[] };
 
 function groupMessageRows(messages: ConversationMessageItem[]): MessageGroup[] {
@@ -488,7 +413,7 @@ function MessageRow({ message, conversationId }: { message: ConversationMessageI
     if (toolName === "web_search" || toolName === "web_extract") {
       return <WebToolChip name={toolName} failed={failed} data={data} />;
     }
-    if (toolName === "remember" || toolName === "update_memory" || toolName === "forget") {
+    if (isMemoryToolName(toolName)) {
       return <MemoryChip name={toolName} failed={failed} data={data} />;
     }
     if (toolName === "read" || toolName === "read_skill_resource") {
@@ -501,7 +426,7 @@ function MessageRow({ message, conversationId }: { message: ConversationMessageI
       return <SkillChip failed={failed} data={data} />;
     }
     if (toolName === "renderChart" && !failed) {
-      const spec = parseJson(data);
+      const spec = parseToolData(data);
       return (
         <ErrorBoundary fallback={<ChartErrorChip />} onError={logChartError} resetKeys={[data]}>
           <Suspense fallback={<ToolCallChip name={toolName} failed={false} />}>
@@ -511,7 +436,7 @@ function MessageRow({ message, conversationId }: { message: ConversationMessageI
       );
     }
     if (toolName === "renderTransactions" && !failed) {
-      const spec = parseJson(data);
+      const spec = parseToolData(data);
       return (
         <ErrorBoundary
           fallback={<ToolCallChip name={toolName} failed={false} />}
@@ -573,19 +498,20 @@ function ScrollToBottomButton() {
   );
 }
 
-const MODEL_MODALITY_META = {
-  audio: { label: "Audio input", Icon: Mic },
-  file: { label: "File input", Icon: FileText },
-  image: { label: "Image input", Icon: ImageIcon },
-  text: { label: "Text input", Icon: Type },
-  video: { label: "Video input", Icon: Video },
-} satisfies Record<AssistantModelInputModality, { label: string; Icon: typeof Type }>;
+const MODEL_MODALITY_ICONS = {
+  audio: Mic,
+  file: FileText,
+  image: ImageIcon,
+  text: Type,
+  video: Video,
+} satisfies Record<AssistantModelInputModality, typeof Type>;
 
 function ModelModalityIcons({ modalities }: { modalities: AssistantModelInputModality[] }) {
   return (
     <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
       {modalities.map((modality) => {
-        const { label, Icon } = MODEL_MODALITY_META[modality];
+        const label = MODEL_MODALITY_LABELS[modality];
+        const Icon = MODEL_MODALITY_ICONS[modality];
         return (
           <Tooltip key={modality}>
             <TooltipTrigger
@@ -926,8 +852,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   // pre-sqlite transcript into conversation_message. Skip brand-new empty chats.
   useEffect(() => {
     if (!conversation) return;
-    if (ensuredRef.current || messages.length > 0) return;
-    if (!conversation.title && conversation.totalTokens === 0) return;
+    if (ensuredRef.current || !needsTranscriptBackfill(conversation, messages.length)) return;
     ensuredRef.current = true;
     orpc.assistant.ensureProjection.call({ conversationId: conversation.id }).catch((error: unknown) => {
       console.error("Failed to backfill conversation", error);
@@ -940,10 +865,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   const preferredReasoningEffort = useAssistantStore((s) => s.reasoningEffort);
   const setPreferredReasoningEffort = useAssistantStore((s) => s.setReasoningEffort);
   const model = conversation ? resolveAssistantModelId(conversation.model) : preferredModel;
-  const reasoningEffort =
-    resolveAssistantReasoningEffort(model, conversation?.reasoningEffort ?? preferredReasoningEffort) ??
-    getAssistantModel(model)?.reasoningEffort ??
-    "medium";
+  const reasoningEffort = displayedReasoningEffort(model, conversation?.reasoningEffort, preferredReasoningEffort);
 
   function selectModel(next: AssistantModelId) {
     setPreferredModel(next);

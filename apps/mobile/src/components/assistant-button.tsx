@@ -1,6 +1,9 @@
+import type { AttachRef } from "@productivity/core/agent/attach";
 import { useRouter } from "expo-router";
 import { Platform, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { attachToAssistant } from "../lib/assistant-chats";
+import { useSession } from "../lib/session";
 import { Icon } from "./ui/icon";
 
 // Distance from the safe-area bottom to just above the native tab bar.
@@ -28,4 +31,22 @@ export function AssistantButton() {
       <Icon name="message-circle" size={24} colorClassName="accent-primary-foreground" />
     </Pressable>
   );
+}
+
+export function useAssistantEnabled() {
+  const { state } = useSession();
+  return state.status === "signed-in" && state.user.assistantEnabled;
+}
+
+/**
+ * Attaches a row to the assistant's composer and opens it, the mobile take on the web's
+ * Cmd-click. Returns to an assistant already under the current screen (a transaction opened
+ * from a chat) instead of stacking a second one.
+ */
+export function useAskAssistant() {
+  const router = useRouter();
+  return (ref: AttachRef) => {
+    attachToAssistant(ref);
+    router.dismissTo("/assistant");
+  };
 }

@@ -1,4 +1,5 @@
-import { getAssistantModel } from "@productivity/core/agent/models";
+import { formatCost } from "@productivity/core/agent/format";
+import { summarizeAssistantUsage, usageModelLabel } from "@productivity/core/agent/usage";
 import { useConversationUsage } from "@productivity/core/data/conversations";
 import { useMemoryEnabledStates } from "@productivity/core/data/memories";
 import { useSkillStatuses } from "@productivity/core/data/skills";
@@ -25,16 +26,6 @@ const CHART_COLORS = [
   "var(--chart-4)",
   "var(--chart-5)",
 ] as const;
-
-function formatCost(cost: number) {
-  if (cost > 0 && cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
-}
-
-function modelLabel(modelId: string | null) {
-  if (!modelId) return "No model";
-  return getAssistantModel(modelId)?.label ?? modelId;
-}
 
 function StatCard({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
@@ -80,36 +71,15 @@ function AgentsPage() {
   const memories = useMemoryEnabledStates();
   const skills = useSkillStatuses();
 
-  const scopedConversations =
-    scope === "live" ? conversations.filter((conversation) => !conversation.tombstone) : conversations;
-  const totalConversations = scopedConversations.length;
-  const totalCost = scopedConversations.reduce((sum, conversation) => sum + conversation.totalCost, 0);
-  const totalTokens = scopedConversations.reduce((sum, conversation) => sum + conversation.totalTokens, 0);
-  const averageCost = totalConversations > 0 ? totalCost / totalConversations : 0;
-
-  const modelRows = Object.values(
-    scopedConversations.reduce<Record<string, { model: string | null; conversations: number; cost: number }>>(
-      (groups, conversation) => {
-        const model = conversation.model ? (getAssistantModel(conversation.model)?.id ?? conversation.model) : null;
-        const key = model ?? "__none";
-        const current = groups[key] ?? { model, conversations: 0, cost: 0 };
-        groups[key] = {
-          ...current,
-          conversations: current.conversations + 1,
-          cost: current.cost + conversation.totalCost,
-        };
-        return groups;
-      },
-      {},
-    ),
-  ).sort((a, b) => b.cost - a.cost || b.conversations - a.conversations);
+  const usage = summarizeAssistantUsage(conversations, scope);
+  const modelRows = usage.models;
 
   const pieData = modelRows
     .filter((row) => row.cost > 0)
     .map((row, index) => ({
       ...row,
       key: `model_${index}`,
-      label: modelLabel(row.model),
+      label: usageModelLabel(row.model),
       fill: CHART_COLORS[index % CHART_COLORS.length],
     }));
 
@@ -155,12 +125,12 @@ function AgentsPage() {
       <div className="grid @4xl:grid-cols-4 @md:grid-cols-2 gap-3">
         <StatCard
           label="Conversations"
-          value={totalConversations.toLocaleString()}
+          value={usage.conversations.toLocaleString()}
           detail={scope === "live" ? "Active chats" : "Including deleted"}
         />
-        <StatCard label="Total cost" value={formatCost(totalCost)} />
-        <StatCard label="Total tokens" value={totalTokens.toLocaleString()} />
-        <StatCard label="Average cost" value={formatCost(averageCost)} detail="Per conversation" />
+        <StatCard label="Total cost" value={formatCost(usage.totalCost)} />
+        <StatCard label="Total tokens" value={usage.totalTokens.toLocaleString()} />
+        <StatCard label="Average cost" value={formatCost(usage.averageCost)} detail="Per conversation" />
       </div>
 
       <div className="mt-4 grid @4xl:grid-cols-[minmax(0,1fr)_20rem] gap-4">
@@ -216,7 +186,7 @@ function AgentsPage() {
               {modelRows.map((row) => (
                 <div key={row.model ?? "__none"} className="rounded-md border bg-background px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="min-w-0 truncate font-medium text-sm">{modelLabel(row.model)}</p>
+                    <p className="min-w-0 truncate font-medium text-sm">{usageModelLabel(row.model)}</p>
                     <span className="shrink-0 font-mono text-sm tabular-nums">{formatCost(row.cost)}</span>
                   </div>
                   <p className="mt-1 text-muted-foreground text-xs">

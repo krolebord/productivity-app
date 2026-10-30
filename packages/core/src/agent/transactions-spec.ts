@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TransactionRow } from "../transactions";
 
 // Shared spec used by the agent's `renderTransactions` tool (server-side
 // validation) and the <TransactionsCard /> renderer (client-side rendering).
@@ -53,3 +54,32 @@ export const TransactionsSpecSchema = z.object({
 export type TransactionsSpec = z.infer<typeof TransactionsSpecSchema>;
 export type TransactionRefItem = z.infer<typeof RefItem>;
 export type TransactionInlineItem = z.infer<typeof InlineItem>;
+
+/**
+ * Shapes an inline item into a transaction record so the real row component can render it.
+ * The sign follows the type, as stored (negative for expenses and transfer sources).
+ */
+export function inlineTransactionRecord(item: TransactionInlineItem, now: number): TransactionRow {
+  const magnitude = Math.abs(item.amount);
+  const amount = item.type === "income" ? magnitude : item.type === "adjustment" ? item.amount : -magnitude;
+  return {
+    id: "",
+    type: item.type,
+    accountId: "",
+    accountCurrency: item.currency,
+    amount,
+    counterpartyAccountId: "",
+    counterpartyCurrency: "",
+    counterpartyAmount: null,
+    title: item.title,
+    category: item.category ?? "",
+    importance: item.importance ?? null,
+    notes: item.notes ?? "",
+    effectiveAt: item.effectiveAt ?? now,
+    providerType: null,
+    providerId: null,
+    createdAt: now,
+    updatedAt: now,
+    tombstone: false,
+  };
+}

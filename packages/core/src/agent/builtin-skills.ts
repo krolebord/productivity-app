@@ -64,3 +64,18 @@ export const BUILTIN_SKILLS: readonly BuiltinSkill[] = [importTransactions];
 export function findBuiltinSkill(id: string): BuiltinSkill | undefined {
   return BUILTIN_SKILLS.find((skill) => skill.id === id);
 }
+
+export type SkillStarter = { id: string; name: string; whenToUse: string };
+
+/** Skills offered on an empty chat: the user's active ones (most recently used first), then built-ins. */
+export function skillStarters(userSkills: readonly SkillStarter[]): SkillStarter[] {
+  return [
+    ...userSkills,
+    ...BUILTIN_SKILLS.map((skill) => ({ id: skill.id, name: skill.name, whenToUse: skill.whenToUse })),
+  ];
+}
+
+/** The composer text a skill starter inserts. */
+export function skillStarterPrompt(skill: Pick<SkillStarter, "name">) {
+  return `Use the "${skill.name || "Untitled"}" skill.`;
+}

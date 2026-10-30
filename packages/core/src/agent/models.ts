@@ -123,3 +123,28 @@ export function formatReasoningEffortLabel(effort: AssistantReasoningEffort): st
       return "Max";
   }
 }
+
+/** Effort sent when starting a conversation: the user's preference, or null when the model has no toggle. */
+export function preferredConversationReasoningEffort(
+  modelId: AssistantModelId,
+  preferred: unknown,
+): AssistantReasoningEffort | null {
+  if (!modelSupportsSelectableReasoning(modelId)) return null;
+  return resolveAssistantReasoningEffort(modelId, preferred) ?? null;
+}
+
+/**
+ * Effort the composer shows: a started conversation's own effort, else the user's preference,
+ * falling back to the catalog default.
+ */
+export function displayedReasoningEffort(
+  modelId: AssistantModelId,
+  conversationEffort: string | null | undefined,
+  preferred: unknown,
+): AssistantReasoningEffort {
+  return (
+    resolveAssistantReasoningEffort(modelId, conversationEffort ?? preferred) ??
+    getAssistantModel(modelId)?.reasoningEffort ??
+    "medium"
+  );
+}

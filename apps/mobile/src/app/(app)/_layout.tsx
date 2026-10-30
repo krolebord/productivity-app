@@ -41,6 +41,9 @@ export default function AppLayout() {
         <Stack.Screen name="integrations" />
         <Stack.Screen name="rates" />
         <Stack.Screen name="assistant" />
+        <Stack.Screen name="agents" />
+        <Stack.Screen name="memories" />
+        <Stack.Screen name="skills" />
         <Stack.Screen name="task/[id]" options={modal} />
         <Stack.Screen name="note/[id]" options={modal} />
         <Stack.Screen name="habit/[id]" options={modal} />

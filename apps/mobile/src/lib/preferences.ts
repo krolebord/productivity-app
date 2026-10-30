@@ -1,3 +1,10 @@
+import {
+  type AssistantModelId,
+  type AssistantReasoningEffort,
+  DEFAULT_ASSISTANT_MODEL,
+  isAssistantReasoningEffort,
+  resolveAssistantModelId,
+} from "@productivity/core/agent/models";
 import * as SecureStore from "expo-secure-store";
 import { useSyncExternalStore } from "react";
 import { Uniwind } from "uniwind";
@@ -15,11 +22,23 @@ type Preferences = {
   defaultHome: DefaultHome;
   /** The saved→device timezone pair the user chose to keep, so it isn't offered again. */
   dismissedTimeZoneMismatch: string;
+  /** Model and effort for new chats, as the web's assistant store keeps them; null effort = catalog default. */
+  assistantModel: AssistantModelId;
+  assistantReasoningEffort: AssistantReasoningEffort | null;
+  /** The chat the assistant reopens on, which may be an unsent draft's id. */
+  assistantConversationId: string | null;
 };
 
 const STORAGE_KEY = "preferences";
 
-const DEFAULTS: Preferences = { theme: "system", defaultHome: "today", dismissedTimeZoneMismatch: "" };
+const DEFAULTS: Preferences = {
+  theme: "system",
+  defaultHome: "today",
+  dismissedTimeZoneMismatch: "",
+  assistantModel: DEFAULT_ASSISTANT_MODEL,
+  assistantReasoningEffort: null,
+  assistantConversationId: null,
+};
 
 function read(): Preferences {
   try {
@@ -31,6 +50,14 @@ function read(): Preferences {
       defaultHome: parsed.defaultHome === "finances" ? "finances" : "today",
       dismissedTimeZoneMismatch:
         typeof parsed.dismissedTimeZoneMismatch === "string" ? parsed.dismissedTimeZoneMismatch : "",
+      assistantModel: resolveAssistantModelId(parsed.assistantModel),
+      assistantReasoningEffort: isAssistantReasoningEffort(parsed.assistantReasoningEffort)
+        ? parsed.assistantReasoningEffort
+        : null,
+      assistantConversationId:
+        typeof parsed.assistantConversationId === "string" && parsed.assistantConversationId
+          ? parsed.assistantConversationId
+          : null,
     };
   } catch {
     return DEFAULTS;
