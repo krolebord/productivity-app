@@ -22,7 +22,6 @@ export function OfflineBanner() {
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>("hidden");
   const [progress] = useState(() => new Animated.Value(0));
-  const [spin] = useState(() => new Animated.Value(0));
 
   const online = remoteState === "online";
 
@@ -58,15 +57,6 @@ export function OfflineBanner() {
   }, [phase, progress]);
 
   const reconnecting = phase === "offline" && remoteState === "connecting";
-  useEffect(() => {
-    if (!reconnecting) return;
-    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 1000, useNativeDriver: true }));
-    loop.start();
-    return () => {
-      loop.stop();
-      spin.setValue(0);
-    };
-  }, [reconnecting, spin]);
 
   if (phase === "hidden") return null;
 
@@ -101,13 +91,7 @@ export function OfflineBanner() {
             <>
               <Icon name="wifi-off" size={16} colorClassName="accent-rose-700 dark:accent-rose-300" />
               <Text className="text-rose-700 text-sm dark:text-rose-300">You're offline</Text>
-              <Animated.View
-                style={{
-                  transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
-                }}
-              >
-                <Icon name="refresh-cw" size={14} colorClassName="accent-rose-700 dark:accent-rose-300" />
-              </Animated.View>
+              <Icon name="refresh-cw" size={14} colorClassName="accent-rose-700 dark:accent-rose-300" />
             </>
           ) : (
             <>
