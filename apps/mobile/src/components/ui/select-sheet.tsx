@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { FlatList, Modal, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SheetHeader } from "../screen-header";
@@ -6,7 +6,17 @@ import { FormRow, FormValue } from "./form";
 import { Icon } from "./icon";
 import { Input } from "./input";
 
-export type SelectOption<T extends string> = { value: T; label: string; description?: string };
+export type SelectOption<T extends string> = {
+  value: T;
+  label: string;
+  description?: string;
+  /** Extra search text that isn't shown, e.g. what the accessories stand for. */
+  keywords?: string;
+  /** Shown after the label, e.g. icons. `label`/`description` stay plain text for search. */
+  labelAccessory?: ReactNode;
+  /** Shown at the end of the description line. */
+  descriptionAccessory?: ReactNode;
+};
 
 const SEARCH_THRESHOLD = 10;
 
@@ -83,7 +93,10 @@ export function SelectSheet<T extends string>({
   const q = query.trim().toLowerCase();
   const filtered = q
     ? options.filter(
-        (option) => option.label.toLowerCase().includes(q) || option.description?.toLowerCase().includes(q),
+        (option) =>
+          option.label.toLowerCase().includes(q) ||
+          option.description?.toLowerCase().includes(q) ||
+          option.keywords?.toLowerCase().includes(q),
       )
     : options;
   const showCustom = allowCustom && q.length > 0 && !options.some((option) => option.label.toLowerCase() === q);
@@ -128,6 +141,8 @@ export function SelectSheet<T extends string>({
             <OptionRow
               label={item.label}
               description={item.description}
+              labelAccessory={item.labelAccessory}
+              descriptionAccessory={item.descriptionAccessory}
               selected={item.value === value}
               onPress={() => onSelect(item.value)}
             />
@@ -141,12 +156,16 @@ export function SelectSheet<T extends string>({
 function OptionRow({
   label,
   description,
+  labelAccessory,
+  descriptionAccessory,
   muted = false,
   selected,
   onPress,
 }: {
   label: string;
   description?: string;
+  labelAccessory?: ReactNode;
+  descriptionAccessory?: ReactNode;
   muted?: boolean;
   selected: boolean;
   onPress: () => void;
@@ -158,9 +177,21 @@ function OptionRow({
       onPress={onPress}
       className="min-h-12 flex-row items-center border-border border-b px-5 py-2 active:bg-muted"
     >
-      <View className="flex-1">
-        <Text className={`text-base ${muted ? "text-muted-foreground" : "text-foreground"}`}>{label}</Text>
-        {description && <Text className="text-muted-foreground text-sm">{description}</Text>}
+      <View className="flex-1 gap-0.5">
+        <View className="flex-row items-center gap-2">
+          <Text className={`shrink text-base ${muted ? "text-muted-foreground" : "text-foreground"}`}>{label}</Text>
+          {labelAccessory}
+        </View>
+        {(description || descriptionAccessory) && (
+          <View className="flex-row items-center justify-between gap-2">
+            {description && (
+              <Text numberOfLines={1} className="shrink text-muted-foreground text-sm">
+                {description}
+              </Text>
+            )}
+            {descriptionAccessory}
+          </View>
+        )}
       </View>
       {selected && <Icon name="check" size={18} colorClassName="accent-primary" />}
     </Pressable>

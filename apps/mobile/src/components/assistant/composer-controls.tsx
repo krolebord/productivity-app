@@ -2,30 +2,64 @@ import { formatCost, formatFileSize, formatModelPricing, MODEL_MODALITY_LABELS }
 import {
   ASSISTANT_MODELS,
   ASSISTANT_MODELS_BY_PRICE,
-  type AssistantModel,
   type AssistantModelId,
+  type AssistantModelInputModality,
   type AssistantReasoningEffort,
   formatReasoningEffortLabel,
   getAssistantModel,
 } from "@productivity/core/agent/models";
 import type { ConversationItem } from "@productivity/core/user-db/migrations";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import type { PickedFile } from "../../lib/assistant-uploads";
-import { Icon, type IconName } from "../ui/icon";
+import { Icon, type IconName, MaterialIcon } from "../ui/icon";
 import { SelectSheet } from "../ui/select-sheet";
 
-function modelDescription(model: AssistantModel) {
-  const parts = [formatModelPricing(model)];
-  if (model.intelligenceScore != null) parts.push(`Intelligence ${model.intelligenceScore}`);
-  parts.push(model.inputModalities.map((modality) => MODEL_MODALITY_LABELS[modality].replace(" input", "")).join(", "));
-  return parts.join(" · ");
+const MODEL_MODALITY_ICONS = {
+  audio: "mic",
+  file: "file-text",
+  image: "image",
+  text: "type",
+  video: "video",
+} satisfies Record<AssistantModelInputModality, IconName>;
+
+/** The input modalities as icons, as on web, so the model list stays compact. */
+function ModelModalityIcons({ modalities }: { modalities: readonly AssistantModelInputModality[] }) {
+  return (
+    <View
+      accessible
+      accessibilityLabel={modalities.map((modality) => MODEL_MODALITY_LABELS[modality]).join(", ")}
+      className="shrink-0 flex-row items-center gap-1"
+    >
+      {modalities.map((modality) => (
+        <Icon key={modality} name={MODEL_MODALITY_ICONS[modality]} size={12} colorClassName="accent-muted-foreground" />
+      ))}
+    </View>
+  );
+}
+
+/** Artificial Analysis intelligence index, when the model reports one. */
+function ModelIntelligenceScore({ score }: { score: number | undefined }) {
+  if (score == null) return null;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Intelligence index ${score}`}
+      className="shrink-0 flex-row items-center gap-0.5"
+    >
+      <MaterialIcon name="gauge" size={13} colorClassName="accent-muted-foreground" />
+      <Text className="text-muted-foreground text-sm tabular-nums">{score}</Text>
+    </View>
+  );
 }
 
 const MODEL_OPTIONS = ASSISTANT_MODELS_BY_PRICE.map((model) => ({
   value: model.id,
   label: model.label,
-  description: modelDescription(model),
+  description: formatModelPricing(model),
+  keywords: model.inputModalities.map((modality) => MODEL_MODALITY_LABELS[modality]).join(" "),
+  labelAccessory: <ModelModalityIcons modalities={model.inputModalities} />,
+  descriptionAccessory: <ModelIntelligenceScore score={model.intelligenceScore} />,
 }));
 
 /** A compact trigger in the row above the composer; static once the conversation has started. */
@@ -35,6 +69,7 @@ function PickerTrigger({
   locked,
   lockedMessage,
   accessibilityLabel,
+  accessory,
   onPress,
 }: {
   icon: IconName;
@@ -42,6 +77,7 @@ function PickerTrigger({
   locked: boolean;
   lockedMessage: string;
   accessibilityLabel: string;
+  accessory?: ReactNode;
   onPress: () => void;
 }) {
   return (
@@ -58,6 +94,7 @@ function PickerTrigger({
       <Text numberOfLines={1} className="shrink text-muted-foreground text-xs">
         {label}
       </Text>
+      {accessory}
       {!locked && <Icon name="chevron-down" size={12} colorClassName="accent-muted-foreground" />}
     </Pressable>
   );
@@ -82,6 +119,7 @@ export function ModelPicker({
         locked={locked}
         lockedMessage="The model is fixed once the conversation starts."
         accessibilityLabel="Model"
+        accessory={<ModelModalityIcons modalities={active.inputModalities} />}
         onPress={() => setOpen(true)}
       />
       <SelectSheet
