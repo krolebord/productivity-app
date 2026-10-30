@@ -1,4 +1,7 @@
+import type { ReactNode } from "react";
 import { Pressable, Text } from "react-native";
+import { cn } from "../../lib/utils";
+import { Icon, type IconName } from "./icon";
 
 export function Chip({
   label,
@@ -38,6 +41,69 @@ export function Chip({
     >
       <Text className={`text-sm ${text}`}>{label}</Text>
       {count != null && <Text className={`text-xs tabular-nums ${countText}`}>{count}</Text>}
+    </Pressable>
+  );
+}
+
+/**
+ * A compact trigger for a picker, like the web transaction editor's chips: a muted fill once it
+ * holds a value, a bare "+ Label" until then. RN can't inherit text colour from the container,
+ * so tinted chips pass their text and icon colours separately.
+ */
+export function PickerChip({
+  label,
+  icon,
+  leading,
+  chevron = false,
+  empty = false,
+  onPress,
+  accessibilityLabel,
+  className,
+  textClassName,
+  iconClassName,
+}: {
+  label: string;
+  /** Defaults to a plus while empty. */
+  icon?: IconName;
+  /** Drawn instead of the icon, e.g. a colour dot. */
+  leading?: ReactNode;
+  chevron?: boolean;
+  empty?: boolean;
+  onPress: () => void;
+  accessibilityLabel?: string;
+  className?: string;
+  textClassName?: string;
+  iconClassName?: string;
+}) {
+  const iconName = icon ?? (empty ? "plus" : undefined);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      // The plus glyph is text, so without a label VoiceOver would read it as part of the chip's.
+      accessibilityLabel={accessibilityLabel ?? label}
+      onPress={onPress}
+      hitSlop={4}
+      className={cn(
+        "h-10 min-w-0 max-w-full shrink flex-row items-center gap-1.5 rounded-lg px-3",
+        empty ? "active:bg-muted" : "bg-muted active:opacity-70",
+        className,
+      )}
+    >
+      {leading ??
+        (iconName && (
+          <Icon
+            name={iconName}
+            size={14}
+            colorClassName={cn(empty ? "accent-muted-foreground" : "accent-foreground", iconClassName)}
+          />
+        ))}
+      <Text
+        numberOfLines={1}
+        className={cn("shrink text-[15px]", empty ? "text-muted-foreground" : "text-foreground", textClassName)}
+      >
+        {label}
+      </Text>
+      {chevron && <Icon name="chevron-down" size={14} colorClassName="accent-muted-foreground" />}
     </Pressable>
   );
 }

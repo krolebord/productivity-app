@@ -19,29 +19,26 @@ import {
   updateTransaction,
 } from "@productivity/core/transactions";
 import { useDb } from "@productivity/core/user-db/db-context";
+import { format, isSameYear, isToday, isYesterday } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, Text, type TextInputInstance, View } from "react-native";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Keyboard, Pressable, Text, type TextInputInstance, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
 import { useAskAssistant, useAssistantEnabled } from "../../../components/assistant-button";
-import { DateTimeField } from "../../../components/date-time-field";
+import { DateTimeSheet } from "../../../components/date-time-field";
 import { SheetHeader } from "../../../components/screen-header";
+import { PickerChip } from "../../../components/ui/chip";
 import { EmptyState } from "../../../components/ui/empty-state";
-import { FieldError, FormRow, FormSection } from "../../../components/ui/form";
-import { Icon } from "../../../components/ui/icon";
+import { FieldError } from "../../../components/ui/form";
+import { Icon, MaterialIcon } from "../../../components/ui/icon";
 import { Input } from "../../../components/ui/input";
 import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
-import { Segmented } from "../../../components/ui/segmented";
-import { SelectField } from "../../../components/ui/select-sheet";
-import { parseAmountInput, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
+import { SelectSheet } from "../../../components/ui/select-sheet";
+import { IMPORTANCE_STYLE, parseAmountInput, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
 import { cn } from "../../../lib/utils";
 
 const DEFAULT_IMPORTANCE: ImportanceTier = "flexible";
 
-const TYPE_OPTIONS = TRANSACTION_TYPES.map((type) => ({
-  value: type,
-  label: TRANSACTION_TYPE_STYLE[type].shortLabel,
-}));
 const IMPORTANCE_OPTIONS = IMPORTANCE_TIERS.map((tier) => ({ value: tier, label: IMPORTANCE_LABELS[tier] }));
 
 const TITLE_PLACEHOLDER: Record<TransactionType, string> = {
@@ -57,6 +54,10 @@ function typedSign(text: string): "+" | "-" | null {
   if (text.includes("+")) return "+";
   return null;
 }
+
+/** Which chip's sheet is open; the account sheet serves both sides of a transfer. */
+type Picker = "account" | "category" | "importance" | "date";
+type AccountPickerTarget = { field: "accountId" | "counterpartyAccountId"; title: string };
 
 type FormState = {
   type: TransactionType;
@@ -197,7 +198,21 @@ function TransactionForm({
   const [importanceTouched, setImportanceTouched] = useState(existing != null);
   const [error, setError] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
+  const [showNotes, setShowNotes] = useState(Boolean(existing?.notes));
+  const [picker, setPicker] = useState<Picker | null>(null);
+  // Outlives `picker`, so the account sheet's title and checkmark don't change while it slides out.
+  const [accountTarget, setAccountTarget] = useState<AccountPickerTarget>({ field: "accountId", title: "Account" });
+  const receivedRef = useRef<TextInputInstance>(null);
   const amountRef = useRef<TextInputInstance>(null);
+  const titleRef = useRef<TextInputInstance>(null);
+  const notesRef = useRef<TextInputInstance>(null);
+  const [focusAmountOnOpen] = useState(!existing);
+
+  // A new entry opens on the amount with the decimal pad up. Not `autoFocus`: the amount input
+  // remounts when a transfer switches between one and two amounts, and that mustn't refocus it.
+  useEffect(() => {
+    if (focusAmountOnOpen) amountRef.current?.focus();
+  }, [focusAmountOnOpen]);
 
   const importanceByCategory = useMemo(() => inferCategoryImportance(importanceRows), [importanceRows]);
 
@@ -206,6 +221,7 @@ function TransactionForm({
     label: account.labelText || "Untitled",
     description: account.currency,
   }));
+  const categoryOptions = categories.map((category) => ({ value: category, label: category }));
   const source = accounts.find((account) => account.id === form.accountId);
   const destination = accounts.find((account) => account.id === form.counterpartyAccountId);
   const needsCounterpartyAmount =
@@ -230,6 +246,19 @@ function TransactionForm({
   };
 
   const isNegative = form.amount.startsWith("-");
+
+  // The sheets are pinned to the bottom, so the decimal pad would cover them.
+  const openPicker = (next: Picker) => {
+    Keyboard.dismiss();
+    setPicker(next);
+  };
+  const closePicker = () => setPicker(null);
+  const focusTitle = () => titleRef.current?.focus();
+
+  const revealNotes = () => {
+    setShowNotes(true);
+    requestAnimationFrame(() => notesRef.current?.focus());
+  };
 
   const changeAmount = (text: string) => {
     const sign = typedSign(text);
@@ -285,6 +314,7 @@ function TransactionForm({
       // Keeps the type, accounts, category and date for a run of similar entries, as the web's
       // "Create & add another" does.
       update({ amount: "", counterpartyAmount: "", title: "", notes: "" });
+      setShowNotes(false);
       setSavedCount((count) => count + 1);
       amountRef.current?.focus();
       return;
@@ -312,7 +342,8 @@ function TransactionForm({
     ]);
   };
 
-  const currency = source?.currency ?? "";
+  const typeStyle = TRANSACTION_TYPE_STYLE[form.type];
+  const transferring = form.type === "transfer" && canTransfer;
   const rate =
     needsCounterpartyAmount && source && destination
       ? formatTransferRate(
@@ -340,12 +371,31 @@ function TransactionForm({
         : isNegative
           ? "Make positive"
           : "Make negative";
+  const importanceStyle = form.importance ? IMPORTANCE_STYLE[form.importance] : null;
+
+  // The chips leave out the currency: the amount above them shows it.
+  const accountChip = (field: AccountPickerTarget["field"], title: string) => {
+    const account = accounts.find((item) => item.id === form[field]);
+    return (
+      <PickerChip
+        label={account ? account.labelText || "Untitled" : "Account"}
+        accessibilityLabel={`${title}: ${account ? `${account.labelText || "Untitled"}, ${account.currency}` : "none"}`}
+        leading={account && <View className="size-2 rounded-full" style={{ backgroundColor: account.labelColor }} />}
+        chevron={account != null}
+        empty={!account}
+        onPress={() => {
+          setAccountTarget({ field, title });
+          openPicker("account");
+        }}
+      />
+    );
+  };
 
   return (
     <KeyboardScreen
       header={
         <SheetHeader
-          title={existing ? "Edit transaction" : "New transaction"}
+          title={screenTitle(existing != null, form.type)}
           onCancel={() => router.back()}
           onDone={() => save()}
           doneLabel="Save"
@@ -353,45 +403,90 @@ function TransactionForm({
         />
       }
     >
-      <Segmented options={TYPE_OPTIONS} value={form.type} onChange={changeType} />
+      <TypeToggle value={form.type} onChange={changeType} />
 
-      <View className="items-center gap-1 py-2">
-        <View className="flex-row items-center gap-1">
-          {sign && (
-            // The +/− shortcut: flips an expense to income and back, or an adjustment's direction.
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={signLabel}
-              onPress={toggleSign}
-              hitSlop={8}
-              className="h-12 min-w-10 items-center justify-center rounded-lg bg-muted px-2 active:opacity-60"
-            >
-              <Text className={cn("font-semibold text-3xl", TRANSACTION_TYPE_STYLE[form.type].accent)}>{sign}</Text>
-            </Pressable>
-          )}
-          <Input
-            ref={amountRef}
-            accessibilityLabel={form.type === "adjustment" ? "Balance change" : "Amount"}
-            value={form.amount.replace(/^-/, "")}
-            onChangeText={changeAmount}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            className={`min-w-24 text-center font-semibold text-4xl ${TRANSACTION_TYPE_STYLE[form.type].accent}`}
-            autoFocus={!existing}
-          />
-          <Text className="font-medium text-muted-foreground text-xl">{currency}</Text>
+      {needsCounterpartyAmount ? (
+        <View className="items-center gap-3">
+          <View className="w-full flex-row items-start gap-2">
+            <View className="min-w-0 flex-1 items-center gap-2">
+              <AmountInput
+                inputRef={amountRef}
+                label={`Sent amount (${source?.currency})`}
+                value={form.amount}
+                onChangeText={changeAmount}
+                currency={source?.currency}
+                className="text-3xl"
+                onSubmitEditing={() => receivedRef.current?.focus()}
+              />
+              {accountChip("accountId", "From account")}
+            </View>
+            <SwapButton onPress={swapAccounts} />
+            <View className="min-w-0 flex-1 items-center gap-2">
+              <AmountInput
+                inputRef={receivedRef}
+                label={`Received amount (${destination?.currency})`}
+                value={form.counterpartyAmount}
+                onChangeText={(counterpartyAmount) => update({ counterpartyAmount })}
+                currency={destination?.currency}
+                className="text-3xl"
+                onSubmitEditing={focusTitle}
+              />
+              {accountChip("counterpartyAccountId", "To account")}
+            </View>
+          </View>
+          {rate && <Text className="text-muted-foreground text-xs tabular-nums">{rate}</Text>}
         </View>
-        {form.type === "adjustment" && (
-          <Text className="text-muted-foreground text-xs">
-            Tap {isNegative ? "−" : "+"} to lower or raise the balance.
-          </Text>
-        )}
-        {savedCount > 0 && !existing && (
-          <Text className="text-emerald-600 text-xs dark:text-emerald-400">
-            Saved {savedCount} {savedCount === 1 ? "entry" : "entries"} · add the next one
-          </Text>
-        )}
-      </View>
+      ) : (
+        <View className="items-center gap-3">
+          <View className="max-w-full flex-row items-center justify-center gap-1">
+            {sign && (
+              // The +/− shortcut: flips an expense to income and back, or an adjustment's direction.
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={signLabel}
+                onPress={toggleSign}
+                hitSlop={8}
+                className="h-14 min-w-11 items-center justify-center rounded-lg bg-muted/70 px-2 active:opacity-60"
+              >
+                <Text className={cn("font-semibold text-4xl", typeStyle.accent)}>{sign}</Text>
+              </Pressable>
+            )}
+            <AmountInput
+              inputRef={amountRef}
+              label={form.type === "adjustment" ? "Balance change" : "Amount"}
+              value={form.amount.replace(/^-/, "")}
+              onChangeText={changeAmount}
+              currency={source?.currency}
+              className={cn("text-5xl", typeStyle.accent)}
+              onSubmitEditing={focusTitle}
+            />
+          </View>
+          <View className="max-w-full flex-row items-center justify-center gap-1.5">
+            {accountChip("accountId", transferring ? "From account" : "Account")}
+            {transferring && (
+              <>
+                <SwapButton onPress={swapAccounts} />
+                {accountChip("counterpartyAccountId", "To account")}
+              </>
+            )}
+          </View>
+        </View>
+      )}
+
+      {(form.type === "adjustment" || (savedCount > 0 && !existing)) && (
+        <View className="-mt-2 items-center gap-1">
+          {form.type === "adjustment" && (
+            <Text className="text-muted-foreground text-xs">
+              Tap {isNegative ? "−" : "+"} to lower or raise the balance.
+            </Text>
+          )}
+          {savedCount > 0 && !existing && (
+            <Text className="text-emerald-600 text-xs dark:text-emerald-400">
+              Saved {savedCount} {savedCount === 1 ? "entry" : "entries"} · add the next one
+            </Text>
+          )}
+        </View>
+      )}
 
       {form.type === "transfer" && !canTransfer && (
         <Text className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-sm dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -399,140 +494,248 @@ function TransactionForm({
         </Text>
       )}
 
-      {form.type === "transfer" && canTransfer && (
-        <View className="-mb-3 flex-row items-center justify-between px-1">
-          <Text className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Accounts</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Swap accounts"
-            onPress={swapAccounts}
-            hitSlop={8}
-            className="flex-row items-center gap-1 active:opacity-60"
-          >
-            <Icon name="repeat" size={13} colorClassName="accent-blue-600 dark:accent-blue-400" />
-            <Text className="font-medium text-blue-600 text-sm dark:text-blue-400">Swap</Text>
-          </Pressable>
-        </View>
-      )}
-      <FormSection>
-        <SelectField
-          label={form.type === "transfer" && canTransfer ? "From" : "Account"}
-          value={form.accountId}
-          options={accountOptions}
-          onChange={(accountId) => update({ accountId })}
-          last={form.type !== "transfer" || !canTransfer}
+      <View className="gap-3">
+        <Input
+          ref={titleRef}
+          accessibilityLabel="Title"
+          value={form.title}
+          onChangeText={(title) => update({ title })}
+          placeholder={TITLE_PLACEHOLDER[form.type]}
+          placeholderTextColorClassName="accent-muted-foreground/70"
+          returnKeyType="done"
+          className={cn("h-11 rounded-lg px-3 text-center font-medium text-lg", !form.title && "bg-muted/50")}
         />
-        {form.type === "transfer" && canTransfer && (
-          <SelectField
-            label="To"
-            value={form.counterpartyAccountId}
-            options={accountOptions}
-            onChange={(counterpartyAccountId) => update({ counterpartyAccountId })}
-            last={!needsCounterpartyAmount}
-          />
-        )}
-        {needsCounterpartyAmount && (
-          <FormRow label="Received" last>
-            <Input
-              value={form.counterpartyAmount}
-              onChangeText={(counterpartyAmount) => update({ counterpartyAmount })}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-              className="h-10 min-w-24 text-right"
-            />
-            <Text className="text-base text-muted-foreground">{destination?.currency}</Text>
-          </FormRow>
-        )}
-      </FormSection>
-      {rate && <Text className="-mt-3 px-1 text-center text-muted-foreground text-xs">{rate}</Text>}
 
-      <FormSection>
-        <FormRow label="Title">
+        <View className="flex-row flex-wrap justify-center gap-2">
+          {form.type !== "transfer" && (
+            <PickerChip
+              label={form.category || "Category"}
+              icon={form.category ? "tag" : undefined}
+              accessibilityLabel={`Category: ${form.category || "none"}`}
+              empty={!form.category}
+              onPress={() => openPicker("category")}
+            />
+          )}
+          {form.type === "expense" && (
+            <PickerChip
+              label={importanceStyle?.label ?? "Importance"}
+              accessibilityLabel={`Importance: ${importanceStyle?.label ?? "none"}`}
+              leading={importanceStyle && <View className={cn("size-1.5 rounded-full", importanceStyle.dot)} />}
+              empty={!importanceStyle}
+              className={importanceStyle?.badge}
+              textClassName={importanceStyle?.badgeText}
+              onPress={() => openPicker("importance")}
+            />
+          )}
+          <PickerChip
+            label={`${formatChipDate(form.effectiveAt)} · ${format(form.effectiveAt, "HH:mm")}`}
+            icon="calendar"
+            accessibilityLabel={`Date: ${format(form.effectiveAt, "PPPp")}`}
+            textClassName="text-muted-foreground"
+            iconClassName="accent-muted-foreground"
+            onPress={() => openPicker("date")}
+          />
+          {!showNotes && <PickerChip label="Note" empty onPress={revealNotes} />}
+        </View>
+
+        {showNotes && (
           <Input
-            value={form.title}
-            onChangeText={(title) => update({ title })}
-            placeholder={TITLE_PLACEHOLDER[form.type]}
-            className="h-10 min-w-40 text-right"
-          />
-        </FormRow>
-        {form.type !== "transfer" && (
-          <SelectField
-            label="Category"
-            value={form.category}
-            options={categories.map((category) => ({ value: category, label: category }))}
-            onChange={changeCategory}
-            placeholder="None"
-            allowCustom
-            clearLabel="No category"
-          />
-        )}
-        <FormRow label="Date">
-          <DateTimeField
-            mode="date"
-            value={form.effectiveAt}
-            onChange={(day) => update({ effectiveAt: withDate(form.effectiveAt, day) })}
-          />
-          <DateTimeField
-            mode="time"
-            value={form.effectiveAt}
-            onChange={(time) => update({ effectiveAt: withTime(form.effectiveAt, time) })}
-          />
-        </FormRow>
-        <View className="px-4 py-1">
-          <Input
+            ref={notesRef}
+            accessibilityLabel="Note"
             value={form.notes}
             onChangeText={(notes) => update({ notes })}
-            placeholder="Notes"
-            className="min-h-10"
+            placeholder="Note"
             multiline
+            textAlignVertical="top"
+            className="min-h-20 rounded-lg border border-border bg-card px-3 py-2.5"
           />
-        </View>
-      </FormSection>
+        )}
+      </View>
 
-      {form.type === "expense" && (
-        <View className="gap-2">
-          <Text className="px-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">Importance</Text>
-          <Segmented
-            options={IMPORTANCE_OPTIONS}
-            value={form.importance ?? ("" as ImportanceTier)}
-            onChange={(importance) => {
-              setImportanceTouched(true);
-              update({ importance });
-            }}
-          />
-        </View>
-      )}
+      <FieldError message={error} className="-mt-1 text-center" />
 
-      <FieldError message={error} />
-
-      {existing ? (
-        <View className="flex-row gap-3">
-          {assistantEnabled && <ActionButton icon="message-circle" label="Ask assistant" onPress={askAssistant} />}
-          <ActionButton icon="trash-2" label="Delete" destructive onPress={confirmDelete} />
-        </View>
-      ) : (
-        <View className="flex-row">
+      <View className="flex-row gap-3 border-border border-t pt-5">
+        {existing ? (
+          <>
+            {assistantEnabled && <ActionButton icon="message-circle" label="Ask assistant" onPress={askAssistant} />}
+            <ActionButton icon="trash-2" label="Delete" destructive onPress={confirmDelete} />
+          </>
+        ) : (
           <ActionButton icon="plus" label="Create & add another" onPress={() => save(true)} />
-        </View>
-      )}
+        )}
+      </View>
+
+      <SelectSheet
+        visible={picker === "account"}
+        title={accountTarget.title}
+        value={form[accountTarget.field]}
+        options={accountOptions}
+        onClose={closePicker}
+        onSelect={(value) => {
+          update({ [accountTarget.field]: value });
+          closePicker();
+        }}
+      />
+      <SelectSheet
+        visible={picker === "category"}
+        title="Category"
+        value={form.category}
+        options={categoryOptions}
+        allowCustom
+        clearLabel="No category"
+        onClose={closePicker}
+        onSelect={(category) => {
+          changeCategory(category);
+          closePicker();
+        }}
+      />
+      <SelectSheet
+        visible={picker === "importance"}
+        title="Importance"
+        value={form.importance ?? ""}
+        options={IMPORTANCE_OPTIONS}
+        onClose={closePicker}
+        onSelect={(importance) => {
+          setImportanceTouched(true);
+          update({ importance: importance as ImportanceTier });
+          closePicker();
+        }}
+      />
+      <DateTimeSheet
+        visible={picker === "date"}
+        value={form.effectiveAt}
+        onChange={(effectiveAt) => update({ effectiveAt })}
+        onClose={closePicker}
+      />
     </KeyboardScreen>
   );
+}
+
+/** Expense / Income / Transfer / Adjust, each with its icon and tinted when active, as on the web. */
+function TypeToggle({ value, onChange }: { value: TransactionType; onChange: (type: TransactionType) => void }) {
+  return (
+    <View accessibilityRole="radiogroup" className="flex-row gap-0.5 rounded-lg bg-muted p-0.5">
+      {TRANSACTION_TYPES.map((type) => {
+        const style = TRANSACTION_TYPE_STYLE[type];
+        const active = type === value;
+        // Adjustments are rare, so the fourth option is icon-only to keep the labels readable.
+        const iconOnly = type === "adjustment";
+        return (
+          <Pressable
+            key={type}
+            accessibilityRole="radio"
+            accessibilityLabel={style.label}
+            accessibilityState={{ checked: active }}
+            onPress={() => onChange(type)}
+            className={cn(
+              "h-10 flex-row items-center justify-center gap-1.5 rounded-md",
+              iconOnly ? "w-12" : "flex-1 px-2",
+              active && "bg-background shadow-sm",
+            )}
+          >
+            <Icon name={style.icon} size={14} colorClassName={active ? style.iconAccent : "accent-muted-foreground"} />
+            {!iconOnly && (
+              <Text
+                numberOfLines={1}
+                className={cn("font-medium text-sm", active ? style.accent : "text-muted-foreground")}
+              >
+                {style.shortLabel}
+              </Text>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// Android pads text for accents by default; off on both, so the input matches the copy measuring it.
+const noFontPadding = { includeFontPadding: false };
+
+/**
+ * A large amount with its currency after it. The input sizes to what's typed via a hidden copy of
+ * the text: a TextInput sized by its content keeps its old width once cleared ("Create & add another").
+ */
+function AmountInput({
+  inputRef,
+  label,
+  value,
+  onChangeText,
+  currency,
+  className,
+  onSubmitEditing,
+}: {
+  inputRef?: RefObject<TextInputInstance | null>;
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  currency?: string;
+  className?: string;
+  /** Where the keypad's Next key goes (iOS 26 floats one above the decimal pad; Android has one). */
+  onSubmitEditing?: () => void;
+}) {
+  const textClassName = cn("font-semibold tabular-nums", className);
+  return (
+    <View className="min-w-0 max-w-full shrink flex-row items-center justify-center gap-1">
+      {/* At least a comfortable tap target while it only shows the "0" placeholder. */}
+      <View className="min-h-11 min-w-16 shrink justify-center">
+        <Text
+          numberOfLines={1}
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+          style={noFontPadding}
+          className={cn(textClassName, "px-1 opacity-0")}
+        >
+          {value || "0"}
+        </Text>
+        <Input
+          ref={inputRef}
+          accessibilityLabel={label}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder="0"
+          placeholderTextColorClassName="accent-muted-foreground/40"
+          keyboardType="decimal-pad"
+          returnKeyType="next"
+          onSubmitEditing={onSubmitEditing}
+          style={noFontPadding}
+          className={cn("absolute inset-0 p-0 text-center", textClassName)}
+        />
+      </View>
+      {currency && <Text className="text-base text-muted-foreground">{currency}</Text>}
+    </View>
+  );
+}
+
+function SwapButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Swap accounts"
+      onPress={onPress}
+      hitSlop={4}
+      className="size-10 items-center justify-center rounded-lg bg-muted active:opacity-60"
+    >
+      <MaterialIcon name="swap-horizontal" size={20} colorClassName="accent-blue-600 dark:accent-blue-400" />
+    </Pressable>
+  );
+}
+
+function screenTitle(editing: boolean, type: TransactionType) {
+  if (editing) return type === "adjustment" ? "Edit adjustment" : "Edit transaction";
+  return `New ${TRANSACTION_TYPE_STYLE[type].label.toLowerCase()}`;
+}
+
+/** "Today", "Yesterday", "Oct 28" or "Oct 28, 2025", as the web's date chip reads. */
+function formatChipDate(date: Date) {
+  if (isToday(date)) return "Today";
+  if (isYesterday(date)) return "Yesterday";
+  return format(date, isSameYear(date, new Date()) ? "MMM d" : "MMM d, yyyy");
 }
 
 function isSameForm(a: FormState, b: FormState) {
   return (Object.keys(a) as (keyof FormState)[]).every((key) =>
     key === "effectiveAt" ? a.effectiveAt.getTime() === b.effectiveAt.getTime() : a[key] === b[key],
   );
-}
-
-function withDate(current: Date, day: Date) {
-  const next = new Date(current);
-  next.setFullYear(day.getFullYear(), day.getMonth(), day.getDate());
-  return next;
-}
-
-function withTime(current: Date, time: Date) {
-  const next = new Date(current);
-  next.setHours(time.getHours(), time.getMinutes(), 0, 0);
-  return next;
 }

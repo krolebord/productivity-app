@@ -34,30 +34,34 @@ export const TRANSACTION_TYPE_STYLE = {
 
 /**
  * Importance badges use the web's traffic-light ramp with investment set apart. RN can't
- * inherit text colour from a View, so the badge's background and text classes are split.
+ * inherit text colour from a View, so the badge's background, text and dot classes are split.
  */
 export const IMPORTANCE_STYLE = {
   fixed: {
     label: IMPORTANCE_LABELS.fixed,
     badge: "bg-red-50 dark:bg-red-950/50",
     badgeText: "text-red-700 dark:text-red-400",
+    dot: "bg-red-600 dark:bg-red-400",
   },
   flexible: {
     label: IMPORTANCE_LABELS.flexible,
     badge: "bg-amber-50 dark:bg-amber-950/50",
     badgeText: "text-amber-700 dark:text-amber-400",
+    dot: "bg-amber-600 dark:bg-amber-400",
   },
   optional: {
     label: IMPORTANCE_LABELS.optional,
     badge: "bg-lime-50 dark:bg-lime-950/50",
     badgeText: "text-lime-700 dark:text-lime-400",
+    dot: "bg-lime-600 dark:bg-lime-400",
   },
   investment: {
     label: IMPORTANCE_LABELS.investment,
     badge: "bg-blue-50 dark:bg-blue-950/50",
     badgeText: "text-blue-700 dark:text-blue-400",
+    dot: "bg-blue-600 dark:bg-blue-400",
   },
-} satisfies Record<ImportanceTier, { label: string; badge: string; badgeText: string }>;
+} satisfies Record<ImportanceTier, { label: string; badge: string; badgeText: string; dot: string }>;
 
 /**
  * Reads a typed amount, or NaN when it isn't a plain number. Either "." or "," can be the

@@ -82,9 +82,9 @@ export function FormSwitch({
   );
 }
 
-export function FieldError({ message }: { message?: string | null }) {
+export function FieldError({ message, className }: { message?: string | null; className?: string }) {
   if (!message) return null;
-  return <Text className="px-1 text-destructive text-sm">{message}</Text>;
+  return <Text className={cn("px-1 text-destructive text-sm", className)}>{message}</Text>;
 }
 
 export function FormOption({
