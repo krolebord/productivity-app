@@ -6,6 +6,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useUniwind } from "uniwind";
 import { SessionProvider, useSession } from "../lib/session";
 
 SplashScreen.preventAutoHideAsync();
@@ -34,11 +35,14 @@ function RootStack() {
 }
 
 export default function RootLayout() {
+  // Follow the app's theme, not "auto": on Android the system color scheme can lag behind the
+  // saved theme after a relaunch, leaving dark icons on a dark background.
+  const { theme } = useUniwind();
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SessionProvider>
         <RootStack />
-        <StatusBar style="auto" />
+        <StatusBar style={theme === "dark" ? "light" : "dark"} />
       </SessionProvider>
     </GestureHandlerRootView>
   );

@@ -77,7 +77,8 @@ export function TagEditor({
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="done"
-          className="h-8 min-w-24 flex-1"
+          // py-0: Android's default input padding doesn't fit an h-8 field and clips the text.
+          className="h-8 min-w-24 flex-1 py-0"
         />
       </View>
       {matches.length > 0 && (

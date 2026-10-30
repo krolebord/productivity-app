@@ -11,7 +11,7 @@ import type { AccountRow } from "@productivity/core/transactions";
 import { useDb } from "@productivity/core/user-db/db-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Platform, Pressable, Text, View } from "react-native";
 import { ActionButton } from "../../../components/action-button";
 import { CurrencyField } from "../../../components/currency-field";
 import { SheetHeader } from "../../../components/screen-header";
@@ -142,7 +142,9 @@ function AccountForm({ account }: { account: AccountRow | undefined }) {
           <Input
             value={form.balance}
             onChangeText={(balance) => update({ balance })}
-            keyboardType="numbers-and-punctuation"
+            // Balances can be negative. iOS's decimal pad has no minus key; Android has no
+            // numbers-and-punctuation keyboard (falls back to QWERTY), but its numeric one is signed.
+            keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "numeric"}
             className="h-10 min-w-32 text-right"
           />
         </FormRow>

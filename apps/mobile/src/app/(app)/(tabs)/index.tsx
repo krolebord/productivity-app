@@ -79,20 +79,6 @@ export default function TodayScreen() {
         actions={
           <>
             <GlobalActions />
-            {/* Hidden rather than removed on today, so the title keeps its width. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityElementsHidden={agenda.isSelectedToday}
-              importantForAccessibility={agenda.isSelectedToday ? "no-hide-descendants" : "auto"}
-              disabled={agenda.isSelectedToday}
-              onPress={agenda.goToToday}
-              className={cn(
-                "h-8 justify-center rounded-full border border-border px-3 active:bg-muted",
-                agenda.isSelectedToday && "opacity-0",
-              )}
-            >
-              <Text className="font-medium text-foreground text-sm">Today</Text>
-            </Pressable>
             <IconButton
               icon={agenda.calendarExpanded ? "chevron-up" : "calendar"}
               label={agenda.calendarExpanded ? "Collapse calendar" : "Expand calendar"}

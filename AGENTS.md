@@ -139,7 +139,7 @@ reaching it through a proxy. The `Dev server (Tailnet)` preset in
 port because Vite reconnects to whatever origin served the page. `DEV_REMOTE_BINDINGS=0`
 keeps the email binding local (Miniflare) instead of using the remote one, which needs `wrangler login`.
 
-For mobile e2e on the iOS simulator, use the `e2e-mobile` skill (`.agents/skills/e2e-mobile`).
+For mobile e2e on the iOS simulator or Android emulator, use the `e2e-mobile` skill (`.agents/skills/e2e-mobile`).
 
 Note: the central D1 database uses SQL migrations in `apps/web/migrations/`; the per-user synced database defines its schema/migrations in code at `packages/core/src/user-db/migrations.ts`.
 

@@ -117,8 +117,9 @@ export default function AssistantScreen() {
 
   return (
     // At the root: KeyboardAvoidingView measures its frame relative to its parent, so nesting
-    // it under the header would under-count the keyboard overlap.
-    <KeyboardAvoidingView className="flex-1 bg-background" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    // it under the header would under-count the keyboard overlap. Padding on Android too: the app
+    // is edge-to-edge, so adjustResize no longer shrinks the window and the keyboard covers the composer.
+    <KeyboardAvoidingView className="flex-1 bg-background" behavior="padding">
       <View
         className="flex-row items-center gap-1 border-border border-b px-2 pb-2"
         style={{ paddingTop: insets.top + 4 }}
