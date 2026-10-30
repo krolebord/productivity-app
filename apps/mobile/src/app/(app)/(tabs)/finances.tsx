@@ -20,7 +20,7 @@ import {
 import { MAX_SPENDING_DAYS, spendingDaysForWidth } from "@productivity/core/finance/spending-days";
 import { useRouter } from "expo-router";
 import { type ReactNode, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Modal, Platform, Pressable, Text, View } from "react-native";
 // RNGH's scroll view, so an account row being dragged takes over from scrolling.
 import { ScrollView } from "react-native-gesture-handler";
 import { AccountList } from "../../../components/account-list";
@@ -29,7 +29,7 @@ import { CurrencySheet } from "../../../components/currency-field";
 import { DashboardRangePicker } from "../../../components/dashboard-range-picker";
 import { GlobalActions } from "../../../components/global-actions";
 import { type OverviewChart, OverviewCharts } from "../../../components/overview-charts";
-import { ScreenHeader } from "../../../components/screen-header";
+import { ScreenHeader, SheetHeader } from "../../../components/screen-header";
 import { TransactionRow } from "../../../components/transaction-row";
 import { ActionSheet } from "../../../components/ui/action-sheet";
 import { Icon, type IconName } from "../../../components/ui/icon";
@@ -156,22 +156,6 @@ export default function FinancesScreen() {
         keyboardDismissMode="on-drag"
       >
         <View className="gap-3">
-          <View className="flex-row gap-2">
-            <ToolbarButton
-              icon="calendar"
-              label={range.label}
-              expanded={rangeOpen}
-              onPress={() => setRangeOpen((open) => !open)}
-              accessibilityLabel="Overview period"
-            />
-            <ToolbarButton
-              icon="globe"
-              label={baseCurrency}
-              onPress={() => setCurrencyOpen(true)}
-              accessibilityLabel={`Display currency, ${baseCurrency}`}
-            />
-          </View>
-          {rangeOpen && <DashboardRangePicker />}
           <View className="flex-row gap-2">
             {QUICK_ACTIONS.map((type, index) => (
               <QuickAction key={type} type={type} primary={index === 0} onPress={() => newTransaction(type)} />
@@ -319,6 +303,9 @@ export default function FinancesScreen() {
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         items={[
+          // Set-and-forget settings, so they live here rather than above the overview.
+          { label: `Period · ${range.label}`, icon: "calendar", onPress: () => setRangeOpen(true) },
+          { label: `Display currency · ${baseCurrency}`, icon: "globe", onPress: () => setCurrencyOpen(true) },
           { label: "New account", icon: "plus", onPress: newAccount },
           { label: "Exchange rates", icon: "dollar-sign", onPress: () => router.push("/rates") },
           { label: "Refresh balances", icon: "refresh-cw", onPress: balances.refresh },
@@ -330,6 +317,19 @@ export default function FinancesScreen() {
           },
         ]}
       />
+      <Modal
+        visible={rangeOpen}
+        animationType="slide"
+        presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
+        onRequestClose={() => setRangeOpen(false)}
+      >
+        <View className="flex-1 bg-background">
+          <SheetHeader title="Overview period" onDone={() => setRangeOpen(false)} />
+          <View className="p-4">
+            <DashboardRangePicker />
+          </View>
+        </View>
+      </Modal>
       <CurrencySheet
         visible={currencyOpen}
         title="Display currency"
@@ -339,38 +339,6 @@ export default function FinancesScreen() {
         onClose={() => setCurrencyOpen(false)}
       />
     </View>
-  );
-}
-
-function ToolbarButton({
-  icon,
-  label,
-  expanded,
-  onPress,
-  accessibilityLabel,
-}: {
-  icon: IconName;
-  label: string;
-  expanded?: boolean;
-  onPress: () => void;
-  accessibilityLabel: string;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityValue={{ text: label }}
-      accessibilityState={expanded === undefined ? undefined : { expanded }}
-      onPress={onPress}
-      className={cn(
-        "h-9 flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 active:bg-muted",
-        expanded && "border-primary",
-      )}
-    >
-      <Icon name={icon} size={14} colorClassName="accent-muted-foreground" />
-      <Text className="font-medium text-foreground text-sm">{label}</Text>
-      <Icon name={expanded ? "chevron-up" : "chevron-down"} size={14} colorClassName="accent-muted-foreground" />
-    </Pressable>
   );
 }
 
