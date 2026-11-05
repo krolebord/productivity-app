@@ -127,7 +127,7 @@ pnpm run deploy           # Build + wrangler deploy
 
 pnpm db:local:migrate     # Apply D1 migrations locally
 pnpm db:new-migration     # Create a new D1 migration
-pnpm e2e:code             # Print latest sign-in codes from the local D1
+pnpm e2e:code [email]     # Latest sign-in codes from the local D1 (just the code with an email)
 pnpm generate:types:env   # Regenerate worker-configuration.d.ts (wrangler types)
 pnpm sync:models          # Regenerate packages/core/src/agent/models.gen.ts from OpenRouter
 ```
@@ -139,7 +139,8 @@ reaching it through a proxy. The `Dev server (Tailnet)` preset in
 port because Vite reconnects to whatever origin served the page. `DEV_REMOTE_BINDINGS=0`
 keeps the email binding local (Miniflare) instead of using the remote one, which needs `wrangler login`.
 
-For mobile e2e on the iOS simulator or Android emulator, use the `e2e-mobile` skill (`.agents/skills/e2e-mobile`).
+For mobile e2e on the iOS simulator or Android emulator, use the `e2e-mobile` skill (`.agents/skills/e2e-mobile`)
+and its wrapper `apps/mobile/scripts/e2e.sh` (`up`, `build`, `devices`, `install`, `down`).
 
 Note: the central D1 database uses SQL migrations in `apps/web/migrations/`; the per-user synced database defines its schema/migrations in code at `packages/core/src/user-db/migrations.ts`.
 
