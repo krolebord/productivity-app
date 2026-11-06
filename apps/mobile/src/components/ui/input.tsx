@@ -1,11 +1,17 @@
 import type { ComponentProps } from "react";
-import { TextInput } from "react-native";
+import { Platform, TextInput, type TextStyle } from "react-native";
 import { cn } from "../../lib/utils";
 
 // Single-line inputs drop the line height that text-* classes add: iOS draws a single-line
 // TextInput's text off-center within a taller line box, and typed text and placeholder shift
 // differently. Multiline inputs keep it to space wrapped lines.
-const singleLine = { lineHeight: undefined };
+// Android also pads the line box past the font's ascent and descent, and the cursor spans that
+// whole box, so it hangs below the text; dropping the padding and centering the line fixes it.
+// Both props are Android-only, so iOS is unaffected.
+const singleLine: TextStyle = {
+  lineHeight: undefined,
+  ...Platform.select<TextStyle>({ android: { includeFontPadding: false, textAlignVertical: "center" } }),
+};
 
 /** The app's text input: base font size and colors; className overrides them. */
 export function Input({ className, multiline, style, ...props }: ComponentProps<typeof TextInput>) {
