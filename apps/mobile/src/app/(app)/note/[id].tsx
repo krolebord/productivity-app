@@ -32,10 +32,10 @@ export default function NoteScreen() {
   const router = useRouter();
   const note = useItem(id);
   // Once seen, a missing row is handled by the editor (it closes); this is for a stale link.
-  const seen = useRef(!!note);
-  if (note) seen.current = true;
+  const [seen, setSeen] = useState(!!note);
+  if (note && !seen) setSeen(true);
 
-  if (!note && !draft && !seen.current) {
+  if (!note && !draft && !seen) {
     return (
       <View className="flex-1 bg-background">
         <SheetHeader title="Note" onDone={() => router.back()} />

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 
 /**
@@ -7,17 +7,17 @@ import { Alert } from "react-native";
  * is a new draft not saved yet. Call `expectDeletion()` before the editor deletes the row itself.
  */
 export function useCloseWhenDeleted(row: unknown, { message, onClose }: { message: string; onClose: () => void }) {
-  const seen = useRef(!!row);
-  if (row) seen.current = true;
+  const [seen, setSeen] = useState(!!row);
+  if (row && !seen) setSeen(true);
   const expected = useRef(false);
-  const deleted = !row && seen.current && !expected.current;
+  const gone = !row && seen;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: react to the deletion only.
   useEffect(() => {
-    if (!deleted) return;
+    if (!gone || expected.current) return;
     onClose();
     Alert.alert(message);
-  }, [deleted]);
+  }, [gone]);
 
   return {
     expectDeletion: () => {

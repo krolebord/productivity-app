@@ -1,7 +1,7 @@
 import Feather from "@expo/vector-icons/Feather";
 import { usePathname, useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import { useCSSVariable } from "uniwind";
 import { AssistantButton, useAssistantEnabled } from "../../../components/assistant-button";
@@ -15,7 +15,7 @@ import { getPreferences } from "../../../lib/preferences";
 function useOpenDefaultHome() {
   const router = useRouter();
   const pathname = usePathname();
-  const initialPath = useRef(pathname).current;
+  const [initialPath] = useState(pathname);
   useEffect(() => {
     if (initialPath === "/" && getPreferences().defaultHome === "finances") router.navigate("/finances");
   }, [initialPath, router]);

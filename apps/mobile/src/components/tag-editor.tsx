@@ -1,5 +1,5 @@
 import { addTags, normalizeTag } from "@productivity/core/tags";
-import { type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { type Ref, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Icon } from "./ui/icon";
 import { Input } from "./ui/input";
@@ -35,7 +35,9 @@ export function TagEditor({
   // Closing the screen doesn't reliably blur the field first, so keep a typed tag on unmount too
   // (useAutosave saves changes scheduled after unmount right away).
   const latest = useRef({ draft, value, onChange });
-  latest.current = { draft, value, onChange };
+  useLayoutEffect(() => {
+    latest.current = { draft, value, onChange };
+  });
   useEffect(
     () => () => {
       const { draft, value, onChange } = latest.current;

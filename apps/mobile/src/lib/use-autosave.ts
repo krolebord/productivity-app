@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { AppState } from "react-native";
 
 /**
@@ -9,7 +9,10 @@ import { AppState } from "react-native";
  */
 export function useAutosave<T>(save: (value: T) => void, delay = 600) {
   const saveRef = useRef(save);
-  saveRef.current = save;
+  // Updated after each commit, not during render; layout effects run before the unmount flush.
+  useLayoutEffect(() => {
+    saveRef.current = save;
+  });
   const pending = useRef<{ value: T } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);

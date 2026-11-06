@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 export type DebouncedCallback<TArgs extends unknown[]> = ((...args: TArgs) => void) & {
   cancel: () => void;
@@ -63,43 +63,64 @@ export function createDebouncedCallback<TArgs extends unknown[]>(
   return debounced;
 }
 
+/** A debounced function whose callback and delay can be swapped without changing its identity. */
+function createDebounceController<TArgs extends unknown[]>(callback: (...args: TArgs) => void, delay: number) {
+  let latestCallback = callback;
+  let latestDelay = delay;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: TArgs | null = null;
+
+  const cancel = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+    lastArgs = null;
+  };
+
+  const flush = () => {
+    if (timer === null) return;
+    clearTimeout(timer);
+    timer = null;
+    const args = lastArgs;
+    lastArgs = null;
+    if (args) latestCallback(...args);
+  };
+
+  const debounced: DebouncedCallback<TArgs> = Object.assign(
+    (...args: TArgs) => {
+      lastArgs = args;
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(flush, latestDelay);
+    },
+    { cancel, flush, pending: () => timer !== null },
+  );
+
+  return {
+    debounced,
+    update: (nextCallback: (...args: TArgs) => void, nextDelay: number) => {
+      // A new delay drops the call pending under the old one (it was timed with that delay).
+      if (nextDelay !== latestDelay) cancel();
+      latestCallback = nextCallback;
+      latestDelay = nextDelay;
+    },
+  };
+}
+
+/**
+ * A stable debounced function that always calls the latest `callback`. A pending call is
+ * dropped on unmount and when `delay` changes.
+ */
 export function useDebounceCallback<TArgs extends unknown[]>(
   callback: (...args: TArgs) => void,
   delay: number,
 ): DebouncedCallback<TArgs> {
-  const callbackRef = useRef(callback);
-  callbackRef.current = callback;
+  const [controller] = useState(() => createDebounceController(callback, delay));
 
-  const debounced = useMemo(
-    () =>
-      createDebouncedCallback<TArgs>((...args) => {
-        callbackRef.current(...args);
-      }, delay),
-    [delay],
-  );
+  // After each commit rather than during render, so renders stay pure.
+  useLayoutEffect(() => {
+    controller.update(callback, delay);
+  });
 
-  const debouncedRef = useRef(debounced);
-  debouncedRef.current = debounced;
+  useEffect(() => controller.debounced.cancel, [controller]);
 
-  useEffect(() => {
-    return () => debounced.cancel();
-  }, [debounced]);
-
-  return useMemo(() => {
-    const fn = ((...args: TArgs) => {
-      debouncedRef.current(...args);
-    }) as DebouncedCallback<TArgs>;
-
-    fn.cancel = () => {
-      debouncedRef.current.cancel();
-    };
-
-    fn.flush = () => {
-      debouncedRef.current.flush();
-    };
-
-    fn.pending = () => debouncedRef.current.pending();
-
-    return fn;
-  }, []);
+  return controller.debounced;
 }

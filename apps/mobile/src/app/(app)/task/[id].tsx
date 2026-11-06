@@ -35,10 +35,10 @@ export default function TaskScreen() {
   const router = useRouter();
   const task = useItem(id);
   // Once seen, a missing row is handled by the editor (it closes); this is for a stale link.
-  const seen = useRef(!!task);
-  if (task) seen.current = true;
+  const [seen, setSeen] = useState(!!task);
+  if (task && !seen) setSeen(true);
 
-  if (!task && !draft && !seen.current) {
+  if (!task && !draft && !seen) {
     return (
       <View className="flex-1 bg-background">
         <SheetHeader title="Task" onDone={() => router.back()} />

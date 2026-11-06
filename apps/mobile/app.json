@@ -7,6 +7,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "experiments": {
+      "reactCompiler": true
+    },
     "ios": {
       "supportsTablet": true
     },

@@ -72,7 +72,7 @@ export function useSelectedIndex(
     setIndex(null);
   }
   useAnimatedReaction(
-    () => (state.isActive.value ? state.matchedIndex.value : -1),
+    () => (state.isActive.get() ? state.matchedIndex.get() : -1),
     (current, previous) => {
       if (current !== previous && current >= 0) scheduleOnRN(setIndex, current);
     },
