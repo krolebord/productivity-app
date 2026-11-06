@@ -3,6 +3,7 @@ import * as z from "zod";
 import { isAssistantAllowed } from "@/lib/assistant-access";
 import { getContext } from "@/lib/context";
 import { db } from "@/lib/db";
+import { consumeMobileOAuthCode, type MobileOAuthRequest } from "@/lib/mobile-oauth";
 import { consumeSignInCode, sendSignInCode } from "@/lib/sign-in-code";
 import {
   authCookieSession,
@@ -19,6 +20,8 @@ import { procedure, protectedProcedure } from "../common/procedure";
 type OAuthSessionData = {
   state: string;
   codeVerifier: string;
+  /** Set when the flow started from the mobile app, which gets a one-time code instead of a cookie. */
+  mobile?: MobileOAuthRequest;
 };
 
 const oauthCookieSession = createCookieSession<OAuthSessionData>({
@@ -78,7 +81,7 @@ export const signOut = protectedProcedure.handler(async ({ context }) => {
   return { success: true };
 });
 
-export const initiateGoogleSignIn = procedure.handler(async ({ context }) => {
+async function createGoogleAuthorizationUrl(context: ORPCContext, mobile?: MobileOAuthRequest) {
   const google = getGoogleProvider();
   const state = arctic.generateState();
   const codeVerifier = arctic.generateCodeVerifier();
@@ -86,10 +89,18 @@ export const initiateGoogleSignIn = procedure.handler(async ({ context }) => {
   const scopes = ["openid", "profile", "email"];
   const url = google.createAuthorizationURL(state, codeVerifier, scopes);
 
-  await oauthCookieSession.set(context, { state, codeVerifier });
+  await oauthCookieSession.set(context, { state, codeVerifier, mobile });
 
+  return url;
+}
+
+export const initiateGoogleSignIn = procedure.handler(async ({ context }) => {
+  const url = await createGoogleAuthorizationUrl(context);
   return { url: url.toString() };
 });
+
+export const initiateMobileGoogleSignIn = (context: ORPCContext, mobile: MobileOAuthRequest) =>
+  createGoogleAuthorizationUrl(context, mobile);
 
 const findOrCreateUser = async (data: { email: string; name?: string }) => {
   const now = new Date().toISOString();
@@ -114,7 +125,15 @@ const findOrCreateUser = async (data: { email: string; name?: string }) => {
   return user;
 };
 
-export const handleGoogleCallback = async (context: ORPCContext, data: { code: string; state: string }) => {
+type GoogleCallbackResult =
+  | { success: true; user: Awaited<ReturnType<typeof findOrCreateUser>>; mobile?: MobileOAuthRequest }
+  | { success: false; error: string; mobile?: MobileOAuthRequest };
+
+/** Resolves the Google user; the caller decides whether that becomes a web cookie or a mobile code. */
+export const handleGoogleCallback = async (
+  context: ORPCContext,
+  data: { code: string; state: string },
+): Promise<GoogleCallbackResult> => {
   const oauthData = await oauthCookieSession.get(context);
 
   if (!oauthData?.state || oauthData?.state !== data.state) {
@@ -129,6 +148,7 @@ export const handleGoogleCallback = async (context: ORPCContext, data: { code: s
   }
 
   await oauthCookieSession.clear(context);
+  const mobile = oauthData.mobile;
 
   const google = getGoogleProvider();
 
@@ -137,14 +157,14 @@ export const handleGoogleCallback = async (context: ORPCContext, data: { code: s
     tokens = await google.validateAuthorizationCode(data.code, codeVerifier);
   } catch (e) {
     if (e instanceof arctic.OAuth2RequestError) {
-      return { success: false, error: "Invalid authorization code" };
+      return { success: false, error: "Invalid authorization code", mobile };
     }
-    return { success: false, error: "Failed to validate authorization code" };
+    return { success: false, error: "Failed to validate authorization code", mobile };
   }
 
   const idToken = tokens.idToken();
   if (!idToken) {
-    return { success: false, error: "No ID token received" };
+    return { success: false, error: "No ID token received", mobile };
   }
 
   const claims = arctic.decodeIdToken(idToken) as {
@@ -155,13 +175,11 @@ export const handleGoogleCallback = async (context: ORPCContext, data: { code: s
   };
 
   if (!claims.email) {
-    return { success: false, error: "No email in ID token" };
+    return { success: false, error: "No email in ID token", mobile };
   }
 
   const user = await findOrCreateUser({ email: claims.email, name: claims.name });
-  await createSession(context, user);
-
-  return { success: true, userId: user.id };
+  return { success: true, user, mobile };
 };
 
 const mobileAuth = contractApi.auth.mobile;
@@ -182,6 +200,20 @@ const mobileAuthRouter = {
     }
 
     const user = await findOrCreateUser({ email: input.email });
+    const token = await createSessionToken(user);
+    return {
+      success: true as const,
+      token,
+      user: toMobileSessionUser({ userId: user.id, userName: user.name, userEmail: user.email }),
+    };
+  }),
+  exchangeGoogleCode: mobileAuth.exchangeGoogleCode.handler(async ({ input }) => {
+    const userId = await consumeMobileOAuthCode(input);
+    const user = userId && (await db.selectFrom("user").where("id", "=", userId).selectAll().executeTakeFirst());
+    if (!user) {
+      return { success: false as const, error: "Google sign-in expired. Try again." };
+    }
+
     const token = await createSessionToken(user);
     return {
       success: true as const,

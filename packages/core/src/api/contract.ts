@@ -67,18 +67,20 @@ function hasTurnContent(input: { text: string; files: readonly unknown[] }) {
   return input.text.trim().length > 0 || input.files.length > 0;
 }
 
+const mobileSignInResult = z.discriminatedUnion("success", [
+  z.object({ success: z.literal(true), token: z.string(), user: sessionUserSchema }),
+  z.object({ success: z.literal(false), error: z.string() }),
+]);
+
 export const apiContract = {
   auth: {
     mobile: {
       requestCode: base.input(z.object({ email: z.email() })).output(z.object({ success: z.literal(true) })),
-      verifyCode: base
-        .input(z.object({ email: z.email(), code: z.string().length(6) }))
-        .output(
-          z.discriminatedUnion("success", [
-            z.object({ success: z.literal(true), token: z.string(), user: sessionUserSchema }),
-            z.object({ success: z.literal(false), error: z.string() }),
-          ]),
-        ),
+      verifyCode: base.input(z.object({ email: z.email(), code: z.string().length(6) })).output(mobileSignInResult),
+      /** Redeems the one-time code the Google OAuth callback deep-links back to the app. */
+      exchangeGoogleCode: base
+        .input(z.object({ code: z.string().min(1).max(200), nonce: z.string().min(1).max(200) }))
+        .output(mobileSignInResult),
       getSession: base.output(sessionUserSchema),
       signOut: base.output(z.object({ success: z.literal(true) })),
     },

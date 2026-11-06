@@ -2,6 +2,7 @@ import type { ORPCContext } from "../orpc/common/os";
 import { assistantDownloadHandler } from "./handlers/assistant.download";
 import { googleCallbackHandler } from "./handlers/callback.google";
 import { googleCalendarCallbackHandler } from "./handlers/callback.google-calendar";
+import { mobileGoogleSignInHandler } from "./handlers/mobile.google";
 import { MONOBANK_WEBHOOK_PREFIX, monobankWebhookHandler } from "./handlers/monobank.webhook";
 
 export const apiHandler = createApiHandler({
@@ -9,6 +10,7 @@ export const apiHandler = createApiHandler({
     "/assistant/download": assistantDownloadHandler,
     "/auth/callback/google": googleCallbackHandler,
     "/auth/callback/google-calendar": googleCalendarCallbackHandler,
+    "/auth/mobile/google": mobileGoogleSignInHandler,
   },
   // Handlers matched by path prefix (for routes with dynamic path segments).
   prefixHandlers: [{ prefix: MONOBANK_WEBHOOK_PREFIX, handler: monobankWebhookHandler }],

@@ -2,6 +2,11 @@ import { ActivityIndicator, Pressable, Text } from "react-native";
 
 const VARIANTS = {
   primary: { container: "bg-primary", label: "text-primary-foreground", spinner: "accent-primary-foreground" },
+  outline: {
+    container: "border border-border bg-transparent",
+    label: "text-foreground",
+    spinner: "accent-foreground",
+  },
   ghost: { container: "bg-transparent", label: "text-foreground", spinner: "accent-foreground" },
 };
 
