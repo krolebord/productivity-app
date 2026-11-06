@@ -1,0 +1,357 @@
+diff --git a/cpp/OPDatabase.cpp b/cpp/OPDatabase.cpp
+index 23da58eae5dd260b6848ea37b23e86cea66d7a7f..dc9d85001eb7c5f3635cf42714ffdf9bbd760f61 100644
+--- a/cpp/OPDatabase.cpp
++++ b/cpp/OPDatabase.cpp
+@@ -79,6 +79,11 @@ void OPDatabase::on_commit() {
+   if (alive != nullptr && !alive->load()) {
+     return;
+   }
++  if (hook_event_buffering.load()) {
++    std::lock_guard<std::mutex> lock(hook_events_mutex);
++    hook_events.push_back({HookEventType::Commit, {}});
++    return;
++  }
+   invoker->invokeAsync([callback = commit_hook_callback](jsi::Runtime &rt) {
+     if (callback != nullptr) {
+       callback->asObject(rt).asFunction(rt).call(rt);
+@@ -90,6 +95,11 @@ void OPDatabase::on_rollback() {
+   if (alive != nullptr && !alive->load()) {
+     return;
+   }
++  if (hook_event_buffering.load()) {
++    std::lock_guard<std::mutex> lock(hook_events_mutex);
++    hook_events.push_back({HookEventType::Rollback, {}});
++    return;
++  }
+   invoker->invokeAsync([callback = rollback_hook_callback](jsi::Runtime &rt) {
+     if (callback != nullptr) {
+       callback->asObject(rt).asFunction(rt).call(rt);
+@@ -103,7 +113,10 @@ void OPDatabase::on_update(const std::string &table,
+     return;
+   }
+ 
+-  if (update_hook_callback != nullptr) {
++  if (hook_event_buffering.load()) {
++    std::lock_guard<std::mutex> lock(hook_events_mutex);
++    hook_events.push_back({HookEventType::Update, table});
++  } else if (update_hook_callback != nullptr) {
+     invoker->invokeAsync([callback = update_hook_callback, table, operation,
+                           row_id](jsi::Runtime &rt) {
+       auto res = jsi::Object(rt);
+@@ -164,7 +177,7 @@ void OPDatabase::sync_update_hook_registration() {
+   }
+ 
+   if (update_hook_callback == nullptr && reactive_queries.empty() &&
+-      is_update_hook_registered) {
++      !hook_event_buffering.load() && is_update_hook_registered) {
+     opsqlite_deregister_update_hook(db);
+     is_update_hook_registered = false;
+     return;
+@@ -177,6 +190,34 @@ void OPDatabase::sync_update_hook_registration() {
+   opsqlite_register_update_hook(db, this);
+   is_update_hook_registered = true;
+ }
++
++void OPDatabase::sync_commit_rollback_hook_registration() {
++  if (invalidated || db == nullptr) {
++    return;
++  }
++
++  if (hook_event_buffering.load() || commit_hook_callback != nullptr) {
++    opsqlite_register_commit_hook(db, this);
++  } else {
++    opsqlite_deregister_commit_hook(db);
++  }
++
++  if (hook_event_buffering.load() || rollback_hook_callback != nullptr) {
++    opsqlite_register_rollback_hook(db, this);
++  } else {
++    opsqlite_deregister_rollback_hook(db);
++  }
++}
++
++void OPDatabase::set_hook_event_buffering(bool enabled) {
++  hook_event_buffering.store(enabled);
++  if (!enabled) {
++    std::lock_guard<std::mutex> lock(hook_events_mutex);
++    hook_events.clear();
++  }
++  sync_update_hook_registration();
++  sync_commit_rollback_hook_registration();
++}
+ #endif
+ 
+ void OPDatabase::throw_if_closed(const char *function_name) const {
+@@ -193,6 +234,9 @@ void OPDatabase::release_hooks() {
+   commit_hook_callback = nullptr;
+   rollback_hook_callback = nullptr;
+   is_update_hook_registered = false;
++  hook_event_buffering.store(false);
++  std::lock_guard<std::mutex> lock(hook_events_mutex);
++  hook_events.clear();
+ }
+ 
+ //    _____                _                   _
+@@ -664,6 +708,12 @@ void OPDatabase::create_jsi_functions(jsi::Runtime &rt,
+ 
+     auto callback = std::make_shared<jsi::Value>(rt, args[0]);
+     if (callback->isUndefined() || callback->isNull()) {
++#if !defined(OP_SQLITE_USE_LIBSQL) && !defined(OP_SQLITE_USE_TURSO)
++      commit_hook_callback = nullptr;
++      if (hook_event_buffering.load()) {
++        return {};
++      }
++#endif
+       opsqlite_deregister_commit_hook(db);
+       return {};
+     }
+@@ -683,6 +733,12 @@ void OPDatabase::create_jsi_functions(jsi::Runtime &rt,
+     auto callback = std::make_shared<jsi::Value>(rt, args[0]);
+ 
+     if (callback->isUndefined() || callback->isNull()) {
++#if !defined(OP_SQLITE_USE_LIBSQL) && !defined(OP_SQLITE_USE_TURSO)
++      rollback_hook_callback = nullptr;
++      if (hook_event_buffering.load()) {
++        return {};
++      }
++#endif
+       opsqlite_deregister_rollback_hook(db);
+       return {};
+     }
+@@ -692,6 +748,51 @@ void OPDatabase::create_jsi_functions(jsi::Runtime &rt,
+     return {};
+   }));
+ 
++#if !defined(OP_SQLITE_USE_LIBSQL) && !defined(OP_SQLITE_USE_TURSO)
++  // Opt-in: instead of posting one async JS task per update/commit/rollback,
++  // the SQLite hooks append to an in-memory buffer that JS drains
++  // synchronously with takeHookEvents(), e.g. right after executeRawSync().
++  // This also registers the SQLite hooks when no JS callbacks are set.
++  js_object.setProperty(rt, "enableHookEventBuffer", HFN(this) {
++    throw_if_closed("enableHookEventBuffer");
++
++    bool enabled = count < 1 || args[0].isUndefined() || args[0].getBool();
++    set_hook_event_buffering(enabled);
++    return {};
++  }));
++
++  js_object.setProperty(rt, "takeHookEvents", HFN(this) {
++    throw_if_closed("takeHookEvents");
++
++    std::vector<HookEvent> events;
++    {
++      std::lock_guard<std::mutex> lock(hook_events_mutex);
++      events.swap(hook_events);
++    }
++
++    auto array = jsi::Array(rt, events.size());
++    for (size_t i = 0; i < events.size(); i++) {
++      auto event = jsi::Object(rt);
++      switch (events[i].type) {
++      case HookEventType::Update:
++        event.setProperty(rt, "type", jsi::String::createFromAscii(rt, "update"));
++        event.setProperty(rt, "table",
++                          jsi::String::createFromUtf8(rt, events[i].table));
++        break;
++      case HookEventType::Commit:
++        event.setProperty(rt, "type", jsi::String::createFromAscii(rt, "commit"));
++        break;
++      case HookEventType::Rollback:
++        event.setProperty(rt, "type",
++                          jsi::String::createFromAscii(rt, "rollback"));
++        break;
++      }
++      array.setValueAtIndex(rt, i, std::move(event));
++    }
++    return array;
++  }));
++#endif
++
+   js_object.setProperty(rt, "loadExtension", HFN(this) {
+     throw_if_closed("loadExtension");
+ 
+diff --git a/cpp/OPDatabase.hpp b/cpp/OPDatabase.hpp
+index 9e387a6b8b7545bdadf7fdb2f70aafda4d45b069..16d60d5c92ff44d79dd44cea3aef21e41f0883ba 100644
+--- a/cpp/OPDatabase.hpp
++++ b/cpp/OPDatabase.hpp
+@@ -15,6 +15,7 @@
+ #endif
+ #endif
+ #include <memory>
++#include <mutex>
+ #include <vector>
+ 
+ namespace opsqlite {
+@@ -33,6 +34,16 @@ struct TableRowDiscriminator {
+   std::vector<int> ids;
+ };
+ 
++// Opt-in hook event buffering (see enableHookEventBuffer). The SQLite
++// callbacks only append to the buffer; JS drains it synchronously with
++// takeHookEvents() right after the statement that raised the events returns.
++enum class HookEventType { Update, Commit, Rollback };
++
++struct HookEvent {
++  HookEventType type;
++  std::string table;
++};
++
+ struct ReactiveQuery {
+ #ifndef OP_SQLITE_USE_LIBSQL
+   sqlite3_stmt *stmt;
+@@ -82,6 +93,8 @@ public:
+ private:
+   std::set<std::shared_ptr<ReactiveQuery>> pending_reactive_queries;
+   void sync_update_hook_registration();
++  void sync_commit_rollback_hook_registration();
++  void set_hook_event_buffering(bool enabled);
+   void release_hooks();
+   void throw_if_closed(const char *function_name) const;
+   void create_jsi_functions(jsi::Runtime &rt, jsi::Object &js_object);
+@@ -110,6 +123,11 @@ private:
+   std::vector<PendingReactiveInvocation> pending_reactive_invocations;
+   bool is_update_hook_registered = false;
+   bool invalidated = false;
++  // Hooks fire on whichever thread runs sqlite3_step (the JS thread for the
++  // sync APIs, the thread pool for the async ones), hence the mutex.
++  std::atomic<bool> hook_event_buffering{false};
++  std::mutex hook_events_mutex;
++  std::vector<HookEvent> hook_events;
+ #ifdef OP_SQLITE_USE_LIBSQL
+   DB db;
+ #else
+diff --git a/lib/module/functions.js b/lib/module/functions.js
+index c336976b63a6eaa2b4210ceeada8c3fe3b19dbd4..59d51f47c53162b723a1625c6a2265fa185b5174 100644
+--- a/lib/module/functions.js
++++ b/lib/module/functions.js
+@@ -51,6 +51,8 @@ function enhanceDB(db, options) {
+     updateHook: db.updateHook,
+     commitHook: db.commitHook,
+     rollbackHook: db.rollbackHook,
++    enableHookEventBuffer: db.enableHookEventBuffer,
++    takeHookEvents: db.takeHookEvents,
+     loadExtension: db.loadExtension,
+     getDbPath: db.getDbPath,
+     reactiveExecute: db.reactiveExecute,
+diff --git a/lib/typescript/src/index.d.ts b/lib/typescript/src/index.d.ts
+index a66dd28e6bcbb5472b0cb3815d451d07971b03de..131047029aae1356d87a9ca876ed1ae252f6b87d 100644
+--- a/lib/typescript/src/index.d.ts
++++ b/lib/typescript/src/index.d.ts
+@@ -1,5 +1,5 @@
+ export * from "./functions";
+ export { Storage } from "./Storage";
+-export type { _InternalDB, _PendingTransaction, BatchQueryResult, ColumnMetadata, DB, DBParams, FileLoadResult, OPSQLiteProxy, PreparedStatement, QueryResult, Scalar, SQLBatchTuple, Transaction, UpdateHookOperation, } from "./types";
++export type { _InternalDB, _PendingTransaction, BatchQueryResult, ColumnMetadata, DB, DBParams, FileLoadResult, OPSQLiteProxy, PreparedStatement, QueryResult, Scalar, SQLBatchTuple, Transaction, UpdateHookOperation, HookEvent, } from "./types";
+ export declare const IOS_DOCUMENT_PATH: any, IOS_LIBRARY_PATH: any, ANDROID_DATABASE_PATH: any, ANDROID_FILES_PATH: any, ANDROID_EXTERNAL_FILES_PATH: any;
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/lib/typescript/src/types.d.ts b/lib/typescript/src/types.d.ts
+index 9953ecc0c863a23bcd6b3850f254fec5caa516c6..2fc7874c8cb959c233bc5161792071364d08d3f0 100644
+--- a/lib/typescript/src/types.d.ts
++++ b/lib/typescript/src/types.d.ts
+@@ -75,6 +75,14 @@ export type ColumnMetadata = {
+  * to declare it a single time, and use an array of array parameters.
+  */
+ export type SQLBatchTuple = [string] | [string, Scalar[]] | [string, Scalar[][]];
++export type HookEvent = {
++    type: "update";
++    table: string;
++} | {
++    type: "commit";
++} | {
++    type: "rollback";
++};
+ export type UpdateHookOperation = "INSERT" | "DELETE" | "UPDATE";
+ /**
+  * status: 0 or undefined for correct execution, 1 for error
+@@ -130,6 +138,10 @@ export type _InternalDB = {
+     }) => void) | null) => void;
+     commitHook: (callback?: (() => void) | null) => void;
+     rollbackHook: (callback?: (() => void) | null) => void;
++    /** Opt-in, plain SQLite builds only. Buffers hook events natively; drain with takeHookEvents(). */
++    enableHookEventBuffer?: (enabled?: boolean) => void;
++    /** Returns buffered hook events in SQLite order and clears the buffer. */
++    takeHookEvents?: () => HookEvent[];
+     prepareStatement: (query: string) => PreparedStatement;
+     loadExtension: (path: string, entryPoint?: string) => void;
+     executeRaw: (query: string, params?: Scalar[]) => Promise<RawQueryResult>;
+@@ -245,6 +257,10 @@ export type DB = {
+     }) => void) | null) => void;
+     commitHook: (callback?: (() => void) | null) => void;
+     rollbackHook: (callback?: (() => void) | null) => void;
++    /** Opt-in, plain SQLite builds only. Buffers hook events natively; drain with takeHookEvents(). */
++    enableHookEventBuffer?: (enabled?: boolean) => void;
++    /** Returns buffered hook events in SQLite order and clears the buffer. */
++    takeHookEvents?: () => HookEvent[];
+     /**
+      * Constructs a prepared statement from the query string
+      * The statement can be re-bound with parameters and executed
+diff --git a/src/functions.ts b/src/functions.ts
+index f712b94a30daa8cfe5d9b7bcbad70185c55f24b5..ee339f6fdbbba323d5a0331181eb2f8cad281d78 100644
+--- a/src/functions.ts
++++ b/src/functions.ts
+@@ -77,6 +77,8 @@ function enhanceDB(db: _InternalDB, options: DBParams): DB {
+     updateHook: db.updateHook,
+     commitHook: db.commitHook,
+     rollbackHook: db.rollbackHook,
++    enableHookEventBuffer: db.enableHookEventBuffer,
++    takeHookEvents: db.takeHookEvents,
+     loadExtension: db.loadExtension,
+     getDbPath: db.getDbPath,
+     reactiveExecute: db.reactiveExecute,
+diff --git a/src/types.ts b/src/types.ts
+index 74c345d5e3fbc672e92accb43d91ecdfed3defbd..24e28814339bccf56ce43cdd3b56b7ec66aebc4f 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -82,6 +82,11 @@ export type ColumnMetadata = {
+  */
+ export type SQLBatchTuple = [string] | [string, Scalar[]] | [string, Scalar[][]];
+ 
++export type HookEvent =
++  | { type: "update"; table: string }
++  | { type: "commit" }
++  | { type: "rollback" };
++
+ export type UpdateHookOperation = "INSERT" | "DELETE" | "UPDATE";
+ 
+ /**
+@@ -152,6 +157,19 @@ export type _InternalDB = {
+   ) => void;
+   commitHook: (callback?: (() => void) | null) => void;
+   rollbackHook: (callback?: (() => void) | null) => void;
++  /**
++   * Opt-in, plain SQLite builds only (undefined on libsql/turso). When enabled,
++   * update/commit/rollback hook events are buffered natively instead of being
++   * dispatched asynchronously to the JS hook callbacks, and SQLite's hooks are
++   * registered even if no JS callbacks are set. Drain the buffer with
++   * takeHookEvents(). Pass false to disable and drop buffered events.
++   */
++  enableHookEventBuffer?: (enabled?: boolean) => void;
++  /**
++   * Returns the buffered hook events in the order SQLite raised them and clears
++   * the buffer. Call it synchronously after each write (e.g. executeRawSync).
++   */
++  takeHookEvents?: () => HookEvent[];
+   prepareStatement: (query: string) => PreparedStatement;
+   loadExtension: (path: string, entryPoint?: string) => void;
+   executeRaw: (query: string, params?: Scalar[]) => Promise<RawQueryResult>;
+@@ -268,6 +286,19 @@ export type DB = {
+   ) => void;
+   commitHook: (callback?: (() => void) | null) => void;
+   rollbackHook: (callback?: (() => void) | null) => void;
++  /**
++   * Opt-in, plain SQLite builds only (undefined on libsql/turso). When enabled,
++   * update/commit/rollback hook events are buffered natively instead of being
++   * dispatched asynchronously to the JS hook callbacks, and SQLite's hooks are
++   * registered even if no JS callbacks are set. Drain the buffer with
++   * takeHookEvents(). Pass false to disable and drop buffered events.
++   */
++  enableHookEventBuffer?: (enabled?: boolean) => void;
++  /**
++   * Returns the buffered hook events in the order SQLite raised them and clears
++   * the buffer. Call it synchronously after each write (e.g. executeRawSync).
++   */
++  takeHookEvents?: () => HookEvent[];
+   /**
+    * Constructs a prepared statement from the query string
+    * The statement can be re-bound with parameters and executed

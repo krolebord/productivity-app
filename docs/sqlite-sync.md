@@ -1,6 +1,6 @@
 # sqlite-sync Documentation
 
-**sqlite-sync** is an offline-first SQLite synchronization library with CRDT support for local-first applications. All writes happen locally against an in-memory SQLite database, persist to OPFS via a Web Worker, and sync automatically to a remote server over WebSocket.
+**sqlite-sync** is an offline-first SQLite synchronization library with CRDT support for local-first applications. In the browser, all writes happen locally against an in-memory SQLite database, persist to OPFS via a Web Worker, and sync automatically to a remote server over WebSocket. On React Native, the same engine runs on a single persisted [op-sqlite](https://github.com/OP-Engineering/op-sqlite) connection (see [React Native](#react-native)).
 
 ## Table of Contents
 
@@ -8,6 +8,7 @@
 - [Architecture Overview](#architecture-overview)
 - [Schema Definition](#schema-definition)
 - [Client Setup](#client-setup)
+- [React Native](#react-native)
 - [React Integration](#react-integration)
 - [Queries](#queries)
 - [Mutations](#mutations)
@@ -31,6 +32,9 @@ pnpm add @sqlite-sync/core
 # React bindings
 pnpm add @sqlite-sync/react
 
+# React Native (op-sqlite) adapter
+pnpm add @sqlite-sync/react-native @op-engineering/op-sqlite react-native-get-random-values
+
 # Optional: floating browser devtools UI
 pnpm add @sqlite-sync/devtools
 
@@ -47,6 +51,7 @@ Peer dependencies:
 |---------|-------|
 | `@sqlite-sync/core` | `@sqlite.org/sqlite-wasm`, `kysely` |
 | `@sqlite-sync/react` | `@sqlite-sync/core`, `react ^18 \|\| ^19`, `kysely` |
+| `@sqlite-sync/react-native` | `@sqlite-sync/core`, `@op-engineering/op-sqlite >=18.2`, `react-native >=0.76`, `react-native-get-random-values ^1.11 \|\| ^2`, `kysely` |
 | `@sqlite-sync/devtools` | `@sqlite-sync/core`, `react ^18 \|\| ^19` |
 | `@sqlite-sync/cloudflare` | `@sqlite-sync/core`, `@cloudflare/workers-types`, `kysely` |
 | `@sqlite-sync/ai` | `@sqlite-sync/core`, `ai ^6`, `zod ^4.1.8`; optional `@modelcontextprotocol/sdk ^1.29` (`@sqlite-sync/ai/mcp`) |
@@ -135,7 +140,7 @@ The base table name uses an underscore prefix by convention (e.g., `_todo`). The
 
 Clients on different schema versions keep syncing: each migration step also transforms CRDT events written at older versions as they are applied.
 
-- `addColumn` — an `item-created` event from an older client gets the new column's default (`priority: 0` above).
+- `addColumn` — events are left as they are. A row created by an older client gets the new column's default from the column's DDL default (`priority: 0` above). Because older creates leave the column out, the schema must declare the same `.default(...)`, or the server rejects them; [`verifySyncSchema`](#verifying-migrations-against-the-schema) reports a mismatch.
 - `renameTable` / `renameColumn` — event datasets and payload keys are rewritten to the new names.
 - `dropColumn` — the key is stripped from payloads. An `item-updated` event that only changed that column is dropped.
 - `dropTable` — events for the table are dropped.
@@ -306,6 +311,89 @@ await startDbWorker({
 });
 ```
 
+## React Native
+
+`@sqlite-sync/react-native` runs the sync engine on a single [op-sqlite](https://github.com/OP-Engineering/op-sqlite) connection. A React Native app has one JS runtime per database, so there is no worker, tab coordination or in-memory copy: reads, writes and sync all go to the persisted database file. Schemas, migrations, CRDT views, the remote protocol and the React hooks are the same as on the web.
+
+### Native setup
+
+sqlite-sync needs SQLite's bytecode virtual tables (`tables_used`) to track which tables a query reads and writes. Enable them in your app's `package.json` and rebuild the native app (`pod install` on iOS):
+
+```json
+{
+  "op-sqlite": {
+    "sqliteFlags": "-DSQLITE_ENABLE_BYTECODE_VTAB=1"
+  }
+}
+```
+
+`sqliteFlags` only apply to the SQLite that op-sqlite compiles, so this setup does not work with `"iosSqlite": true`. `createSyncedDb` throws an error explaining this when the virtual tables are missing.
+
+React Native has no `crypto.getRandomValues`, which sqlite-sync uses to generate UUID v4 IDs. `@sqlite-sync/react-native` imports [`react-native-get-random-values`](https://github.com/LinusU/react-native-get-random-values) to provide it, so there is nothing to import yourself, but the package must be listed in your app's dependencies so its native module is autolinked. It leaves an existing `crypto.getRandomValues` (for example from `react-native-quick-crypto`) in place.
+
+Hermes has no WebAssembly, so the state hash falls back to a JavaScript xxh64 that produces the same hashes as the web build. `@sqlite-sync/core` ships a `react-native` export condition, which Metro picks automatically, so the app bundle does not include sqlite-wasm.
+
+### Initialize the Database
+
+```ts
+// src/db.ts
+import { createSyncedDb, createWsRemoteSource } from "@sqlite-sync/react-native";
+import { syncDbSchema } from "./db-schema";
+
+export function initDb() {
+  return createSyncedDb({
+    dbId: "my-app-db",
+    syncDbSchema,
+    createRemoteSource: createWsRemoteSource({
+      createWebSocket: () => new WebSocket("wss://your-server.example.com/sync"),
+    }),
+    verifySchema: __DEV__,
+  });
+}
+```
+
+The result has the same shape as the browser `SyncedDb`, so `createDbContext` from `@sqlite-sync/react` and the [query](#queries), [mutation](#mutations) and [sync state](#sync-state) APIs work unchanged.
+
+**`createSyncedDb` options (`@sqlite-sync/react-native`):**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `dbId` | `string` | Database identifier, same format as on the web. The file is named `<dbId>.sqlite`. |
+| `syncDbSchema` | `SyncDbSchema` | The schema built with `defineSyncSchema`. |
+| `createRemoteSource` | `CreateRemoteSourceFactory` | Optional. Usually `createWsRemoteSource(...)`. Without it the database stays local-only. |
+| `location` | `string` | Optional directory for the database file. Defaults to op-sqlite's default location. |
+| `encryptionKey` | `string` | Optional. Requires op-sqlite built with SQLCipher. |
+| `storageVersion` | `string` | Optional. See [Breaking Storage Changes](#breaking-storage-changes); a mismatch deletes the local database on startup. |
+| `verifySchema` | `boolean` | Optional dev-time check that replays the migrations on an in-memory database. |
+| `eventLogGc` | `boolean` | Optional event-log garbage collection on startup. |
+| `syncOnAppStateChange` | `boolean` | Default `true`. Syncs when the app returns to the foreground and drops the connection when it goes to the background. |
+| `logger` | `Logger` | Optional logger. |
+
+`state.dropConnection()` is also available, for example to react to a network library reporting the device offline. Call `state.sync()` once the network is back.
+
+### Reload on React Native
+
+There is no page to reload, so `requestReload({ clean })` disposes the instance (and with `clean: true` deletes the database file), then emits `reload-requested`. Create a new instance when that event fires:
+
+```tsx
+const [db, setDb] = useState<SyncedDb<Database> | null>(null);
+
+useEffect(() => {
+  if (!db) {
+    void initDb().then(setDb);
+    return;
+  }
+  const { unsubscribe } = db.subscribe("reload-requested", () => setDb(null));
+  return unsubscribe;
+}, [db]);
+```
+
+Writes that were not pushed yet are lost with `clean: true`. Unlike the browser, pending local writes otherwise survive restarts: they are stored in the same database file and pushed on the next start.
+
+### Other SQLite drivers
+
+`createSyncedDb` is a thin wrapper over `createLocalSyncedDb` from `@sqlite-sync/core/local`, which accepts any synchronous `SqliteDriver` (see `createOpSqliteDriver` for a reference implementation). Hooks may be delivered asynchronously, as long as they arrive in order.
+
 ---
 
 ## React Integration
@@ -360,6 +448,8 @@ createRoot(document.getElementById("root")!).render(
 `useDbQuery` creates a **reactive subscription** — the query re-runs automatically when underlying tables change (via SQLite update hooks). It uses `useSyncExternalStore` for concurrent-safe React integration.
 
 Identical `useDbQuery` calls within the same `DbProvider` reuse the same live query when both the SQL string and parameter values match. Each component still receives its own `mapData` result, but the underlying live subscription is shared.
+
+**Results are structurally shared.** When a live query re-runs, every row whose column values are unchanged keeps the same object as before, so `React.memo` and React Compiler memoization on row components keep working. Rows are matched by position, then by an `id` column if the query selects one; a row is only reused if all its values are equal (blobs are compared by bytes). If the whole result is unchanged, the query returns the same array and does not notify subscribers at all, so writes to a table that don't affect a query's result don't re-render it. Treat rows, result arrays and blobs as **immutable**: a mutated row would be kept as is by later refreshes.
 
 **Kysely query builder (recommended):**
 
@@ -707,7 +797,7 @@ function SyncStatus() {
 
 sqlite-sync detects two recovery conditions while syncing:
 
-- **De-sync detected** — the local worker is caught up to the remote sync ID and no local events are waiting to push, but the local and remote HLC checksums differ. This means the applied event sets have diverged, for example because the server rejected some of this client's pushed events (see [Client push validation](#client-push-validation)). It can also be raised if applying a remote event fails.
+- **De-sync detected** — the local worker is caught up to the remote sync ID and no local events are waiting to push, but the local and remote state hashes differ. The state hash covers the winning HLC of every synced cell, so a mismatch means the materialized CRDT state has diverged, for example because the server rejected some of this client's pushed events (see [Client push validation](#client-push-validation)). Hashes are only compared at the same schema version. It can also be raised if applying a remote event fails.
 - **Schema version mismatch** — the remote sends an event with a `schema_version` greater than the local migrator's current schema version. This usually means another client has already written data with newer app code.
 
 You can react to these conditions through `useDbState()` for UI state, or subscribe to the underlying worker notifications with `useDbEvent()`:
@@ -772,7 +862,7 @@ function SyncToggle() {
 
 ### Reload and Recovery
 
-`requestReload({ clean })` asks the elected worker to reload every tab for the same `dbId`. With `clean: true`, the persisted worker DB is also wiped on the next startup.
+`requestReload({ clean })` asks the elected worker to reload every tab for the same `dbId`. With `clean: true`, the persisted worker DB is also wiped on the next startup. React Native works differently, see [Reload on React Native](#reload-on-react-native).
 
 Notes:
 
@@ -973,7 +1063,7 @@ syncDb.applySnapshot({
 
 `applySnapshot` reads the current row if there is one, applies the patch, and writes an `item-created` event with the complete row and `tombstone: false`. Existing rows treat it as an update, and a deleted row is restored. Event listeners receive it as `item-created`.
 
-Older events for the row stay in the log, but their payloads are replaced with a no-op marker. Sync cursors and checksums stay intact while superseded data is dropped. Fresh replicas replay the no-ops, then the snapshot.
+Older events for the row stay in the log, but their payloads are replaced with a no-op marker. Sync cursors and the state hash stay intact while superseded data is dropped. Fresh replicas replay the no-ops, then the snapshot.
 
 - If an event for the row is newer than the snapshot (e.g. a pending client edit from a clock running ahead), the history is kept: that event still wins for its fields, and fresh replicas need the history to replay it. The next snapshot newer than every event for the row compacts it.
 - If the row does not exist, the patch must supply every required column. This path does not run runtime schema validation, so SQLite rejects an incomplete create. TypeScript prevents patching `id` or `tombstone`.
@@ -1026,7 +1116,7 @@ push still returns `ok: true`. An event is rejected when:
 Older-version events are migrated before they are checked. Events whose table was dropped by a
 migration, and events with a no-op payload, are stored as no-ops.
 
-The client that pushed a rejected event keeps its local copy. Its checksum no longer matches the
+The client that pushed a rejected event keeps its local copy. Its state hash no longer matches the
 server's, so it reports a [de-sync](#de-sync-and-schema-mismatch) once it is caught up. A device
 whose clock runs more than 6 hours fast cannot sync until its clock is corrected.
 
@@ -1320,7 +1410,7 @@ Requests wait for the socket to open before they are sent. The source implements
 
 ```ts
 type CreateRemoteSourceFactory = (opts: {
-  onEventsAvailable: (event: { newSyncId: number; remoteEventHlcSum: string | null }) => void;
+  onEventsAvailable: (event: { newSyncId: number; remoteStateHash: string | null }) => void;
   onClosed: (error?: unknown) => void;
 }) => RemoteSource;
 
@@ -1335,6 +1425,7 @@ type RemoteSource = {
 - One source is one connection. Each call must return a new source, synchronously. Do any async setup, like fetching a token, inside the source.
 - The library calls `disconnect` on every returned source exactly once, also to cancel an attempt that is still connecting. It does not wait for `disconnect` to finish.
 - Call `onClosed` when the connection ends on its own. It is safe to call at any time, including during the factory call, and is ignored after `disconnect`. The library then reports `connecting` and opens a new source after a backoff. Throwing from the factory counts as a failed attempt too.
+- Call `onEventsAvailable` when the remote broadcasts new events. Pass its `stateHash` as `remoteStateHash`, or `null` if it reports none, which skips [de-sync detection](#de-sync-and-schema-mismatch).
 - `pullEvents` and `pushEvents` may wait for the connection to open. Once the connection has closed, they should reject so failures surface quickly.
 - `ping` is optional. When present, the library pings a connection that has received nothing (no response or broadcast) for 25 seconds, and replaces it if the ping fails or gets no answer within 10 seconds. Pings never overlap, run only on an online connection, and never start after the connection closes, so a ping does not need to settle once the source has closed. Without `ping`, a connection that dies without closing is only noticed when a request times out.
 - The library times requests out after 10 seconds and does not retry on the same source: any failed request closes the connection, and the library reconnects with backoff. A push response with `ok: false` also closes the connection, but the library does not reconnect until the next `state.sync()`. The remote counts as `online` once the first request succeeds.
@@ -1557,5 +1648,6 @@ The sync protocol uses JSON messages over WebSocket.
 { type: "events-push-response", requestId: string, data: { ok: true, beforeSyncId: number, afterSyncId: number } }
 
 // Server push notification when new events are available
-{ type: "events-applied", newSyncId: number, eventHlcSum: string | null }
+// eventHlcSum is always null; clients from before the state hash skip their comparison for it
+{ type: "events-applied", newSyncId: number, stateHash: string | null, eventHlcSum: null }
 ```
