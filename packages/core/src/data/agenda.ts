@@ -107,15 +107,7 @@ export function useHabitEntries(endDateKey: string) {
     return map as ReadonlyMap<string, HabitEntryValuesByDate>;
   }, [entriesRaw]);
 
-  const entryIdByHabitDate = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const entry of entriesRaw) {
-      map.set(`${entry.habitId}:${entry.date}`, entry.id);
-    }
-    return map;
-  }, [entriesRaw]);
-
-  return { entriesByHabit, entryIdByHabitDate };
+  return { entriesByHabit };
 }
 
 export type CalendarDayInfo = {
@@ -167,7 +159,7 @@ export function useAgenda(todayKey: string) {
     overdueBeforeMs: todayStartMs,
   });
   const inboxTasks = useInboxTasks();
-  const { entriesByHabit, entryIdByHabitDate } = useHabitEntries(entriesEndKey);
+  const { entriesByHabit } = useHabitEntries(entriesEndKey);
 
   const dayInfos: CalendarDayInfo[] = useMemo(
     () =>
@@ -225,18 +217,19 @@ export function useAgenda(todayKey: string) {
 
   const isSelectedToday = selectedKey === todayKey;
 
+  // Actions take the row they act on instead of reading query results, so they keep their
+  // identity across refreshes and memoized rows don't re-render.
   const toggleTaskCompleted = useCallback(
-    (taskId: string, completed: boolean) => {
-      const task = completed && isSelectedToday ? agendaTasks.find((row) => row.id === taskId) : undefined;
+    (task: AgendaTask, completed: boolean) => {
       // Finishing an overdue task logs it as done today instead of on the day it was missed.
       // Calendar-mirrored tasks keep their date, which the next sync would restore anyway.
-      if (task && isTaskOverdueForToday(task, todayKey) && !isCalendarBackedTask(task)) {
+      if (completed && isSelectedToday && isTaskOverdueForToday(task, todayKey) && !isCalendarBackedTask(task)) {
         rescheduleTask(db.db, task.id, dueAtOnDay(task, today), { completed: true });
         return;
       }
-      setTaskCompleted(db.db, taskId, completed);
+      setTaskCompleted(db.db, task.id, completed);
     },
-    [db, agendaTasks, isSelectedToday, todayKey, today],
+    [db, isSelectedToday, todayKey, today],
   );
 
   const moveTaskToToday = useCallback(
@@ -272,7 +265,7 @@ export function useAgenda(todayKey: string) {
     [db, selectedDate],
   );
 
-  const { toggleHabitDone, incrementHabit } = useHabitEntryActions(entryIdByHabitDate, todayKey);
+  const { toggleHabitDone, incrementHabit } = useHabitEntryActions(todayKey);
 
   return {
     selectedDate,
@@ -298,20 +291,15 @@ export function useAgenda(todayKey: string) {
 }
 
 /** Writes habit entries for a day; future days are ignored. */
-export function useHabitEntryActions(entryIdByHabitDate: ReadonlyMap<string, string>, todayKey: string) {
+export function useHabitEntryActions(todayKey: string) {
   const db = useDb();
 
   const setHabitEntryValue = useCallback(
     (habitId: string, dateKey: string, value: number) => {
       if (dateKey > todayKey) return;
-      writeHabitEntryValue(db.db, {
-        existingEntryId: entryIdByHabitDate.get(`${habitId}:${dateKey}`),
-        habitId,
-        dateKey,
-        value,
-      });
+      writeHabitEntryValue(db.db, { habitId, dateKey, value });
     },
-    [db, entryIdByHabitDate, todayKey],
+    [db, todayKey],
   );
 
   const toggleHabitDone = useCallback(

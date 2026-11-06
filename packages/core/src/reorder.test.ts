@@ -22,4 +22,14 @@ describe("reorderByOrder", () => {
     ]);
     expect(changes).toHaveLength(3);
   });
+
+  it("treats a null order as 0", () => {
+    const list = [
+      { id: "a", order: null },
+      { id: "b", order: 2 },
+      { id: "c", order: 4 },
+    ];
+    expect(reorderByOrder(list, 2, 1).changes).toEqual([{ id: "c", order: 1 }]);
+    expect(reorderByOrder(list, 1, 0).changes).toEqual([{ id: "b", order: -1 }]);
+  });
 });

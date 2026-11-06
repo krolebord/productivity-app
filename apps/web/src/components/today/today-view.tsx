@@ -546,7 +546,7 @@ function AgendaSectionBlock({
 }: {
   section: AgendaSection;
   onOpenTask: (id: string) => void;
-  onToggleTask: (id: string, completed: boolean) => void;
+  onToggleTask: (task: AgendaTask, completed: boolean) => void;
   onMoveTaskToToday: (task: AgendaTaskRow["task"]) => void;
   onToggleHabit: (habit: AgendaHabit, dateKey: string, done: boolean) => void;
   onIncrementHabit: (habitId: string, dateKey: string, currentValue: number) => void;
@@ -574,7 +574,7 @@ function AgendaSectionBlock({
                   (section.bucket === "anytime" || section.bucket === "overdue")
                 }
                 onOpen={() => onOpenTask(row.id)}
-                onToggle={(completed) => onToggleTask(row.id, completed)}
+                onToggle={(completed) => onToggleTask(row.task, completed)}
                 onMoveToToday={() => onMoveTaskToToday(row.task)}
               />
             ) : (
@@ -601,7 +601,7 @@ function CompletedSection({
 }: {
   rows: AgendaRow[];
   onOpenTask: (id: string) => void;
-  onToggleTask: (id: string, completed: boolean) => void;
+  onToggleTask: (task: AgendaTask, completed: boolean) => void;
   onToggleHabit: (habit: AgendaHabit, dateKey: string, done: boolean) => void;
   onIncrementHabit: (habitId: string, dateKey: string, currentValue: number) => void;
 }) {
@@ -629,7 +629,7 @@ function CompletedSection({
                   row={row}
                   overdue={false}
                   onOpen={() => onOpenTask(row.id)}
-                  onToggle={(completed) => onToggleTask(row.id, completed)}
+                  onToggle={(completed) => onToggleTask(row.task, completed)}
                 />
               ) : (
                 <HabitRow

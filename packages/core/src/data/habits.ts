@@ -128,18 +128,17 @@ export function saveHabitOrder(db: UserDbDatabase, changes: readonly { id: strin
 }
 
 /**
- * Writes a habit's value for one day: `existingEntryId` is updated (or deleted when the value
- * drops to 0); otherwise a positive value inserts a new entry.
+ * Writes a habit's value for one day: the day's existing entry is updated (or deleted when the
+ * value drops to 0); otherwise a positive value inserts a new entry.
  */
 export function setHabitEntryValue(
   db: UserDbDatabase,
-  {
-    existingEntryId,
-    habitId,
-    dateKey,
-    value,
-  }: { existingEntryId: string | undefined; habitId: string; dateKey: string; value: number },
+  { habitId, dateKey, value }: { habitId: string; dateKey: string; value: number },
 ) {
+  // Looked up here rather than passed in, so callers' actions don't depend on query results.
+  const existingEntryId = db.executeKysely((q) =>
+    q.selectFrom("habit_entry").select("id").where("habitId", "=", habitId).where("date", "=", dateKey).limit(1),
+  ).rows[0]?.id;
   const now = Date.now();
 
   if (existingEntryId) {

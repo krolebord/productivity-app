@@ -60,8 +60,8 @@ export default function HabitsScreen() {
   const db = useDb();
   const todayKey = useCurrentDayKey();
   const habits = useAgendaHabits();
-  const { entriesByHabit, entryIdByHabitDate } = useHabitEntries(todayKey);
-  const actions = useHabitEntryActions(entryIdByHabitDate, todayKey);
+  const { entriesByHabit } = useHabitEntries(todayKey);
+  const actions = useHabitEntryActions(todayKey);
   const [showArchived, setShowArchived] = useState(false);
 
   const days = useMemo(() => {

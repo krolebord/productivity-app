@@ -6,7 +6,7 @@ import { reorderByOrder } from "./reorder";
  * applied. A move paints right away and hands the order writes to `save`; the override is
  * dropped as soon as a new list comes in.
  */
-export function useReorderable<T extends { id: string; order: number }>(
+export function useReorderable<T extends { id: string; order: number | null }>(
   list: readonly T[],
   save: (changes: { id: string; order: number }[]) => void,
 ) {

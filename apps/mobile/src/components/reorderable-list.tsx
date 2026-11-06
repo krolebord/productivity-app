@@ -1,11 +1,17 @@
-import { type ReactElement, type ReactNode, useLayoutEffect } from "react";
+import { type ReactElement, type ReactNode, useLayoutEffect, useRef } from "react";
 import { View } from "react-native";
 import { GestureDetector, usePanGesture } from "react-native-gesture-handler";
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { cn } from "../lib/utils";
 
-type DragState = { index: SharedValue<number>; offset: SharedValue<number>; count: number; rowHeight: number };
+type DragState = {
+  index: SharedValue<number>;
+  offset: SharedValue<number>;
+  /** A shared value so a list growing or shrinking doesn't rebuild every row's gesture. */
+  count: SharedValue<number>;
+  rowHeight: number;
+};
 
 function targetIndex(from: number, offset: number, count: number, rowHeight: number) {
   "worklet";
@@ -19,6 +25,10 @@ export type DragHandle = (grip: ReactElement) => ReactElement;
  * A list whose rows are dragged into a new slot by a grip (see AccountList, the first user).
  * Rows have a fixed height so a drag offset maps straight to a target slot; `renderItem` gets
  * a `DragHandle` to wrap the row's grip in.
+ *
+ * Each row's gesture is reconfigured natively whenever its config changes. The React Compiler
+ * memoizes the config, but only on its inputs, so those are kept stable: callbacks go through a
+ * ref and `count` is a shared value. Only rows whose position changes get a new config.
  */
 export function ReorderableList<T extends { id: string }>({
   items,
@@ -38,25 +48,35 @@ export function ReorderableList<T extends { id: string }>({
 }) {
   const index = useSharedValue(-1);
   const offset = useSharedValue(0);
-  const drag: DragState = { index, offset, count: items.length, rowHeight };
+  const count = useSharedValue(items.length);
+  const drag: DragState = { index, offset, count, rowHeight };
+
+  // `onMove` usually changes whenever the list does; the rows' gestures read the latest one
+  // through this ref instead of closing over it.
+  const callbacks = useRef({ onMove, onDraggingChange });
+  useLayoutEffect(() => {
+    callbacks.current = { onMove, onDraggingChange };
+    count.set(items.length);
+  });
 
   const orderKey = items.map((item) => item.id).join("|");
   // Release the dragged row only once the reordered list has rendered, so it doesn't flash
   // back to its old slot for a frame.
   // biome-ignore lint/correctness/useExhaustiveDependencies: orderKey is the trigger; shared values are stable.
   useLayoutEffect(() => {
-    index.value = -1;
-    offset.value = 0;
+    index.set(-1);
+    offset.set(0);
   }, [orderKey]);
 
+  const dragStart = () => callbacks.current.onDraggingChange(true);
   const drop = (from: number, to: number) => {
-    onDraggingChange(false);
+    callbacks.current.onDraggingChange(false);
     if (from === to) {
-      index.value = -1;
-      offset.value = 0;
+      index.set(-1);
+      offset.set(0);
       return;
     }
-    onMove(from, to);
+    callbacks.current.onMove(from, to);
   };
 
   return (
@@ -67,7 +87,7 @@ export function ReorderableList<T extends { id: string }>({
           position={position}
           drag={drag}
           className={rowClassName}
-          onDragStart={() => onDraggingChange(true)}
+          onDragStart={dragStart}
           onDrop={drop}
           render={(handle) => renderItem(item, handle, position)}
         />
@@ -93,37 +113,41 @@ function ReorderableRow({
 }) {
   const { index, offset, count, rowHeight } = drag;
 
+  // The compiler memoizes this on its inputs; a new config object makes the gesture handler
+  // reconfigure natively, which is why the inputs are kept stable above.
   const pan = usePanGesture({
     activateAfterLongPress: 150,
     onActivate: () => {
       "worklet";
-      index.value = position;
-      offset.value = 0;
+      index.set(position);
+      offset.set(0);
       scheduleOnRN(onDragStart);
     },
     onUpdate: (event) => {
       "worklet";
-      offset.value = event.translationY;
+      offset.set(event.translationY);
     },
     onDeactivate: (event) => {
       "worklet";
       // A canceled drag (e.g. the system took the touch) springs back without saving.
-      const to = event.canceled ? position : targetIndex(position, offset.value, count, rowHeight);
+      const to = event.canceled ? position : targetIndex(position, offset.get(), count.get(), rowHeight);
       // Settle on the target slot; the reorder lands once the row is there, and only if it got there.
-      offset.value = withTiming((to - position) * rowHeight, { duration: 120 }, (finished) =>
-        scheduleOnRN(onDrop, position, finished ? to : position),
+      offset.set(
+        withTiming((to - position) * rowHeight, { duration: 120 }, (finished) =>
+          scheduleOnRN(onDrop, position, finished ? to : position),
+        ),
       );
     },
   });
 
   const style = useAnimatedStyle(() => {
-    const from = index.value;
+    const from = index.get();
     if (from < 0) return { transform: [{ translateY: 0 }, { scale: 1 }], zIndex: 0, shadowOpacity: 0 };
     if (from === position) {
-      return { transform: [{ translateY: offset.value }, { scale: 1.02 }], zIndex: 10, shadowOpacity: 0.15 };
+      return { transform: [{ translateY: offset.get() }, { scale: 1.02 }], zIndex: 10, shadowOpacity: 0.15 };
     }
     // Rows between the dragged row's slot and its target make room for it.
-    const to = targetIndex(from, offset.value, count, rowHeight);
+    const to = targetIndex(from, offset.get(), count.get(), rowHeight);
     const shift = from < position && position <= to ? -rowHeight : to <= position && position < from ? rowHeight : 0;
     return {
       transform: [{ translateY: withTiming(shift, { duration: 150 }) }, { scale: 1 }],

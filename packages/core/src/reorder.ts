@@ -1,9 +1,9 @@
 /**
- * Moves the row at `from` to index `to` in a list sorted by a numeric `order` column. Returns
- * the reordered list with updated `order` values (for painting before the query catches up)
- * and the order writes to persist.
+ * Moves the row at `from` to index `to` in a list sorted by a numeric `order` column (a null
+ * order counts as 0). Returns the reordered list with updated `order` values (for painting
+ * before the query catches up) and the order writes to persist.
  */
-export function reorderByOrder<T extends { id: string; order: number }>(
+export function reorderByOrder<T extends { id: string; order: number | null }>(
   rows: readonly T[],
   from: number,
   to: number,
@@ -14,8 +14,8 @@ export function reorderByOrder<T extends { id: string; order: number }>(
 
   // Slot the moved row between its new neighbours when there is room, so a
   // single drag writes a single row instead of renumbering the whole list.
-  const prevOrder = to > 0 ? moved[to - 1].order : undefined;
-  const nextOrder = to < moved.length - 1 ? moved[to + 1].order : undefined;
+  const prevOrder = to > 0 ? (moved[to - 1].order ?? 0) : undefined;
+  const nextOrder = to < moved.length - 1 ? (moved[to + 1].order ?? 0) : undefined;
   let movedOrder: number | null = null;
   if (typeof prevOrder === "number" && typeof nextOrder === "number") {
     const mid = (prevOrder + nextOrder) / 2;

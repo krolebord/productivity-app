@@ -1,6 +1,5 @@
 import {
   type AgendaHabit,
-  type AgendaHabitRow,
   type AgendaRow,
   type AgendaSection,
   type AgendaTask,
@@ -70,6 +69,17 @@ export default function TodayScreen() {
 
   // The viewed day is where "Scheduled" puts an inbox task, like quick-add and the inbox's schedule action.
   const openTask = (id: string) => router.push({ pathname: "/task/[id]", params: { id, day: agenda.selectedKey } });
+  // Rows get the actions rather than `agenda` (a new object every render), so the compiler can
+  // skip rows whose data didn't change.
+  const actions: RowActions = {
+    openTask,
+    toggleTaskCompleted: agenda.toggleTaskCompleted,
+    moveTaskToToday: agenda.moveTaskToToday,
+    toggleHabitDone: agenda.toggleHabitDone,
+    incrementHabit: agenda.incrementHabit,
+    completeInboxTask: agenda.completeInboxTask,
+    scheduleInboxTask: agenda.scheduleInboxTask,
+  };
 
   return (
     <View className="flex-1 bg-background">
@@ -102,7 +112,7 @@ export default function TodayScreen() {
         <QuickAddTask selectedLabel={headerLabel} onCreate={agenda.createTask} />
 
         {agenda.inboxTasks.length > 0 && (
-          <InboxSection tasks={agenda.inboxTasks} selectedLabel={headerLabel} agenda={agenda} onOpen={openTask} />
+          <InboxSection tasks={agenda.inboxTasks} selectedLabel={headerLabel} actions={actions} />
         )}
 
         {activeSections.length === 0 && completedRows.length === 0 ? (
@@ -117,12 +127,7 @@ export default function TodayScreen() {
               <View key={section.bucket} className="gap-1">
                 <SectionTitle label={section.label} destructive={section.bucket === "overdue"} />
                 {section.bucket === "anytime" && (
-                  <ReorderableTasks
-                    rows={section.rows}
-                    onOpenTask={openTask}
-                    onToggle={(id, completed) => agenda.toggleTaskCompleted(id, completed)}
-                    onDraggingChange={setDragging}
-                  />
+                  <ReorderableTasks rows={section.rows} actions={actions} onDraggingChange={setDragging} />
                 )}
                 {section.rows
                   .filter((row) => section.bucket !== "anytime" || !isManuallyOrdered(row))
@@ -131,8 +136,7 @@ export default function TodayScreen() {
                       key={`${row.kind}:${row.id}:${row.kind === "habit" ? row.dateKey : ""}`}
                       row={row}
                       overdue={section.bucket === "overdue"}
-                      agenda={agenda}
-                      onOpenTask={openTask}
+                      actions={actions}
                     />
                   ))}
               </View>
@@ -146,13 +150,7 @@ export default function TodayScreen() {
                 />
                 {showCompleted &&
                   completedRows.map((row) => (
-                    <AgendaRowView
-                      key={`${row.kind}:${row.id}`}
-                      row={row}
-                      overdue={false}
-                      agenda={agenda}
-                      onOpenTask={openTask}
-                    />
+                    <AgendaRowView key={`${row.kind}:${row.id}`} row={row} overdue={false} actions={actions} />
                   ))}
               </View>
             )}
@@ -169,22 +167,28 @@ const isManuallyOrdered = (row: AgendaRow): row is AgendaTaskRow =>
 
 const TASK_ROW_HEIGHT = 48;
 
+type RowActions = Pick<
+  Agenda,
+  | "toggleTaskCompleted"
+  | "moveTaskToToday"
+  | "toggleHabitDone"
+  | "incrementHabit"
+  | "completeInboxTask"
+  | "scheduleInboxTask"
+> & { openTask: (id: string) => void };
+
 function ReorderableTasks({
   rows,
-  onOpenTask,
-  onToggle,
+  actions,
   onDraggingChange,
 }: {
   rows: readonly AgendaRow[];
-  onOpenTask: (id: string) => void;
-  onToggle: (id: string, completed: boolean) => void;
+  actions: RowActions;
   onDraggingChange: (dragging: boolean) => void;
 }) {
   const db = useDb();
-  const tasks = useMemo(
-    () => rows.filter(isManuallyOrdered).map((row) => ({ id: row.id, order: row.task.order ?? 0, row })),
-    [rows],
-  );
+  // The tasks themselves, not wrappers, so an unchanged task is the same object after a refresh.
+  const tasks = useMemo(() => rows.filter(isManuallyOrdered).map((row) => row.task), [rows]);
   const save = useCallback((changes: { id: string; order: number }[]) => saveItemOrder(db.db, changes), [db]);
   const { items, move } = useReorderable(tasks, save);
   if (items.length === 0) return null;
@@ -196,14 +200,8 @@ function ReorderableTasks({
       onMove={move}
       onDraggingChange={onDraggingChange}
       rowClassName="bg-background"
-      renderItem={({ row }, handle) => (
-        <TaskRow
-          row={row}
-          overdue={false}
-          handle={handle}
-          onOpen={() => onOpenTask(row.id)}
-          onToggle={(completed) => onToggle(row.id, completed)}
-        />
+      renderItem={(task, handle) => (
+        <TaskRow task={task} completed={false} overdue={false} handle={handle} actions={actions} />
       )}
     />
   );
@@ -458,13 +456,11 @@ function QuickAddTask({
 function InboxSection({
   tasks,
   selectedLabel,
-  agenda,
-  onOpen,
+  actions,
 }: {
   tasks: AgendaTask[];
   selectedLabel: string;
-  agenda: Agenda;
-  onOpen: (id: string) => void;
+  actions: RowActions;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -476,58 +472,50 @@ function InboxSection({
         onToggle={() => setExpanded((value) => !value)}
       />
       {expanded &&
-        tasks.map((task) => (
-          <View key={task.id} className="min-h-11 flex-row items-center gap-3">
-            <CheckCircle
-              checked={false}
-              label={`Complete ${taskLabel(task)}`}
-              onPress={() => agenda.completeInboxTask(task.id, true)}
-            />
-            <Pressable className="flex-1 py-2" onPress={() => onOpen(task.id)}>
-              <TaskTitle task={task} />
-            </Pressable>
-            <IconButton
-              icon="calendar"
-              label={`Schedule for ${selectedLabel}`}
-              onPress={() => agenda.scheduleInboxTask(task.id)}
-              iconClassName="accent-muted-foreground"
-              size={16}
-              className="size-8"
-            />
-          </View>
-        ))}
+        tasks.map((task) => <InboxRow key={task.id} task={task} selectedLabel={selectedLabel} actions={actions} />)}
     </View>
   );
 }
 
-function AgendaRowView({
-  row,
-  overdue,
-  agenda,
-  onOpenTask,
-}: {
-  row: AgendaRow;
-  overdue: boolean;
-  agenda: Agenda;
-  onOpenTask: (id: string) => void;
-}) {
-  if (row.kind === "task") {
-    return (
-      <TaskRow
-        row={row}
-        overdue={overdue}
-        onOpen={() => onOpenTask(row.id)}
-        onToggle={(completed) => agenda.toggleTaskCompleted(row.id, completed)}
-        onMoveToToday={() => agenda.moveTaskToToday(row.task)}
+function InboxRow({ task, selectedLabel, actions }: { task: AgendaTask; selectedLabel: string; actions: RowActions }) {
+  return (
+    <View className="min-h-11 flex-row items-center gap-3">
+      <CheckCircle
+        checked={false}
+        optimistic
+        label={`Complete ${taskLabel(task)}`}
+        onPress={() => actions.completeInboxTask(task.id, true)}
       />
-    );
+      <Pressable className="flex-1 py-2" onPress={() => actions.openTask(task.id)}>
+        <TaskTitle task={task} />
+      </Pressable>
+      <IconButton
+        icon="calendar"
+        label={`Schedule for ${selectedLabel}`}
+        onPress={() => actions.scheduleInboxTask(task.id)}
+        iconClassName="accent-muted-foreground"
+        size={16}
+        className="size-8"
+      />
+    </View>
+  );
+}
+
+/** Spreads the row into fields so rows get the (stable) task or habit objects, not the wrapper. */
+function AgendaRowView({ row, overdue, actions }: { row: AgendaRow; overdue: boolean; actions: RowActions }) {
+  if (row.kind === "task") {
+    return <TaskRow task={row.task} completed={row.completed} overdue={overdue} actions={actions} />;
   }
   return (
     <HabitRow
-      row={row}
+      habit={row.habit}
+      dateKey={row.dateKey}
+      value={row.value}
+      dayValue={row.dayValue}
+      done={row.done}
+      editable={row.editable}
       overdue={overdue}
-      onToggle={(habit, done) => agenda.toggleHabitDone(habit, row.dateKey, done)}
-      onIncrement={() => agenda.incrementHabit(row.id, row.dateKey, row.dayValue)}
+      actions={actions}
     />
   );
 }
@@ -549,22 +537,19 @@ function TaskTitle({ task, completed = false, lines = 2 }: { task: AgendaTask; c
 }
 
 function TaskRow({
-  row,
+  task,
+  completed,
   overdue,
   handle,
-  onOpen,
-  onToggle,
-  onMoveToToday,
+  actions,
 }: {
-  row: AgendaTaskRow;
+  task: AgendaTask;
+  completed: boolean;
   overdue: boolean;
   /** Set for rows in a reorderable list: a one-line row with a grip at the end. */
   handle?: DragHandle;
-  onOpen: () => void;
-  onToggle: (completed: boolean) => void;
-  onMoveToToday?: () => void;
+  actions: RowActions;
 }) {
-  const { task, completed } = row;
   const timeLabel = task.hasDueTime && task.dueAt != null ? format(task.dueAt, "HH:mm") : null;
   const dueLabel = overdue && task.dueAt != null ? formatDueDateLabel(task.dueAt, task.hasDueTime) : null;
 
@@ -572,10 +557,11 @@ function TaskRow({
     <View className={cn("min-h-11 flex-row items-center gap-3", handle && "h-full", completed && "opacity-60")}>
       <CheckCircle
         checked={completed}
+        optimistic
         label={completed ? "Mark incomplete" : "Mark complete"}
-        onPress={() => onToggle(!completed)}
+        onPress={() => actions.toggleTaskCompleted(task, !completed)}
       />
-      <Pressable className="flex-1 py-2" onPress={onOpen}>
+      <Pressable className="flex-1 py-2" onPress={() => actions.openTask(task.id)}>
         <View className="flex-row items-center gap-2">
           <View className="shrink">
             <TaskTitle task={task} completed={completed} lines={handle ? 1 : 2} />
@@ -592,11 +578,11 @@ function TaskRow({
         </View>
         {dueLabel && <Text className="mt-0.5 text-destructive text-xs">{dueLabel}</Text>}
       </Pressable>
-      {overdue && onMoveToToday && (
+      {overdue && (
         <IconButton
           icon="corner-down-left"
           label="Move to today"
-          onPress={onMoveToToday}
+          onPress={() => actions.moveTaskToToday(task)}
           iconClassName="accent-muted-foreground"
           size={16}
           className="size-8"
@@ -616,34 +602,41 @@ function TaskRow({
 }
 
 function HabitRow({
-  row,
+  habit,
+  dateKey,
+  value,
+  dayValue,
+  done,
+  editable,
   overdue,
-  onToggle,
-  onIncrement,
+  actions,
 }: {
-  row: AgendaHabitRow;
+  habit: AgendaHabit;
+  dateKey: string;
+  value: number;
+  dayValue: number;
+  done: boolean;
+  editable: boolean;
   overdue: boolean;
-  onToggle: (habit: AgendaHabit, done: boolean) => void;
-  onIncrement: () => void;
+  actions: RowActions;
 }) {
-  const { habit, value, done, editable } = row;
+  const onToggle = (nextDone: boolean) => actions.toggleHabitDone(habit, dateKey, nextDone);
+  const onIncrement = () => actions.incrementHabit(habit.id, dateKey, dayValue);
   const isSimple = habit.target <= 1;
   const unit = habit.unit.trim();
   const progressLabel = `${value}/${habit.target}${unit ? ` ${unit}` : ""}`;
-  const missedLabel = overdue ? format(parseDateKey(row.dateKey), "MMM d") : null;
+  const missedLabel = overdue ? format(parseDateKey(dateKey), "MMM d") : null;
 
   return (
     <View className={`min-h-11 flex-row items-center gap-3 ${done ? "opacity-60" : ""}`}>
       <CheckCircle
         checked={done}
         disabled={!editable}
+        // Increments and confirmed resets don't flip `done` on every press.
+        optimistic={isSimple && !done}
         label={done ? `Uncheck ${habit.name}` : isSimple ? `Complete ${habit.name}` : `Add 1 to ${habit.name}`}
         onPress={() =>
-          done
-            ? confirmHabitReset(habit, value, () => onToggle(habit, false))
-            : isSimple
-              ? onToggle(habit, true)
-              : onIncrement()
+          done ? confirmHabitReset(habit, value, () => onToggle(false)) : isSimple ? onToggle(true) : onIncrement()
         }
       />
       <View className="flex-1 py-2">
