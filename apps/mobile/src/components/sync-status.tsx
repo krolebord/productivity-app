@@ -1,4 +1,5 @@
 import { useDb, useDbEvent, useDbState } from "@productivity/core/user-db/db-context";
+import { useConnectionBanner } from "@productivity/core/user-db/use-connection-banner";
 import { useEffect, useState } from "react";
 import { Alert, Animated, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,41 +7,15 @@ import { API_URL } from "../lib/config";
 import { cn } from "../lib/utils";
 import { Icon } from "./ui/icon";
 
-const SHOW_DELAY_MS = 1000;
-const BACK_ONLINE_MS = 1000;
-
-type Phase = "hidden" | "offline" | "back-online" | "leaving";
-
 /**
  * Connection badge floating over the top of every screen, like web's: appears once the sync
- * connection has been down for a moment, flashes "Back online" when it returns, then slides away.
+ * connection has been down for a few seconds, flashes "Back online" when it returns, then slides away.
  * Local edits keep working throughout and push once the connection is back.
  */
 export function OfflineBanner() {
-  const { state } = useDb();
-  const { remoteState } = useDbState();
+  const { phase, offline, reconnecting, reconnect, onLeft } = useConnectionBanner();
   const insets = useSafeAreaInsets();
-  const [phase, setPhase] = useState<Phase>("hidden");
   const [progress] = useState(() => new Animated.Value(0));
-
-  const online = remoteState === "online";
-
-  // Keyed on a boolean, so flips between "connecting" and "offline" during retries don't restart the delay.
-  useEffect(() => {
-    if (online) {
-      setPhase((current) => (current === "offline" ? "back-online" : current));
-      return;
-    }
-    setPhase((current) => (current === "back-online" || current === "leaving" ? "offline" : current));
-    const timeout = setTimeout(() => setPhase("offline"), SHOW_DELAY_MS);
-    return () => clearTimeout(timeout);
-  }, [online]);
-
-  useEffect(() => {
-    if (phase !== "back-online") return;
-    const timeout = setTimeout(() => setPhase("leaving"), BACK_ONLINE_MS);
-    return () => clearTimeout(timeout);
-  }, [phase]);
 
   useEffect(() => {
     if (phase === "hidden") return;
@@ -51,16 +26,12 @@ export function OfflineBanner() {
       useNativeDriver: true,
     });
     animation.start(({ finished }) => {
-      if (finished && leaving) setPhase("hidden");
+      if (finished && leaving) onLeft();
     });
     return () => animation.stop();
-  }, [phase, progress]);
-
-  const reconnecting = phase === "offline" && remoteState === "connecting";
+  }, [phase, progress, onLeft]);
 
   if (phase === "hidden") return null;
-
-  const offline = phase === "offline";
 
   return (
     <View
@@ -79,7 +50,7 @@ export function OfflineBanner() {
           accessibilityLabel={offline ? "You're offline. Tap to reconnect." : "Back online"}
           accessibilityState={{ busy: reconnecting, disabled: !offline }}
           disabled={!offline}
-          onPress={() => void state.goOnline()}
+          onPress={reconnect}
           className={cn(
             "flex-row items-center gap-2 rounded-full border py-1.5 pr-3 pl-3.5 shadow-md active:opacity-80",
             offline
