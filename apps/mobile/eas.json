@@ -6,7 +6,10 @@
   "build": {
     "base": {
       "node": "24.18.0",
-      "pnpm": "10.30.1"
+      "pnpm": "10.30.1",
+      "env": {
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a"
+      }
     },
     "development": {
       "extends": "base",
@@ -17,7 +20,6 @@
       },
       "env": {
         "APP_VARIANT": "development",
-        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a",
         "EAS_USE_CACHE": "1"
       }
     },
