@@ -15,5 +15,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     scheme: IS_DEV_VARIANT ? `${base.scheme}-dev` : base.scheme,
     ios: { ...base.ios, bundleIdentifier: appId },
     android: { ...base.android, package: appId },
+    // Release builds made outside EAS (the sideloaded iOS build) don't get a channel from eas.json,
+    // so name it here; EAS builds set the same one. The dev client loads from Metro instead.
+    updates: IS_DEV_VARIANT ? base.updates : { ...base.updates, requestHeaders: { "expo-channel-name": "production" } },
   };
 };

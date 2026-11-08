@@ -8,7 +8,8 @@
     "ios": "expo run:ios",
     "ios:dev": "APP_VARIANT=development expo run:ios --device \"iPhone 17\"",
     "prebuild:ios:dev": "APP_VARIANT=development expo prebuild -p ios --clean",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "update": "env -u APP_VARIANT -u EXPO_PUBLIC_API_URL eas update --channel production"
   },
   "dependencies": {
     "@expo/metro-runtime": "~58.0.17",
@@ -35,6 +36,7 @@
     "expo-splash-screen": "~58.0.13",
     "expo-status-bar": "~58.0.4",
     "expo-system-ui": "~58.0.7",
+    "expo-updates": "~58.0.21",
     "expo-web-browser": "~58.0.7",
     "kysely": "catalog:",
     "react": "catalog:",

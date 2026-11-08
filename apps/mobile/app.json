@@ -8,6 +8,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "primaryColor": "#8b5cf6",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4481f5e3-4b42-43b5-81ae-858b60600034"
+    },
     "experiments": {
       "reactCompiler": true
     },

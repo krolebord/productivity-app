@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter @productivity/web run dev",
     "dev:mobile": "pnpm --filter @productivity/mobile run start",
+    "update:mobile": "pnpm --filter @productivity/mobile run update",
     "build": "pnpm --filter @productivity/web run build",
     "preview": "pnpm --filter @productivity/web run preview",
     "deploy": "pnpm --filter @productivity/web run deploy",

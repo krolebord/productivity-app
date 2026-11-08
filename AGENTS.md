@@ -78,6 +78,12 @@ in `apps/mobile/src/lib/user-db.tsx` and uses core's `data/*` hooks like the web
   the dev-client preset) into a separate app: "Productivity (dev)",
   `com.krolebord.productivity.dev`, scheme `productivity-dev`, installable next to prod
   (`com.krolebord.productivity.prod`).
+- Release builds take JS-only changes over the air with expo-updates (EAS Update): `pnpm update:mobile`
+  publishes to the single `production` channel that the `preview` and `production` EAS profiles use (and
+  `app.config.ts` names for release builds made outside EAS). `runtimeVersion` uses the fingerprint policy,
+  so an update only reaches builds with the same native code; a new native dependency, config plugin or
+  app config change needs a new build. The script drops `APP_VARIANT` and `EXPO_PUBLIC_API_URL`, which
+  the dev preset sets, so an update can't point release builds at the dev server or miss their fingerprint.
 - The sync WebSocket authenticates with the same `Authorization: Bearer` session token.
 - `metro.config.js` stubs kysely's Node-only `FileMigrationProvider`, whose dynamic
   `import()` Hermes can't compile.
