@@ -108,6 +108,14 @@ in `apps/mobile/src/lib/user-db.tsx` and uses core's `data/*` hooks like the web
   on single-line fields, which iOS otherwise renders off-center. Likewise `Switch` from
   `components/ui/switch.tsx`, which sets theme colors (Android otherwise paints the thumb teal).
   Biome enforces both outside `components/ui/` (`noRestrictedImports` in `biome.json`).
+- Keyboard handling uses react-native-keyboard-controller (`KeyboardProvider` in `src/app/_layout.tsx`,
+  a native module). The editors' `EditorShell` uses its `KeyboardAvoidingView` with `automaticOffset`:
+  RN's own one measures itself relative to its parent, so inside an iOS sheet it padded too little and
+  the bottom bar ended up behind the keyboard. Prefer the library's components for new keyboard work;
+  older screens still use RN's `KeyboardAvoidingView` / `automaticallyAdjustKeyboardInsets`.
+- `babel.config.js` adds one local plugin (`babel/hermes-async-arrow-rest-pattern.js`): Hermes in RN
+  0.88.1 can't parse `async (...[a, b]) =>`, which oRPC's client ships, and babel-preset-expo 58.0.24
+  dropped its own fix. Its comment says how to check whether it can be deleted.
 - Short pickers open in `FormSheet` from `components/ui/form-sheet.tsx` (long ones in `PickerScreen`), a wrapper around
   react-native-screens' experimental `FormSheet` (Biome blocks importing it directly). It's experimental API:
   recheck the pickers on both platforms when react-native-screens changes. Android always compiles it; iOS

@@ -6,6 +6,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useCSSVariable, useUniwind } from "uniwind";
 import { SessionProvider, useSession } from "../lib/session";
 
@@ -62,12 +63,14 @@ export default function RootLayout() {
   };
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: navigationTheme.colors.background }}>
-      <ThemeProvider value={navigationTheme}>
-        <SessionProvider>
-          <RootStack />
-          <StatusBar style={theme === "dark" ? "light" : "dark"} />
-        </SessionProvider>
-      </ThemeProvider>
+      <KeyboardProvider>
+        <ThemeProvider value={navigationTheme}>
+          <SessionProvider>
+            <RootStack />
+            <StatusBar style={theme === "dark" ? "light" : "dark"} />
+          </SessionProvider>
+        </ThemeProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

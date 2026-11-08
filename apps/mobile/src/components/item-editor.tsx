@@ -1,16 +1,6 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import {
-  Dimensions,
-  Keyboard,
-  type KeyboardEvent,
-  LayoutAnimation,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
 import Animated, { Easing, FadeInDown, FadeOut, LinearTransition, ReduceMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cn } from "../lib/utils";
@@ -22,45 +12,6 @@ const panelEnter = FadeInDown.duration(180)
   .withInitialValues({ opacity: 0, transform: [{ translateY: 12 }] })
   .reduceMotion(ReduceMotion.System);
 const panelExit = FadeOut.duration(120).reduceMotion(ReduceMotion.System);
-
-/**
- * How much of the screen's bottom the keyboard covers, with the keyboard's own animation on iOS.
- *
- * The editors reach the screen's bottom edge, so that's the distance from the keyboard's top to the
- * bottom of the screen. RN's KeyboardAvoidingView instead compares its own frame, relative to its
- * parent, with the keyboard's top in screen coordinates; inside an iOS sheet, which starts below the
- * top of the screen, those disagree by the sheet's offset, and the bottom bar ended up behind the
- * keyboard. Not the keyboard's `height` either: Android leaves out the navigation bar under it,
- * which the edge-to-edge editor also extends behind.
- */
-function useKeyboardInset() {
-  const [inset, setInset] = useState(() => {
-    const metrics = Keyboard.isVisible() ? Keyboard.metrics() : undefined;
-    return metrics ? coveredBy(metrics.screenY) : 0;
-  });
-  useEffect(() => {
-    const follow = (shown: boolean) => (event: KeyboardEvent) => {
-      if (Platform.OS === "ios" && event.duration > 0) {
-        LayoutAnimation.configureNext({
-          duration: event.duration,
-          update: { duration: event.duration, type: LayoutAnimation.Types[event.easing] ?? "keyboard" },
-        });
-      }
-      setInset(shown ? coveredBy(event.endCoordinates.screenY) : 0);
-    };
-    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", follow(true));
-    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", follow(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-  return inset;
-}
-
-function coveredBy(keyboardTop: number) {
-  return Math.max(Dimensions.get("screen").height - keyboardTop, 0);
-}
 
 /**
  * Editor layout shared by tasks, notes and transactions: a header, scrolling content, an optional
@@ -85,28 +36,34 @@ export function EditorShell({
   toolbarClassName?: string;
 }) {
   const insets = useSafeAreaInsets();
-  const keyboardInset = useKeyboardInset();
+  const keyboardVisible = useKeyboardState((state) => state.isVisible);
   return (
-    <View className="flex-1 bg-background" style={{ paddingBottom: keyboardInset }}>
-      {header}
-      <Animated.ScrollView
-        layout={panelLayout}
-        className="flex-1"
-        contentContainerClassName={cn("grow gap-5 px-5 pt-3 pb-6", contentClassName)}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-        scrollEnabled={scrollEnabled}
-      >
-        {children}
-      </Animated.ScrollView>
-      {panel}
-      <View
-        className={cn("flex-row items-center gap-1 border-border border-t bg-background px-3 pt-2", toolbarClassName)}
-        style={{ paddingBottom: keyboardInset > 0 ? 8 : Math.max(insets.bottom, 8) }}
-      >
-        {toolbar}
+    // `automaticOffset` measures where the editor really sits on screen. RN's own
+    // KeyboardAvoidingView doesn't, so inside an iOS sheet, which starts below the top of the
+    // screen, it padded too little and the bottom bar ended up behind the keyboard.
+    // Uniwind only styles core components through `className`, so the library's view takes `style`.
+    <KeyboardAvoidingView behavior="padding" automaticOffset style={{ flex: 1 }}>
+      <View className="flex-1 bg-background">
+        {header}
+        <Animated.ScrollView
+          layout={panelLayout}
+          className="flex-1"
+          contentContainerClassName={cn("grow gap-5 px-5 pt-3 pb-6", contentClassName)}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          scrollEnabled={scrollEnabled}
+        >
+          {children}
+        </Animated.ScrollView>
+        {panel}
+        <View
+          className={cn("flex-row items-center gap-1 border-border border-t bg-background px-3 pt-2", toolbarClassName)}
+          style={{ paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom, 8) }}
+        >
+          {toolbar}
+        </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
