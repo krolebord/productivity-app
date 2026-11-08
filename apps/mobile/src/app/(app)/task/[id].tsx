@@ -1,31 +1,21 @@
 import { parseDateKey } from "@productivity/core/agenda";
 import { deleteItem, isBlankItem, useItem } from "@productivity/core/data/items";
-import {
-  detachTaskFromCalendar,
-  discardTaskIfBlank,
-  saveTask,
-  type TaskFields,
-  useTaskTagSuggestions,
-} from "@productivity/core/data/tasks";
+import { detachTaskFromCalendar, discardTaskIfBlank, saveTask, type TaskFields } from "@productivity/core/data/tasks";
 import { localMidnightMs } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
-import { setMarkdownTaskChecked } from "@productivity/core/note-text";
 import { parseTags, serializeTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
+import { format } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
-import { ActionButton } from "../../../components/action-button";
-import { Markdown } from "../../../components/markdown";
+import { Alert, Text, View } from "react-native";
+import { ItemDocumentEditor } from "../../../components/item-document-editor";
+import { EditorAction, EditorMetadata } from "../../../components/item-editor";
 import { SheetHeader } from "../../../components/screen-header";
-import { TagEditor } from "../../../components/tag-editor";
 import { TaskScheduleSection } from "../../../components/task-schedule";
 import { EmptyState } from "../../../components/ui/empty-state";
-import { FormSection } from "../../../components/ui/form";
 import { Icon } from "../../../components/ui/icon";
-import { Input } from "../../../components/ui/input";
-import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { useAutosave } from "../../../lib/use-autosave";
 import { useCloseWhenDeleted } from "../../../lib/use-close-when-deleted";
 
@@ -52,7 +42,6 @@ export default function TaskScreen() {
 function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | undefined; defaultDay?: Date }) {
   const db = useDb();
   const router = useRouter();
-  const tagSuggestions = useTaskTagSuggestions();
   const [openedBlank] = useState(() => isBlankItem(task ?? {}));
   const [fields, setFields] = useState(() => ({
     title: task?.title ?? "",
@@ -63,7 +52,6 @@ function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | und
     completedAt: task?.completedAt ?? null,
   }));
   const fieldsRef = useRef(fields);
-  const [editingDetails, setEditingDetails] = useState(!task?.content?.trim());
   // Until its first save inserts it, a new task has no row; after that (or for a task opened
   // from its row) a missing row means it was deleted elsewhere, and saves mustn't recreate it.
   const isDraft = useRef(!task);
@@ -92,14 +80,6 @@ function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | und
     fieldsRef.current = next;
     setFields(next);
     autosave.schedule({ ...next, tags: serializeTags(next.tags) });
-  };
-
-  const toggleChecklistItem = (item: { index: number; checked: boolean; text: string }) => {
-    const content = setMarkdownTaskChecked(fieldsRef.current.content, item);
-    // The item couldn't be told apart from another; let the user tick it in the source instead.
-    if (content === fieldsRef.current.content) return setEditingDetails(true);
-    update({ content });
-    autosave.flush();
   };
 
   const toggleCompleted = () => {
@@ -135,59 +115,43 @@ function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | und
   const completed = fields.completedAt != null;
 
   return (
-    <KeyboardScreen
-      header={
-        <SheetHeader
-          title={openedBlank ? "New task" : "Task"}
-          onCancel={() => setEditingDetails(!editingDetails)}
-          cancelLabel={editingDetails ? "Preview" : "Edit"}
-          onDone={() => router.back()}
+    <ItemDocumentEditor
+      kind="task"
+      openedBlank={openedBlank}
+      value={fields}
+      onChange={update}
+      onClose={() => router.back()}
+      completed={completed}
+      accessory={{
+        label: "Schedule",
+        icon: "calendar",
+        summary:
+          fields.dueAt == null
+            ? undefined
+            : format(new Date(fields.dueAt), fields.hasDueTime ? "EEE, MMM d · HH:mm" : "EEE, MMM d"),
+        content: (
+          <TaskScheduleSection
+            dueAt={fields.dueAt}
+            hasDueTime={fields.hasDueTime}
+            defaultDay={defaultDay}
+            onChange={update}
+          />
+        ),
+      }}
+      trailingActions={
+        <EditorAction
+          icon={completed ? "rotate-ccw" : "check"}
+          label={completed ? "Reopen" : "Complete"}
+          onPress={toggleCompleted}
         />
       }
+      menuItems={[{ icon: "trash-2", label: "Delete task", destructive: true, onPress: confirmDelete }]}
     >
-      <View className="gap-2">
-        <Input
-          value={fields.title}
-          onChangeText={(title) => update({ title })}
-          placeholder="What needs doing?"
-          className={`font-semibold text-xl ${completed ? "line-through opacity-60" : ""}`}
-          multiline
-          submitBehavior="blurAndSubmit"
-          autoFocus={openedBlank}
-        />
-        {editingDetails ? (
-          <Input
-            value={fields.content}
-            onChangeText={(content) => update({ content })}
-            placeholder="Add details… (markdown)"
-            className="min-h-24"
-            multiline
-            textAlignVertical="top"
-            // Opening the editor from a rendered task focuses it; a new task focuses the title instead.
-            autoFocus={!!task?.content?.trim()}
-          />
-        ) : fields.content.trim() ? (
-          <Markdown markdown={fields.content} onToggleTask={toggleChecklistItem} />
-        ) : (
-          <Pressable accessibilityRole="button" onPress={() => setEditingDetails(true)} className="min-h-12 py-1">
-            <Text className="text-base text-muted-foreground">Add details…</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <FormSection title="Tags">
-        <View className="px-4 py-2">
-          <TagEditor value={fields.tags} onChange={(tags) => update({ tags })} suggestions={tagSuggestions} />
+      {completed && (
+        <View className="flex-row">
+          <EditorMetadata icon="check-circle" label="Completed" onPress={toggleCompleted} />
         </View>
-      </FormSection>
-
-      <TaskScheduleSection
-        dueAt={fields.dueAt}
-        hasDueTime={fields.hasDueTime}
-        defaultDay={defaultDay}
-        onChange={update}
-      />
-
+      )}
       {task && isCalendarBackedTask(task) && (
         <View className="flex-row items-start gap-2 px-1">
           <Icon name="calendar" size={14} colorClassName="accent-muted-foreground" />
@@ -199,15 +163,6 @@ function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | und
           </Text>
         </View>
       )}
-
-      <View className="flex-row gap-3">
-        <ActionButton
-          icon={completed ? "rotate-ccw" : "check"}
-          label={completed ? "Reopen" : "Complete"}
-          onPress={toggleCompleted}
-        />
-        <ActionButton icon="trash-2" label="Delete" destructive onPress={confirmDelete} />
-      </View>
-    </KeyboardScreen>
+    </ItemDocumentEditor>
   );
 }

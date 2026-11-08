@@ -5,24 +5,18 @@ import {
   isBlankNote,
   type NoteFields,
   saveNote,
-  useNoteTagSuggestions,
 } from "@productivity/core/data/notes";
-import { setMarkdownTaskChecked } from "@productivity/core/note-text";
 import { parseTags, serializeTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
-import { ActionButton } from "../../../components/action-button";
+import { Alert, View } from "react-native";
 import { useAskAssistant, useAssistantEnabled } from "../../../components/assistant-button";
-import { Markdown } from "../../../components/markdown";
+import { ItemDocumentEditor } from "../../../components/item-document-editor";
+import { EditorAction } from "../../../components/item-editor";
 import { SheetHeader } from "../../../components/screen-header";
-import { TagEditor, type TagEditorHandle } from "../../../components/tag-editor";
 import { EmptyState } from "../../../components/ui/empty-state";
-import { FormSection } from "../../../components/ui/form";
-import { Input } from "../../../components/ui/input";
-import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { useAutosave } from "../../../lib/use-autosave";
 import { useCloseWhenDeleted } from "../../../lib/use-close-when-deleted";
 
@@ -49,18 +43,15 @@ export default function NoteScreen() {
 function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | undefined; draftTags?: string }) {
   const db = useDb();
   const router = useRouter();
-  const tagSuggestions = useNoteTagSuggestions();
   const assistantEnabled = useAssistantEnabled();
   const ask = useAskAssistant();
   const [openedBlank] = useState(() => isBlankNote(note ?? {}));
-  const [editing, setEditing] = useState(openedBlank);
   const [fields, setFields] = useState(() => ({
     title: note?.title ?? "",
     content: note?.content ?? "",
     tags: parseTags(note?.tags ?? draftTags),
   }));
   const fieldsRef = useRef(fields);
-  const tagEditor = useRef<TagEditorHandle>(null);
   const toNoteFields = (next: typeof fields): NoteFields => ({ ...next, tags: serializeTags(next.tags) });
   // Until its first save inserts it, a new note has no row; after that (or for a note opened
   // from its row) a missing row means it was deleted elsewhere, and saves mustn't recreate it.
@@ -93,24 +84,14 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
     autosave.schedule(toNoteFields(next));
   };
 
-  const toggleTask = (task: { index: number; checked: boolean; text: string }) => {
-    const content = setMarkdownTaskChecked(fieldsRef.current.content, task);
-    // The item couldn't be told apart from another; let the user tick it in the source instead.
-    if (content === fieldsRef.current.content) return setEditing(true);
-    update({ content });
-    autosave.flush();
-  };
-
   const askAssistant = () => {
     // The assistant reads the synced row, so get the latest text into it first.
-    tagEditor.current?.commit();
     autosave.cancel();
     save(toNoteFields(fieldsRef.current), { insertBlank: true });
     ask({ table: "item", id });
   };
 
   const convertToTask = () => {
-    tagEditor.current?.commit();
     autosave.cancel();
     save(toNoteFields(fieldsRef.current), { insertBlank: true });
     convertNoteToTask(db.db, id);
@@ -134,64 +115,20 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
     ]);
 
   return (
-    <KeyboardScreen
-      header={
-        <SheetHeader
-          title={openedBlank ? "New note" : "Note"}
-          onCancel={() => setEditing(!editing)}
-          cancelLabel={editing ? "Preview" : "Edit"}
-          onDone={() => router.back()}
-        />
+    <ItemDocumentEditor
+      kind="note"
+      openedBlank={openedBlank}
+      value={fields}
+      onChange={update}
+      onClose={() => router.back()}
+      actions={
+        assistantEnabled &&
+        !isBlankNote(fields) && <EditorAction icon="message-circle" label="Ask assistant" onPress={askAssistant} />
       }
-    >
-      <View className="gap-2">
-        <Input
-          value={fields.title}
-          onChangeText={(title) => update({ title })}
-          placeholder="Title"
-          className="font-semibold text-xl"
-          multiline
-          submitBehavior="blurAndSubmit"
-        />
-        {editing ? (
-          <Input
-            value={fields.content}
-            onChangeText={(content) => update({ content })}
-            placeholder="Write something… (markdown)"
-            className="min-h-64"
-            multiline
-            textAlignVertical="top"
-            autoFocus
-          />
-        ) : fields.content.trim() ? (
-          <Markdown markdown={fields.content} onToggleTask={toggleTask} style={{ minHeight: 64 }} />
-        ) : (
-          <Pressable accessibilityRole="button" onPress={() => setEditing(true)} className="min-h-16 py-1">
-            <Text className="text-base text-muted-foreground">Tap to write…</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <FormSection title="Tags">
-        <View className="px-4 py-2">
-          <TagEditor
-            ref={tagEditor}
-            value={fields.tags}
-            onChange={(tags) => update({ tags })}
-            suggestions={tagSuggestions}
-          />
-        </View>
-      </FormSection>
-
-      {assistantEnabled && !isBlankNote(fields) && (
-        <View className="flex-row">
-          <ActionButton icon="message-circle" label="Ask assistant" onPress={askAssistant} />
-        </View>
-      )}
-      <View className="flex-row gap-3">
-        <ActionButton icon="check-square" label="Make task" onPress={convertToTask} />
-        <ActionButton icon="trash-2" label="Delete" destructive onPress={confirmDelete} />
-      </View>
-    </KeyboardScreen>
+      menuItems={[
+        { icon: "check-square", label: "Make task", onPress: convertToTask },
+        { icon: "trash-2", label: "Delete note", destructive: true, onPress: confirmDelete },
+      ]}
+    />
   );
 }

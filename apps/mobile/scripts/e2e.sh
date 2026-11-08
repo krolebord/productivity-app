@@ -6,13 +6,16 @@
 #   e2e.sh up              start the API, Metro and the tunnel to the Mac; wait until the Mac reaches both
 #   e2e.sh build android   build the dev APK if native code changed (memory-capped; run in the background)
 #   e2e.sh build ios       build the dev .app on the Mac if native code changed
-#   e2e.sh devices         list simulators/emulators already booted on the Mac
-#   e2e.sh install android install the build, forward 8082 and 3301 to the emulator, print the launch command
+#   e2e.sh devices         list simulators/emulators already booted on the Mac (local: phones on this server's adb)
+#   e2e.sh install android install the build, forward 8082 and 3301 to the emulator/phone, print the launch command
 #   e2e.sh install ios     install the build on the simulator, print the launch command
 #   e2e.sh down            stop what `up` started (API, Metro, tunnel)
 #
 # Boot the device between `build` and `install` with T3's device_open, after
 # checking `devices`: the Mac has 8 GB of RAM, so keep one device booted.
+#
+# RN_E2E_TARGET=local e2e.sh ...  uses the Android phone on this server's adb
+# instead of the Mac (no tunnel; adb reverse maps 8082 and 3301 to this server).
 set -euo pipefail
 
 S=${RN_E2E_SCRIPTS:-$HOME/.agents/skills/rn-e2e-verification/scripts}
@@ -74,11 +77,14 @@ cmd_up() {
 	fi
 
 	# One SSH tunnel forwards both Metro and the API to the Mac's 127.0.0.1.
-	if rn_has_session "$TUNNEL_SESSION" && ! mac_api_ok && api_ok; then
+	# A local phone gets both through adb reverse (install) instead.
+	if rn_is_local; then
+		:
+	elif rn_has_session "$TUNNEL_SESSION" && ! mac_api_ok && api_ok; then
 		rn_log "tunnel: doesn't forward the API; restarting it"
 		rn_tmux kill-session -t "=$TUNNEL_SESSION"
 	fi
-	if ! rn_has_session "$TUNNEL_SESSION"; then
+	if ! rn_is_local && ! rn_has_session "$TUNNEL_SESSION"; then
 		rn_start_session "$TUNNEL_SESSION" "$HOME" \
 			"ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -R $METRO_PORT:localhost:$METRO_PORT -R $API_PORT:localhost:$API_PORT $RN_E2E_MAC 2>&1 | tee -a $RN_E2E_LOG_DIR/tunnel-$METRO_PORT.log"
 		sleep 3
@@ -88,8 +94,63 @@ cmd_up() {
 	# Waits for Metro on this server and through the Mac.
 	"$S/metro-up.sh" --app "$APP_DIR" --port "$METRO_PORT"
 	wait_for api 180 api_ok
-	wait_for "api via the Mac" 90 mac_api_ok
+	rn_is_local || wait_for "api via the Mac" 90 mac_api_ok
 	rn_log "web: http://localhost:$API_PORT (the first page load can render blank while Vite optimizes deps; reload)"
+}
+
+# The global build.sh copies only the app directory to the Mac, but this app is a pnpm workspace
+# member: it needs packages/core, the root package.json (catalog, and the op-sqlite flag the iOS
+# podspec reads) and the root lockfile. So this copies the workspace (sources only, ~5 MB),
+# installs there and builds apps/mobile. It writes the same ios.app/ios.fingerprint stamps
+# install.sh reads, so `e2e.sh install ios` works unchanged.
+build_ios() {
+	local force=0
+	[[ "${1:-}" == "--force" ]] && force=1
+	rn_parse_args --app "$APP_DIR" --port "$METRO_PORT"
+	rn_load_app_config
+	rn_lock "$RN_APP_SLUG-ios"
+	local fingerprint dir="~/$RN_APP_MAC_DIR" log="$RN_E2E_LOG_DIR/xcodebuild-$RN_APP_SLUG.log"
+	fingerprint=$(rn_fingerprint ios)
+	[[ -n "$fingerprint" ]] || rn_die "could not compute the ios fingerprint"
+	if ((!force)) && [[ "$(rn_mac "test -d \"\$(cat $dir/ios.app)\" && cat $dir/ios.fingerprint" 2>/dev/null)" == "$fingerprint" ]]; then
+		rn_log "ios: build is current ($fingerprint), skipping"
+		return
+	fi
+	local free_kb
+	free_kb=$(rn_mac 'df -k ~ | tail -n1' | awk '{print $4}')
+	((free_kb > 8 * 1024 * 1024)) || rn_die "only $((free_kb / 1024 / 1024)) GB free on the Mac (need 8); ask the user"
+
+	rn_log "ios: building the workspace on the Mac in $dir (log $log, ~10 min clean)"
+	rn_mac "rm -f $dir/ios.fingerprint $dir/ios.app && rm -rf $dir/dd && mkdir -p $dir/src"
+	# .env files stay here: Metro on this server inlines env values.
+	rsync -a --delete -e 'ssh -o BatchMode=yes' \
+		--exclude node_modules --exclude .git --exclude 'apps/mobile/android' --exclude 'apps/mobile/ios' \
+		--exclude '.env' --exclude '.env.*' --exclude .dev.vars --exclude .expo --exclude .wrangler --exclude dist \
+		"$REPO_DIR/" "$RN_E2E_MAC:$RN_APP_MAC_DIR/src/" >"$log" 2>&1 || rn_die "rsync to the Mac failed; see $log"
+	local mac_env="export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$HOME/Library/pnpm:\$PATH\" LANG=en_US.UTF-8 CI=1 APP_VARIANT=development"
+	rn_mac "cd $dir/src && $mac_env && pnpm install --frozen-lockfile \
+		&& cd apps/mobile && npx expo prebuild -p ios --clean" >>"$log" 2>&1 ||
+		rn_die "ios install/prebuild failed; see $log"
+	local scheme
+	scheme=$(rn_mac "cd $dir/src/apps/mobile/ios && ls -d *.xcworkspace" | head -n1)
+	scheme=${scheme%.xcworkspace}
+	[[ -n "$scheme" ]] || rn_die "prebuild produced no .xcworkspace; see $log"
+	# Ad-hoc signing (CODE_SIGN_IDENTITY=-) keeps keychain access working for expo-secure-store.
+	rn_mac "cd $dir/src/apps/mobile/ios && $mac_env RCT_NO_LAUNCH_PACKAGER=1 \
+		&& xcodebuild -workspace '$scheme.xcworkspace' -scheme '$scheme' -configuration Debug -sdk iphonesimulator \
+			-destination 'generic/platform=iOS Simulator' -derivedDataPath $dir/dd -jobs 4 \
+			CODE_SIGN_IDENTITY=- COMPILER_INDEX_STORE_ENABLE=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES build" >>"$log" 2>&1 || {
+		tail -n 30 "$log" >&2
+		rn_die "xcodebuild failed; see $log"
+	}
+	local built="$dir/dd/Build/Products/Debug-iphonesimulator/'$scheme.app'"
+	rn_mac "test -d $built" || rn_die "xcodebuild succeeded but $scheme.app isn't where expected; see $log"
+	# Keep only the .app; the workspace copy and DerivedData are ~6 GB.
+	rn_mac "rm -rf $dir/'$scheme.app' && ditto $built $dir/'$scheme.app' \
+		&& rm -rf $dir/src $dir/dd \
+		&& echo $dir/'$scheme.app' > $dir/ios.app \
+		&& printf '%s\n' $fingerprint > $dir/ios.fingerprint"
+	rn_log "ios: built $scheme.app on the Mac (kept ~/$RN_APP_MAC_DIR/$scheme.app)"
 }
 
 cmd_build() {
@@ -106,13 +167,22 @@ cmd_build() {
 			--working-directory="$APP_DIR" \
 			"$S/build.sh" --app "$APP_DIR" --port "$METRO_PORT" android "$@"
 		;;
-	ios) "$S/build.sh" --app "$APP_DIR" --port "$METRO_PORT" ios "$@" ;;
+	ios) build_ios "$@" ;;
 	*) rn_die "usage: e2e.sh build android|ios [--force]" ;;
 	esac
 }
 
 cmd_devices() {
 	local booted
+	if rn_is_local; then
+		booted=$(adb devices | awk 'NR>1 && $2=="device" {print "android  " $1}')
+		if [[ -z "$booted" ]]; then
+			rn_log "no Android device on this server's adb: ask the user to turn on Wireless debugging and give its port"
+		else
+			printf '%s\n' "$booted"
+		fi
+		return
+	fi
 	booted=$(rn_mac 'xcrun simctl list devices booted 2>/dev/null | grep -E "\(Booted\)" | sed -E "s/^ +/ios      /"; adb devices 2>/dev/null | awk "NR>1 && \$2==\"device\" {print \"android  \" \$1}"')
 	if [[ -z "$booted" ]]; then
 		rn_log "no simulators or emulators booted on the Mac"
@@ -128,8 +198,10 @@ cmd_install() {
 	android)
 		"$S/install.sh" --app "$APP_DIR" --port "$METRO_PORT" android
 		# install.sh forwards only Metro; the app also calls the API on 127.0.0.1.
-		rn_mac "adb -s $RN_E2E_EMU_SERIAL reverse tcp:$API_PORT tcp:$API_PORT" >/dev/null
-		rn_mac "adb -s $RN_E2E_EMU_SERIAL reverse --list" | grep -q "tcp:$API_PORT" ||
+		local serial
+		serial=$(rn_android_serial)
+		rn_adb "$serial" reverse "tcp:$API_PORT" "tcp:$API_PORT" >/dev/null
+		rn_adb "$serial" reverse --list | grep -q "tcp:$API_PORT" ||
 			rn_die "adb reverse for the API port didn't take"
 		rn_log "android: API port $API_PORT forwarded"
 		;;
@@ -151,7 +223,7 @@ shift || true
 case "$command" in
 up | build | devices | install | down) "cmd_$command" "$@" ;;
 *)
-	sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+	sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
 	exit 1
 	;;
 esac

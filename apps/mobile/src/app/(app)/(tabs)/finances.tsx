@@ -18,9 +18,10 @@ import {
   trailingDailyRange,
 } from "@productivity/core/finance/overview";
 import { MAX_SPENDING_DAYS, spendingDaysForWidth } from "@productivity/core/finance/spending-days";
+import { formatShortDayHeader, groupTransactionsByDay } from "@productivity/core/finance/transaction-list";
 import { useRouter } from "expo-router";
 import { type ReactNode, useMemo, useState } from "react";
-import { Modal, Platform, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 // RNGH's scroll view, so an account row being dragged takes over from scrolling.
 import { ScrollView } from "react-native-gesture-handler";
 import { AccountList } from "../../../components/account-list";
@@ -32,6 +33,7 @@ import { type OverviewChart, OverviewCharts } from "../../../components/overview
 import { ScreenHeader, SheetHeader } from "../../../components/screen-header";
 import { TransactionRow } from "../../../components/transaction-row";
 import { ActionSheet } from "../../../components/ui/action-sheet";
+import { FormSheet } from "../../../components/ui/form-sheet";
 import { Icon, type IconName } from "../../../components/ui/icon";
 import { IconButton } from "../../../components/ui/icon-button";
 import { StatusNotice } from "../../../components/ui/notice";
@@ -97,6 +99,8 @@ export default function FinancesScreen() {
     excludedAccountIds: excludedIds,
   });
   const recent = useRecentTransactions({ limit: RECENT_LIMIT, excludedAccountIds: excludedIds });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: currentDayKey re-labels Today/Yesterday at midnight.
+  const recentGroups = useMemo(() => groupTransactionsByDay(recent, "date_desc"), [recent, currentDayKey]);
 
   const spendingLookback = trailingDailyRange(MAX_SPENDING_DAYS, new Date(range.nowTs));
   const spendingVisible = trailingDailyRange(spendingDays, new Date(range.nowTs));
@@ -119,12 +123,12 @@ export default function FinancesScreen() {
     excludedAccountIds,
   });
 
-  const chartTitle =
+  const chartCaption =
     activeChart === "flow"
-      ? `Cash flow · last ${TREND_BUCKETS} ${range.trendPeriodLabel}`
+      ? `Income and expenses · last ${TREND_BUCKETS} ${range.trendPeriodLabel}`
       : activeChart === "networth"
-        ? `Net worth · last ${TREND_BUCKETS} ${range.trendPeriodLabel}`
-        : `Spending per day · last ${spendingDays} days`;
+        ? `Last ${TREND_BUCKETS} ${range.trendPeriodLabel}`
+        : `Per day · last ${spendingDays} days`;
 
   const newTransaction = (type: (typeof QUICK_ACTIONS)[number]) =>
     router.push({ pathname: "/transaction/[id]", params: { id: "new", type } });
@@ -176,60 +180,48 @@ export default function FinancesScreen() {
           </Text>
         )}
 
-        <View className="gap-3">
-          <SummaryCard
-            label="Net worth"
-            marker={<Icon name="credit-card" size={13} colorClassName="accent-muted-foreground" />}
-            value={formatBalance(netWorth, baseCurrency)}
-            footnote={`${included.length} account${included.length === 1 ? "" : "s"}${
+        <View className="gap-1 px-1">
+          <Text className="text-muted-foreground text-sm">Net worth</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit className="font-semibold text-4xl text-foreground">
+            {formatBalance(netWorth, baseCurrency)}
+          </Text>
+          <Text className="text-muted-foreground text-xs">
+            {`${included.length} account${included.length === 1 ? "" : "s"}${
               unconvertibleAccounts > 0 ? ` · ${unconvertibleAccounts} not converted` : ""
             }`}
-            large
-          />
-          <View className="flex-row gap-3">
-            <SummaryCard
-              label={`Income · ${range.cardSuffix}`}
-              marker={<View className="size-2 rounded-full bg-emerald-500" />}
-              value={formatBalance(flow.income, baseCurrency)}
-              valueClassName={TRANSACTION_TYPE_STYLE.income.accent}
-            />
-            <SummaryCard
-              label={`Expenses · ${range.cardSuffix}`}
-              marker={<View className="size-2 rounded-full bg-rose-500" />}
-              value={formatBalance(flow.expense, baseCurrency)}
-              valueClassName={TRANSACTION_TYPE_STYLE.expense.accent}
-            />
-          </View>
-          <SummaryCard
-            label={`Net · ${range.cardSuffix}`}
-            marker={
-              <Icon
-                name={netDelta >= 0 ? "trending-up" : "trending-down"}
-                size={13}
-                colorClassName="accent-muted-foreground"
-              />
-            }
-            value={formatBalance(flow.net, baseCurrency)}
-            valueClassName={amountAccentClass(flow.net)}
-            footnote={`${netDelta >= 0 ? "+" : "−"}${formatBalance(Math.abs(netDelta), baseCurrency)} vs ${range.prevLabel}`}
-          />
+          </Text>
         </View>
 
-        <View className="gap-3">
-          <Segmented options={CHART_TABS} value={activeChart} onChange={setActiveChart} />
-          <View
-            className="gap-3 rounded-xl border border-border bg-card p-4"
-            onLayout={(event) => setChartWidth(event.nativeEvent.layout.width)}
-          >
-            <Text className="text-muted-foreground text-xs uppercase tracking-wide">{chartTitle}</Text>
-            <OverviewCharts
-              activeChart={activeChart}
-              baseCurrency={baseCurrency}
-              dailySpending={dailySpending}
-              flowData={flowData}
-              hasAccounts={included.length > 0}
-              trendBuckets={range.trendBuckets}
+        <View className="gap-3 rounded-xl border border-border bg-card p-4">
+          <Text className="font-medium text-foreground text-sm">{range.label}</Text>
+          <View className="flex-row gap-3">
+            <FlowStat
+              label="Income"
+              dotClassName="bg-emerald-500"
+              value={formatBalance(flow.income, baseCurrency)}
+              valueClassName={flow.income === 0 ? undefined : TRANSACTION_TYPE_STYLE.income.accent}
             />
+            <FlowStat
+              label="Expenses"
+              dotClassName="bg-rose-500"
+              value={formatBalance(flow.expense, baseCurrency)}
+              valueClassName={flow.expense === 0 ? undefined : TRANSACTION_TYPE_STYLE.expense.accent}
+            />
+            <FlowStat
+              label="Net"
+              value={formatBalance(flow.net, baseCurrency)}
+              valueClassName={amountAccentClass(flow.net)}
+            />
+          </View>
+          <View className="flex-row items-center gap-1.5 border-border border-t pt-3">
+            <Icon
+              name={netDelta >= 0 ? "trending-up" : "trending-down"}
+              size={13}
+              colorClassName="accent-muted-foreground"
+            />
+            <Text className="text-muted-foreground text-xs">
+              {`Net ${netDelta >= 0 ? "+" : "−"}${formatBalance(Math.abs(netDelta), baseCurrency)} vs ${range.prevLabel}`}
+            </Text>
           </View>
         </View>
 
@@ -271,6 +263,22 @@ export default function FinancesScreen() {
           </View>
         </Section>
 
+        <View
+          className="gap-3 rounded-xl border border-border bg-card p-3"
+          onLayout={(event) => setChartWidth(event.nativeEvent.layout.width)}
+        >
+          <Segmented options={CHART_TABS} value={activeChart} onChange={setActiveChart} />
+          <Text className="px-1 text-muted-foreground text-xs">{chartCaption}</Text>
+          <OverviewCharts
+            activeChart={activeChart}
+            baseCurrency={baseCurrency}
+            dailySpending={dailySpending}
+            flowData={flowData}
+            hasAccounts={included.length > 0}
+            trendBuckets={range.trendBuckets}
+          />
+        </View>
+
         <Section
           title="Recent activity"
           action={
@@ -279,23 +287,37 @@ export default function FinancesScreen() {
             </Pressable>
           }
         >
-          <View className="overflow-hidden rounded-xl border border-border bg-card">
-            {recent.length === 0 ? (
+          {recentGroups.length === 0 ? (
+            <View className="overflow-hidden rounded-xl border border-border bg-card">
               <CardEmptyState icon="list" title="No transactions yet." />
-            ) : (
-              recent.map((transaction, index) => (
-                <TransactionRow
-                  key={transaction.id}
-                  transaction={transaction}
-                  accountLabels={accountLabels}
-                  baseCurrency={baseCurrency}
-                  convert={convert}
-                  onPress={() => router.push({ pathname: "/transaction/[id]", params: { id: transaction.id } })}
-                  last={index === recent.length - 1}
-                />
-              ))
-            )}
-          </View>
+            </View>
+          ) : (
+            <View className="gap-4">
+              {recentGroups.map((group) => (
+                <View key={group.key} className="gap-2">
+                  {group.timestamp !== null && (
+                    <Text className="px-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      {formatShortDayHeader(group.timestamp)}
+                    </Text>
+                  )}
+                  <View className="overflow-hidden rounded-xl border border-border bg-card">
+                    {group.transactions.map((transaction, index) => (
+                      <TransactionRow
+                        key={transaction.id}
+                        transaction={transaction}
+                        accountLabels={accountLabels}
+                        baseCurrency={baseCurrency}
+                        convert={convert}
+                        timeOnly
+                        onPress={() => router.push({ pathname: "/transaction/[id]", params: { id: transaction.id } })}
+                        last={index === group.transactions.length - 1}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
         </Section>
       </ScrollView>
       {/* Workspace-level actions, as the web's finance header menu. */}
@@ -306,7 +328,6 @@ export default function FinancesScreen() {
           // Set-and-forget settings, so they live here rather than above the overview.
           { label: `Period · ${range.label}`, icon: "calendar", onPress: () => setRangeOpen(true) },
           { label: `Display currency · ${baseCurrency}`, icon: "globe", onPress: () => setCurrencyOpen(true) },
-          { label: "New account", icon: "plus", onPress: newAccount },
           { label: "Exchange rates", icon: "dollar-sign", onPress: () => router.push("/rates") },
           { label: "Refresh balances", icon: "refresh-cw", onPress: balances.refresh },
           {
@@ -317,19 +338,14 @@ export default function FinancesScreen() {
           },
         ]}
       />
-      <Modal
-        visible={rangeOpen}
-        animationType="slide"
-        presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
-        onRequestClose={() => setRangeOpen(false)}
-      >
-        <View className="flex-1 bg-background">
+      <FormSheet isOpen={rangeOpen} onNativeDismiss={() => setRangeOpen(false)}>
+        <View>
           <SheetHeader title="Overview period" onDone={() => setRangeOpen(false)} />
           <View className="p-4">
             <DashboardRangePicker />
           </View>
         </View>
-      </Modal>
+      </FormSheet>
       <CurrencySheet
         visible={currencyOpen}
         title="Display currency"
@@ -404,35 +420,26 @@ function CardEmptyState({
   );
 }
 
-function SummaryCard({
+function FlowStat({
   label,
-  marker,
+  dotClassName,
   value,
   valueClassName = "text-card-foreground",
-  footnote,
-  large = false,
 }: {
   label: string;
-  marker: ReactNode;
+  dotClassName?: string;
   value: string;
   valueClassName?: string;
-  footnote?: string;
-  large?: boolean;
 }) {
   return (
-    <View className="flex-1 rounded-xl border border-border bg-card p-4">
+    <View className="min-w-0 flex-1 gap-1">
       <View className="flex-row items-center gap-1.5">
-        {marker}
-        <Text className="text-muted-foreground text-xs uppercase tracking-wide">{label}</Text>
+        {dotClassName && <View className={cn("size-2 rounded-full", dotClassName)} />}
+        <Text className="text-muted-foreground text-xs">{label}</Text>
       </View>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        className={`mt-1.5 font-semibold ${large ? "text-3xl" : "text-xl"} ${valueClassName}`}
-      >
+      <Text numberOfLines={1} adjustsFontSizeToFit className={cn("font-semibold text-lg", valueClassName)}>
         {value}
       </Text>
-      {footnote && <Text className="mt-1 text-muted-foreground text-xs">{footnote}</Text>}
     </View>
   );
 }

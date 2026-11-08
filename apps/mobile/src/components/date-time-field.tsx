@@ -1,9 +1,10 @@
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { Modal, Platform, Pressable, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform, Pressable, Text, View } from "react-native";
 import { useUniwind } from "uniwind";
+import { SheetHeader } from "./screen-header";
 import { FormRow } from "./ui/form";
+import { FormSheet } from "./ui/form-sheet";
 
 type PickerMode = "date" | "time";
 
@@ -47,8 +48,8 @@ export function DateTimeField({
 }
 
 /**
- * The date and time pickers in a panel sliding up from the bottom, for a compact trigger such as
- * the transaction editor's date chip. Changing either keeps the other part of `value`.
+ * The date and time pickers in a form sheet, for a compact trigger such as the transaction
+ * editor's date chip. Changing either keeps the other part of `value`.
  */
 export function DateTimeSheet({
   visible,
@@ -63,22 +64,12 @@ export function DateTimeSheet({
   onChange: (value: Date) => void;
   onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View className="flex-1 justify-end">
-        {/* A sibling of the panel, not its parent, so VoiceOver can still reach the pickers. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          onPress={onClose}
-          className="absolute inset-0 bg-black/40"
-        />
-        <View className="gap-2 px-3" style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-          <View className="overflow-hidden rounded-2xl bg-card">
-            <Text className="border-border border-b px-4 py-3 text-center text-muted-foreground text-xs uppercase tracking-wide">
-              {title}
-            </Text>
+    <FormSheet isOpen={visible} onNativeDismiss={onClose}>
+      <View>
+        <SheetHeader title={title} onDone={onClose} />
+        <View className="p-4">
+          <View className="overflow-hidden rounded-xl bg-card">
             <FormRow label="Date">
               <DateTimeField mode="date" value={value} onChange={(day) => onChange(withDate(value, day))} />
             </FormRow>
@@ -86,16 +77,9 @@ export function DateTimeSheet({
               <DateTimeField mode="time" value={value} onChange={(time) => onChange(withTime(value, time))} />
             </FormRow>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onClose}
-            className="min-h-14 items-center justify-center rounded-2xl bg-card active:bg-muted"
-          >
-            <Text className="font-semibold text-base text-primary">Done</Text>
-          </Pressable>
         </View>
       </View>
-    </Modal>
+    </FormSheet>
   );
 }
 

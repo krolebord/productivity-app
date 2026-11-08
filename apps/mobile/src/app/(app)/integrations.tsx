@@ -17,12 +17,13 @@ import type {
 import { formatDistanceToNow } from "date-fns";
 import { useFocusEffect, useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../components/screen-header";
 import { FormRow, FormSection } from "../../components/ui/form";
 import { Icon, type IconName } from "../../components/ui/icon";
 import { SelectField } from "../../components/ui/select-sheet";
+import { Switch } from "../../components/ui/switch";
 import { api } from "../../lib/api";
 import { API_URL } from "../../lib/config";
 import { cn } from "../../lib/utils";
@@ -434,7 +435,6 @@ function CalendarAccount({
               value={source.enabled}
               disabled={pending === `calendar-${source.id}`}
               onValueChange={(enabled) => setEnabled(source, enabled)}
-              trackColorOnClassName="accent-primary"
             />
           </View>
         );

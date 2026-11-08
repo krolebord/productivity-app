@@ -10,13 +10,14 @@ import { useDb } from "@productivity/core/user-db/db-context";
 import { MEMORY_INJECTION_LIMIT } from "@productivity/core/user-db/migrations";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView, Switch, Text, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../components/screen-header";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { IconButton } from "../../components/ui/icon-button";
 import { Input } from "../../components/ui/input";
+import { Switch } from "../../components/ui/switch";
 import { cn } from "../../lib/utils";
 
 function SourceBadge({ source }: { source: string }) {
@@ -74,7 +75,6 @@ function MemoryCard({ memory }: { memory: MemoryRow }) {
             // SQLite hands booleans back as 0/1, and the native switch only reads a real boolean.
             value={Boolean(memory.enabled)}
             onValueChange={(enabled) => setMemoryEnabled(db.db, memory.id, enabled)}
-            trackColorOnClassName="accent-primary"
           />
           <IconButton
             icon="trash-2"

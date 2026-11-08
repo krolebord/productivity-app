@@ -81,6 +81,30 @@
           }
         }
       }
+    },
+    {
+      "includes": ["apps/mobile/src/**", "!apps/mobile/src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react-native": {
+                    "importNames": ["TextInput", "Switch"],
+                    "message": "Use Input / Switch from components/ui: they carry the theme defaults and platform fixes (see AGENTS.md)."
+                  },
+                  "react-native-screens/experimental": {
+                    "importNames": ["FormSheet"],
+                    "message": "Use FormSheet from components/ui/form-sheet: it sets the theme, sheet headers and ScrollView context (see docs/design-principles.md)."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

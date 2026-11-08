@@ -2,6 +2,7 @@ import { safe } from "@orpc/client";
 import { createAgentWarmer, needsTranscriptBackfill } from "@productivity/core/agent/agent-warmer";
 import { skillStarterPrompt } from "@productivity/core/agent/builtin-skills";
 import { conversationTurnFilesFromData } from "@productivity/core/agent/conversation-files";
+import { formatCost } from "@productivity/core/agent/format";
 import {
   type AssistantModelId,
   type AssistantReasoningEffort,
@@ -12,18 +13,22 @@ import {
   resolveAssistantModelId,
 } from "@productivity/core/agent/models";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@productivity/core/agent/uploads";
-import { conversationTitle, summarizeConversationActivity } from "@productivity/core/conversation-list";
+import {
+  conversationTitle,
+  isConversationUnread,
+  summarizeConversationActivity,
+} from "@productivity/core/conversation-list";
 import {
   catchUpConversationLastRead,
-  deleteConversation as deleteConversationRow,
   useConversationMessages,
   useConversations,
 } from "@productivity/core/data/conversations";
 import { isSubmitLockHolding, type SubmitLock } from "@productivity/core/submit-lock";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { ConversationItem, ConversationMessageItem } from "@productivity/core/user-db/migrations";
+import { useConnectionBanner } from "@productivity/core/user-db/use-connection-banner";
 import { generateId } from "@sqlite-sync/core";
-import { useRouter } from "expo-router";
+import { useIsFocused, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -38,16 +43,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  AttachmentChips,
-  ConversationCost,
-  ModelPicker,
-  ReasoningEffortPicker,
-} from "../../components/assistant/composer-controls";
+import { AttachmentChips, ModelPicker, ReasoningEffortPicker } from "../../components/assistant/composer-controls";
 import {
   ActivityBadge,
-  ConversationList,
   confirmDeleteConversation,
+  useDeleteConversation,
 } from "../../components/assistant/conversation-list";
 import { SkillStarters } from "../../components/assistant/skill-starters";
 import { ToolMessage } from "../../components/assistant/tool-message";
@@ -60,7 +60,6 @@ import { Input } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import {
   appendToAssistantDraft,
-  clearAssistantChat,
   clearAssistantSubmitLock,
   getAssistantChat,
   setAssistantDraft,
@@ -82,38 +81,64 @@ function rpcErrorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : "Something went wrong. Try again.";
 }
 
+// Opening the assistant starts a new chat unless the last one is still in play: touched or viewed
+// within this window, running, with an unread reply, or holding a draft (e.g. context just attached).
+const REOPEN_WITHIN_MS = 30 * 60_000;
+
+// When the assistant was last left, and on which chat. In memory only: after a restart only the
+// chat's own updatedAt counts.
+let lastViewed: { id: string; at: number } | null = null;
+
+function startConversationId(remembered: string | null, conversations: readonly ConversationItem[]) {
+  if (!remembered) return generateId();
+  const row = conversations.find((conversation) => conversation.id === remembered);
+  // Not started yet: already a fresh chat.
+  if (!row) return remembered;
+  const chat = getAssistantChat(remembered);
+  const touchedAt = Math.max(row.updatedAt, lastViewed?.id === remembered ? lastViewed.at : 0);
+  const inPlay =
+    row.turnStatus === "running" ||
+    isConversationUnread(row) ||
+    Date.now() - touchedAt < REOPEN_WITHIN_MS ||
+    !!chat.draft ||
+    chat.files.length > 0 ||
+    chat.lock != null;
+  return inPlay ? remembered : generateId();
+}
+
 export default function AssistantScreen() {
   const router = useRouter();
-  const db = useDb();
   const insets = useSafeAreaInsets();
+  const focused = useIsFocused();
   const conversations = useConversations();
+  const deleteConversation = useDeleteConversation();
   const remembered = usePreference("assistantConversationId");
-  // With nothing remembered yet, open on the newest chat.
-  const [initialId] = useState(() => conversations[0]?.id ?? generateId());
-  const conversationId = remembered ?? initialId;
-  const [showList, setShowList] = useState(false);
+  const [startId] = useState(() => startConversationId(remembered, conversations));
+  // Until the preference catches up with startId, show startId rather than flashing the old chat.
+  const startPending = useRef(remembered !== startId);
+  if (remembered === startId) startPending.current = false;
+  const conversationId = startPending.current ? startId : (remembered ?? startId);
+  const [menuOpen, setMenuOpen] = useState(false);
   const conversation = conversations.find((row) => row.id === conversationId) ?? null;
   const activity = summarizeConversationActivity({ conversations, activeConversationId: conversationId });
 
   // Remembered across restarts, as the web persists its active chat; attaching context
   // from elsewhere in the app also lands in whichever chat this is.
   useEffect(() => {
-    if (!remembered) setPreference("assistantConversationId", initialId);
-  }, [remembered, initialId]);
+    if (startPending.current) setPreference("assistantConversationId", startId);
+  }, [startId]);
 
-  const openConversation = (id: string) => {
-    setPreference("assistantConversationId", id);
-    setShowList(false);
-  };
+  useEffect(
+    () => () => {
+      lastViewed = { id: conversationId, at: Date.now() };
+    },
+    [conversationId],
+  );
 
-  const deleteConversation = (id: string) => {
-    deleteConversationRow(db.db, id);
-    clearAssistantChat(id);
-    if (id === conversationId) {
-      const next = conversations.find((row) => row.id !== id);
-      setPreference("assistantConversationId", next?.id ?? generateId());
-    }
-  };
+  const usage =
+    conversation && (conversation.totalCost || conversation.totalTokens)
+      ? `${formatCost(conversation.totalCost)} · ${conversation.totalTokens.toLocaleString()} tokens`
+      : undefined;
 
   return (
     // At the root: KeyboardAvoidingView measures its frame relative to its parent, so nesting
@@ -126,45 +151,49 @@ export default function AssistantScreen() {
       >
         <IconButton icon="chevron-left" label="Back" onPress={() => router.back()} size={26} />
         <Text numberOfLines={1} className="min-w-0 flex-1 px-1 font-semibold text-base text-foreground">
-          {showList ? "Chats" : conversationTitle(conversation ?? { title: "" })}
+          {conversationTitle(conversation ?? { title: "" })}
         </Text>
-        {!showList && conversation && (
-          <IconButton
-            icon="trash-2"
-            label="Delete conversation"
-            onPress={() => confirmDeleteConversation(conversation, () => deleteConversation(conversation.id))}
-            iconClassName="accent-muted-foreground"
-          />
-        )}
         <View>
           <IconButton
-            icon={showList ? "message-circle" : "list"}
-            label={showList ? "Back to chat" : "Show chats"}
-            onPress={() => setShowList((value) => !value)}
+            icon="list"
+            label="Chats"
+            onPress={() => router.push("/assistant-chats")}
             iconClassName="accent-muted-foreground"
           />
-          {!showList && <ActivityBadge activity={activity} />}
+          <ActivityBadge activity={activity} />
         </View>
         <IconButton
           icon="edit"
           label="New chat"
-          onPress={() => openConversation(generateId())}
+          onPress={() => setPreference("assistantConversationId", generateId())}
           iconClassName="accent-muted-foreground"
         />
+        {conversation && (
+          <IconButton
+            icon="more-vertical"
+            label="More actions"
+            onPress={() => setMenuOpen(true)}
+            iconClassName="accent-muted-foreground"
+          />
+        )}
       </View>
-      {showList && (
-        <ConversationList
-          conversations={conversations}
-          activeId={conversationId}
-          onOpen={openConversation}
-          onNew={() => openConversation(generateId())}
-          onDelete={deleteConversation}
-        />
-      )}
-      {/* Hidden rather than unmounted, so the draft and an in-flight send survive a look at the list. */}
-      <View className={showList ? "hidden" : "flex-1"}>
-        <Chat key={conversationId} conversationId={conversationId} conversation={conversation} visible={!showList} />
-      </View>
+      <Chat key={conversationId} conversationId={conversationId} conversation={conversation} visible={focused} />
+      <ActionSheet
+        visible={menuOpen}
+        title={usage}
+        onClose={() => setMenuOpen(false)}
+        items={[
+          {
+            label: "Delete conversation",
+            icon: "trash-2",
+            destructive: true,
+            onPress: () => {
+              if (!conversation) return;
+              confirmDeleteConversation(conversation, () => deleteConversation(conversation.id, conversations));
+            },
+          },
+        ]}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -198,6 +227,8 @@ function Chat({
   const db = useDb();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
+  // Debounced like the banner, so a quick reconnect doesn't flicker Send.
+  const { offline } = useConnectionBanner();
   const messages = useConversationMessages(conversationId);
   const { draft: input, files, lock: submitLock } = useAssistantChat(conversationId);
   const preferredModel = usePreference("assistantModel");
@@ -232,7 +263,7 @@ function Chat({
     if (submitLock && !lockHolding) clearAssistantSubmitLock(conversationId, submitLock);
   }, [conversationId, submitLock, lockHolding]);
 
-  // Viewing a chat marks its latest reply as read; not while the list covers it.
+  // Viewing a chat marks its latest reply as read; not while the chats list covers it.
   const updatedAt = conversation?.updatedAt;
   useEffect(() => {
     if (visible && updatedAt != null) catchUpConversationLastRead(db.db, conversationId);
@@ -279,7 +310,13 @@ function Chat({
     const sentFiles = files;
     const text = sent.trim();
     // Read the store, not the render: a quick second tap lands before the lock re-renders.
-    if ((!text && sentFiles.length === 0) || isRunning || isLockHolding(getAssistantChat(conversationId).lock)) return;
+    if (
+      offline ||
+      (!text && sentFiles.length === 0) ||
+      isRunning ||
+      isLockHolding(getAssistantChat(conversationId).lock)
+    )
+      return;
 
     setRpcError(null);
     setUploadError(null);
@@ -407,7 +444,7 @@ function Chat({
           files={files}
           onRemove={(index) => setAssistantFiles(conversationId, (current) => current.filter((_, i) => i !== index))}
         />
-        <View className="flex-row items-center justify-between gap-2 px-2">
+        <View className="flex-row items-center px-2">
           <View className="min-w-0 shrink flex-row items-center gap-1">
             <ModelPicker
               model={model}
@@ -423,7 +460,12 @@ function Chat({
               />
             )}
           </View>
-          {conversation && <ConversationCost conversation={conversation} />}
+          {offline && (
+            <View className="ml-auto shrink-0 flex-row items-center gap-1 px-1.5">
+              <Icon name="wifi-off" size={12} colorClassName="accent-muted-foreground" />
+              <Text className="text-muted-foreground text-xs">Offline, can't send</Text>
+            </View>
+          )}
         </View>
         <View className="flex-row items-end gap-1 px-2">
           <IconButton
@@ -457,7 +499,7 @@ function Chat({
               icon="arrow-up"
               label="Send message"
               onPress={() => void submit()}
-              disabled={isWorking || (!input.trim() && files.length === 0)}
+              disabled={offline || isWorking || (!input.trim() && files.length === 0)}
               className="bg-primary"
               iconClassName="accent-primary-foreground"
             />

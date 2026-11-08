@@ -11,6 +11,7 @@ Auth uses magic links (sent via the Cloudflare Email binding) and Google OAuth (
 - [sqlite-sync docs](docs/sqlite-sync.md) — full docs for the offline-first sync library used for user data
 - [Currency API docs](docs/currency-api.md) — Frankfurter API used for exchange rates
 - [Google Calendar docs](docs/google-calendar.md) — one-way read-only event → task mirror
+- [Design principles](docs/design-principles.md) — UI rules to follow (e.g. which mobile transition each kind of screen uses); read before adding screens
 
 ## Repository Structure
 
@@ -104,7 +105,18 @@ in `apps/mobile/src/lib/user-db.tsx` and uses core's `data/*` hooks like the web
   wraps a picked file in a Blob-shaped object that oRPC and Expo's fetch accept (RN's `Blob` can't be
   built from a file). The slim agent simulator can't list photos or Files, so the pickers open empty there.
 - Use `Input` from `components/ui/input.tsx`, not a bare `TextInput`: it drops the line height
-  on single-line fields, which iOS otherwise renders off-center.
+  on single-line fields, which iOS otherwise renders off-center. Likewise `Switch` from
+  `components/ui/switch.tsx`, which sets theme colors (Android otherwise paints the thumb teal).
+  Biome enforces both outside `components/ui/` (`noRestrictedImports` in `biome.json`).
+- Short pickers open in `FormSheet` from `components/ui/form-sheet.tsx` (long ones in `PickerScreen`), a wrapper around
+  react-native-screens' experimental `FormSheet` (Biome blocks importing it directly). It's experimental API:
+  recheck the pickers on both platforms when react-native-screens changes. Android always compiles it; iOS
+  only with `RNS_GAMMA_ENABLED=1` at `pod install`, which `plugins/rns-gamma.js` writes into the Podfile, so
+  an iOS build made before that plugin shows nothing when a sheet opens. See docs/design-principles.md.
+- Wrappers in `components/ui/` stay thin: same props as the native component, `className` merged
+  with `cn`, only defaults and platform fixes. They set styles explicitly rather than relying on
+  defaults, because React Native reuses native views across screens and an unset style keeps the
+  previous view's value (the sign-in code field's letter spacing once leaked into the Today input).
 
 ## Technology Stack
 

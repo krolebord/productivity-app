@@ -1,9 +1,9 @@
 import { safe } from "@orpc/client";
 import type { McpTokenAccess } from "@productivity/core/api/contract";
 import * as Clipboard from "expo-clipboard";
-import { useRouter } from "expo-router";
+import { useNavigation, usePreventRemove, useRouter } from "expo-router";
 import { useRef, useState } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Alert, Platform, Pressable, Text, View } from "react-native";
 import { SheetHeader } from "../../components/screen-header";
 import { FieldError, FormOption, FormRow, FormSection } from "../../components/ui/form";
 import { Icon } from "../../components/ui/icon";
@@ -30,6 +30,20 @@ export default function McpTokenScreen() {
   const [token, setToken] = useState<string | null>(null);
   // The keyboard's submit still fires while the header button is disabled, so guard synchronously.
   const inFlight = useRef(false);
+  const navigation = useNavigation();
+  // The token is shown once, so a stray swipe down (iOS) or back (Android) asks first; only the
+  // header's ✓ closes it outright.
+  const confirmedClose = useRef(false);
+  usePreventRemove(token != null, ({ data }) => {
+    if (confirmedClose.current) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    Alert.alert("Close without copying?", "The token will not be shown again.", [
+      { text: "Keep open", style: "cancel" },
+      { text: "Close", style: "destructive", onPress: () => navigation.dispatch(data.action) },
+    ]);
+  });
 
   async function create() {
     if (inFlight.current) return;
@@ -54,7 +68,17 @@ export default function McpTokenScreen() {
   if (token) {
     const url = `${API_URL}/mcp`;
     return (
-      <KeyboardScreen header={<SheetHeader title="Token created" onDone={() => router.back()} />}>
+      <KeyboardScreen
+        header={
+          <SheetHeader
+            title="Token created"
+            onDone={() => {
+              confirmedClose.current = true;
+              router.back();
+            }}
+          />
+        }
+      >
         <Text className="px-1 text-muted-foreground text-sm">Copy it now. It will not be shown again.</Text>
         <CopyableBlock label="Token" value={token} />
         <CopyableBlock
@@ -72,7 +96,8 @@ export default function McpTokenScreen() {
           title="New MCP token"
           onCancel={() => router.back()}
           onDone={() => void create()}
-          doneLabel={pending ? "Creating…" : "Create"}
+          doneLabel="Create"
+          donePending={pending}
           doneDisabled={pending}
         />
       }

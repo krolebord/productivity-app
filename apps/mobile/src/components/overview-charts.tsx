@@ -134,7 +134,7 @@ export function ColumnHighlight({
 
 function ChartEmptyState({ children }: { children: string }) {
   return (
-    <View className="h-56 items-center justify-center">
+    <View className="items-center justify-center py-8">
       <Text className="text-muted-foreground text-sm">{children}</Text>
     </View>
   );

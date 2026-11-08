@@ -13,12 +13,16 @@ const singleLine: TextStyle = {
   ...Platform.select<TextStyle>({ android: { includeFontPadding: false, textAlignVertical: "center" } }),
 };
 
+// tracking-normal sets letter spacing explicitly. React Native reuses native text inputs across
+// screens, and one that never sets it keeps the last value: the sign-in code field's 8px spacing
+// reappeared on the Today quick-add field after signing in.
+
 /** The app's text input: base font size and colors; className overrides them. */
 export function Input({ className, multiline, style, ...props }: ComponentProps<typeof TextInput>) {
   return (
     <TextInput
       multiline={multiline}
-      className={cn("text-base text-foreground", className)}
+      className={cn("text-base text-foreground tracking-normal", className)}
       placeholderTextColorClassName="accent-muted-foreground"
       style={[!multiline && singleLine, style]}
       {...props}

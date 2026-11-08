@@ -19,6 +19,21 @@ another project) and the local web API on **3301**. One SSH tunnel forwards both
 Mac's `127.0.0.1`, and `install` adds `adb reverse` for both on Android. Bundle id / package:
 `com.krolebord.productivity.dev`.
 
+**Local Android phone:** to test on the user's phone connected to this server's adb instead of
+the Mac's emulator, prefix every call with `RN_E2E_TARGET=local` (`RN_E2E_TARGET=local $S up`,
+`... $S install android`, ...). See "Device target" in the global skill. `up` then skips the
+tunnel, `devices` lists this server's adb, and `install android` forwards 8082 and 3301 to this
+server with `adb reverse`, so the app's `127.0.0.1` URLs are unchanged. In step 4,
+`device_open` the phone (host `local`) instead of `pixel_36`. iOS still runs on the Mac.
+
+## Long-running commands
+
+Start anything that keeps running (dev server, Metro, `expo start`, watchers, builds, log tails)
+with the Bash tool's `run_in_background: true`, never in the foreground: a foreground server
+blocks the turn until it is killed. Prefer `run_in_background` over your own tmux sessions,
+`nohup` or systemd units; read its output file to check health. The wrapper scripts below manage
+their own processes, so call them as documented rather than starting those servers by hand.
+
 ## Flow
 
 1. **Every turn, first:** `$S up`. It starts what's down and waits until the Mac reaches Metro
@@ -102,7 +117,8 @@ Watch it with `systemctl --user status productivity-e2e-build-android` and
 
 ## Cleanup
 
-- `device_close` with `shutdown: true` for the device you opened, and only that one.
+- `device_close` with `shutdown: true` for the device you opened, and only that one (the local
+  phone: without `shutdown`).
 - `$S down` stops the API, Metro and the tunnel when the user is done testing. Other threads may
   share Metro and the tunnel; leave them running if the user wants to keep testing.
 - If the Mac refuses SSH (`kex_exchange_identification: Connection reset`) while Tailscale shows

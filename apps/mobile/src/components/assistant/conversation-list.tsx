@@ -9,10 +9,14 @@ import {
   groupConversations,
   turnElapsedLabel,
 } from "@productivity/core/conversation-list";
-import { useConversationTurnStarts } from "@productivity/core/data/conversations";
+import { deleteConversation, useConversationTurnStarts } from "@productivity/core/data/conversations";
+import { useDb } from "@productivity/core/user-db/db-context";
+import { generateId } from "@sqlite-sync/core";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { clearAssistantChat } from "../../lib/assistant-chats";
+import { getPreferences, setPreference } from "../../lib/preferences";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { EmptyState } from "../ui/empty-state";
@@ -43,6 +47,19 @@ export function confirmDeleteConversation(conversation: Pick<ConversationListIte
     { text: "Cancel", style: "cancel" },
     { text: "Delete", style: "destructive", onPress: onDelete },
   ]);
+}
+
+/** Deletes a chat and its composer state; deleting the open one moves the assistant to the next. */
+export function useDeleteConversation() {
+  const db = useDb();
+  return (id: string, conversations: readonly Pick<ConversationListItem, "id">[]) => {
+    deleteConversation(db.db, id);
+    clearAssistantChat(id);
+    if (id === getPreferences().assistantConversationId) {
+      const next = conversations.find((row) => row.id !== id);
+      setPreference("assistantConversationId", next?.id ?? generateId());
+    }
+  };
 }
 
 function StatusGlyph({ status }: { status: ConversationRowStatus }) {

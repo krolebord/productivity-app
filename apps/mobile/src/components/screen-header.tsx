@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { cn } from "../lib/utils";
+import { useInFormSheet } from "./ui/form-sheet";
+import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
 
 export function ScreenHeader({
@@ -39,14 +42,23 @@ export function ScreenHeader({
   );
 }
 
-/** Header for screens presented as modals: iOS sheets sit below the status bar, Android modals don't. */
+/**
+ * Header for screens presented as modals and for form sheets: iOS sheets and every FormSheet sit
+ * below the status bar, Android's full-screen modals don't.
+ *
+ * Cancel is a ✕ on both platforms (Material's full-screen dialog, iOS 26 sheets); a custom
+ * `cancelLabel` such as "Clear all" is an action rather than a dismissal, so it stays text.
+ * Confirm is a filled ✓ on iOS, as in iOS 26 sheets, and text on Android, as in Material;
+ * `doneLabel` is its accessibility label on iOS.
+ */
 export function SheetHeader({
   title,
   onCancel,
-  cancelLabel = "Cancel",
+  cancelLabel,
   onDone,
   doneLabel = "Done",
   doneDisabled = false,
+  donePending = false,
 }: {
   title: string;
   onCancel?: () => void;
@@ -54,27 +66,68 @@ export function SheetHeader({
   onDone?: () => void;
   doneLabel?: string;
   doneDisabled?: boolean;
+  /** Shows a spinner in place of the confirm button while its action runs. */
+  donePending?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const inSheet = useInFormSheet();
   return (
     <View
       className="flex-row items-center border-border border-b bg-background px-2 pb-2"
-      style={{ paddingTop: Platform.OS === "ios" ? 10 : insets.top + 6 }}
+      style={{ paddingTop: Platform.OS === "ios" || inSheet ? 10 : insets.top + 6 }}
     >
       <View className="flex-1 items-start">
-        {onCancel && <HeaderTextButton label={cancelLabel} onPress={onCancel} />}
+        {onCancel &&
+          (cancelLabel ? (
+            <HeaderTextButton label={cancelLabel} onPress={onCancel} />
+          ) : (
+            <IconButton icon="x" label="Cancel" onPress={onCancel} size={22} />
+          ))}
       </View>
       <Text numberOfLines={1} className="max-w-[55%] font-semibold text-base text-foreground">
         {title}
       </Text>
       <View className="flex-1 items-end">
-        {onDone && <HeaderTextButton label={doneLabel} onPress={onDone} disabled={doneDisabled} bold />}
+        {onDone &&
+          (donePending ? (
+            <View className="size-10 items-center justify-center">
+              <ActivityIndicator colorClassName="accent-muted-foreground" />
+            </View>
+          ) : Platform.OS === "ios" ? (
+            <ConfirmIconButton label={doneLabel} onPress={onDone} disabled={doneDisabled} />
+          ) : (
+            <HeaderTextButton label={doneLabel} onPress={onDone} disabled={doneDisabled} bold />
+          ))}
       </View>
     </View>
   );
 }
 
-function HeaderTextButton({
+/** iOS 26's sheet confirm: a ✓ in a filled accent circle, outlined and muted while disabled. */
+function ConfirmIconButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={8}
+      className={cn(
+        "size-10 items-center justify-center rounded-full",
+        disabled ? "border border-border" : "bg-primary active:opacity-80",
+      )}
+    >
+      <Icon
+        name="check"
+        size={22}
+        colorClassName={disabled ? "accent-muted-foreground" : "accent-primary-foreground"}
+      />
+    </Pressable>
+  );
+}
+
+export function HeaderTextButton({
   label,
   onPress,
   disabled = false,

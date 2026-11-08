@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { useCSSVariable } from "uniwind";
 import { OfflineBanner, SyncStatusMonitor } from "../../components/sync-status";
 import { TimeZoneWatcher } from "../../components/time-zone-watcher";
@@ -7,7 +7,12 @@ import { Button } from "../../components/ui/button";
 import { useSession } from "../../lib/session";
 import { UserDbProvider } from "../../lib/user-db";
 
-const modal = { presentation: "modal" } as const;
+// Item editors and other layers over the app (see docs/design-principles.md): a native sheet on
+// iOS, a short fade-and-rise on Android, which reads as "on top" rather than "deeper".
+const modal = {
+  presentation: "modal",
+  animation: Platform.OS === "android" ? "fade_from_bottom" : undefined,
+} as const;
 
 export default function AppLayout() {
   const { state } = useSession();
@@ -41,7 +46,13 @@ export default function AppLayout() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="integrations" />
         <Stack.Screen name="rates" />
-        <Stack.Screen name="assistant" />
+        {/* A page you stay in, not a layer: a push with swipe-back on iOS (a sheet's swipe-down would
+            fight scrolling up the chat), the same fade-and-rise as the editors on Android. */}
+        <Stack.Screen
+          name="assistant"
+          options={{ animation: Platform.OS === "android" ? "fade_from_bottom" : "default" }}
+        />
+        <Stack.Screen name="assistant-chats" />
         <Stack.Screen name="agents" />
         <Stack.Screen name="memories" />
         <Stack.Screen name="skills" />

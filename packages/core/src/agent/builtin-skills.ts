@@ -8,7 +8,10 @@ export type BuiltinSkill = {
   /** Stable id used in the skill catalog and activate_skill. */
   id: string;
   name: string;
+  /** For the model: when to activate it. */
   whenToUse: string;
+  /** For people: a short line shown on the new-chat skill starters. */
+  description: string;
   /** Markdown playbook, same shape as a user skill's instructions. */
   instructions: string;
 };
@@ -23,6 +26,7 @@ const importTransactions: BuiltinSkill = {
   name: "Import transactions",
   whenToUse:
     "Importing transactions into an account from a source the user provides — a bank statement, CSV/PDF export, screenshot, or pasted list.",
+  description: "Add transactions from a bank statement, CSV, PDF or screenshot.",
   instructions: [
     "Import transactions from a source the user provides into one of their accounts, reusing their existing categories and importance levels and never creating duplicates.",
     "",
@@ -65,13 +69,14 @@ export function findBuiltinSkill(id: string): BuiltinSkill | undefined {
   return BUILTIN_SKILLS.find((skill) => skill.id === id);
 }
 
+/** `whenToUse` is the line shown under the name: a user skill's own trigger text, a built-in's `description`. */
 export type SkillStarter = { id: string; name: string; whenToUse: string };
 
 /** Skills offered on an empty chat: the user's active ones (most recently used first), then built-ins. */
 export function skillStarters(userSkills: readonly SkillStarter[]): SkillStarter[] {
   return [
     ...userSkills,
-    ...BUILTIN_SKILLS.map((skill) => ({ id: skill.id, name: skill.name, whenToUse: skill.whenToUse })),
+    ...BUILTIN_SKILLS.map((skill) => ({ id: skill.id, name: skill.name, whenToUse: skill.description })),
   ];
 }
 

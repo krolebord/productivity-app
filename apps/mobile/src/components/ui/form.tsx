@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { cn } from "../../lib/utils";
 import { Icon, type IconName } from "./icon";
+import { Switch } from "./switch";
 
 export function FormSection({ title, children, footer }: { title?: string; children: ReactNode; footer?: string }) {
   return (
@@ -77,7 +78,7 @@ export function FormSwitch({
 }) {
   return (
     <FormRow label={label} last={last}>
-      <Switch value={value} onValueChange={onValueChange} trackColorOnClassName="accent-primary" />
+      <Switch value={value} onValueChange={onValueChange} />
     </FormRow>
   );
 }

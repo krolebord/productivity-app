@@ -50,7 +50,8 @@ export default function MonobankTokenScreen() {
           title={replacing ? "Replace token" : "Connect Monobank"}
           onCancel={() => router.back()}
           onDone={() => void submit()}
-          doneLabel={pending ? "Checking…" : replacing ? "Replace" : "Connect"}
+          doneLabel={replacing ? "Replace" : "Connect"}
+          donePending={pending}
           doneDisabled={pending}
         />
       }

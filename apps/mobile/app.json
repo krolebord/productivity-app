@@ -7,6 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "primaryColor": "#8b5cf6",
     "experiments": {
       "reactCompiler": true
     },
@@ -25,7 +26,7 @@
         "expo-dev-client",
         {
           "launchMode": "most-recent",
-          "defaultLaunchURL": "http://agent-ui-vps.tailc07dd9.ts.net:3303"
+          "defaultLaunchURL": "http://kirils-dev.tailc07dd9.ts.net:3303"
         }
       ],
       [
@@ -46,7 +47,9 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
-      ]
+      ],
+      "./plugins/android-theme",
+      "./plugins/rns-gamma"
     ],
     "extra": {
       "router": {

@@ -1,4 +1,4 @@
-import { formatCost, formatFileSize, formatModelPricing, MODEL_MODALITY_LABELS } from "@productivity/core/agent/format";
+import { formatFileSize, formatModelPricing, MODEL_MODALITY_LABELS } from "@productivity/core/agent/format";
 import {
   ASSISTANT_MODELS,
   ASSISTANT_MODELS_BY_PRICE,
@@ -8,8 +8,7 @@ import {
   formatReasoningEffortLabel,
   getAssistantModel,
 } from "@productivity/core/agent/models";
-import type { ConversationItem } from "@productivity/core/user-db/migrations";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import type { PickedFile } from "../../lib/assistant-uploads";
 import { Icon, type IconName, MaterialIcon } from "../ui/icon";
@@ -69,7 +68,6 @@ function PickerTrigger({
   locked,
   lockedMessage,
   accessibilityLabel,
-  accessory,
   onPress,
 }: {
   icon: IconName;
@@ -77,7 +75,6 @@ function PickerTrigger({
   locked: boolean;
   lockedMessage: string;
   accessibilityLabel: string;
-  accessory?: ReactNode;
   onPress: () => void;
 }) {
   return (
@@ -94,7 +91,6 @@ function PickerTrigger({
       <Text numberOfLines={1} className="shrink text-muted-foreground text-xs">
         {label}
       </Text>
-      {accessory}
       {!locked && <Icon name="chevron-down" size={12} colorClassName="accent-muted-foreground" />}
     </Pressable>
   );
@@ -119,7 +115,6 @@ export function ModelPicker({
         locked={locked}
         lockedMessage="The model is fixed once the conversation starts."
         accessibilityLabel="Model"
-        accessory={<ModelModalityIcons modalities={active.inputModalities} />}
         onPress={() => setOpen(true)}
       />
       <SelectSheet
@@ -171,20 +166,6 @@ export function ReasoningEffortPicker({
         }}
       />
     </>
-  );
-}
-
-/** Spend so far, with the token count the web shows in its tooltip. */
-export function ConversationCost({ conversation }: { conversation: ConversationItem }) {
-  if (!conversation.totalCost && !conversation.totalTokens) return null;
-  return (
-    <Text
-      accessibilityLabel={`${conversation.totalTokens.toLocaleString()} tokens, ${formatCost(conversation.totalCost)} this conversation`}
-      className="shrink-0 px-1.5 text-muted-foreground text-xs tabular-nums"
-    >
-      {formatCost(conversation.totalCost)}
-      <Text className="text-muted-foreground/70"> · {conversation.totalTokens.toLocaleString()} tok</Text>
-    </Text>
   );
 }
 

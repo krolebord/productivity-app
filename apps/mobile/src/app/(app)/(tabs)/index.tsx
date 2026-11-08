@@ -93,7 +93,6 @@ export default function TodayScreen() {
               icon={agenda.calendarExpanded ? "chevron-up" : "calendar"}
               label={agenda.calendarExpanded ? "Collapse calendar" : "Expand calendar"}
               onPress={agenda.toggleCalendarExpanded}
-              iconClassName="accent-muted-foreground"
             />
           </>
         }
@@ -418,7 +417,6 @@ function QuickAddTask({
 
   return (
     <View className="h-12 flex-row items-center gap-2 rounded-xl border border-border bg-card pr-1 pl-3">
-      <Icon name="plus" size={18} colorClassName="accent-muted-foreground" />
       <Input
         value={title}
         onChangeText={setTitle}
@@ -432,16 +430,16 @@ function QuickAddTask({
         }
         className="h-full flex-1"
       />
+      {/* Shows where the task goes, like the web's destination toggle. */}
       <IconButton
-        icon="inbox"
-        label={toInbox ? "Schedule on the selected day instead" : "Send to inbox instead"}
+        icon={toInbox ? "inbox" : "calendar"}
+        label={toInbox ? "Send new task to inbox" : `Schedule new task for ${selectedLabel}`}
         onPress={() => setToInbox((value) => !value)}
-        iconClassName={toInbox ? "accent-primary" : "accent-muted-foreground"}
+        iconClassName="accent-muted-foreground"
         size={18}
-        className={toInbox ? "bg-accent" : ""}
       />
       <IconButton
-        icon="arrow-up"
+        icon="plus"
         label="Add task"
         onPress={submit}
         disabled={!title.trim()}
