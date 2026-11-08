@@ -1,4 +1,4 @@
-import { addMonths, endOfMonth } from "date-fns";
+import { addMonths, endOfMonth, startOfMonth } from "date-fns";
 import { useCallback, useMemo, useState } from "react";
 import {
   type AgendaHabit,
@@ -127,8 +127,14 @@ function dueAtOnDay(task: Pick<AgendaTask, "dueAt" | "hasDueTime">, day: Date): 
   );
 }
 
-/** Agenda state for the selected day; `todayKey` comes from the platform's day-change watcher. */
-export function useAgenda(todayKey: string) {
+/**
+ * Agenda state for the selected day; `todayKey` comes from the platform's day-change watcher.
+ *
+ * `keepMonthGrid` makes `dayInfos` cover the selected day's whole month grid even while the
+ * calendar is collapsed, so a client can keep every row mounted and expand by showing them
+ * instead of creating them on tap.
+ */
+export function useAgenda(todayKey: string, { keepMonthGrid = false }: { keepMonthGrid?: boolean } = {}) {
   const db = useDb();
   const today = useMemo(() => parseDateKey(todayKey), [todayKey]);
 
@@ -139,10 +145,11 @@ export function useAgenda(todayKey: string) {
   const selectedKey = pinnedDate ? toDateKey(pinnedDate) : todayKey;
 
   const [calendarExpanded, setCalendarExpanded] = useState(false);
-  const visibleDays = useMemo(
-    () => (calendarExpanded ? getMonthGridDays(selectedDate) : getWeekDays(selectedDate)),
-    [calendarExpanded, selectedDate],
-  );
+  // Keyed by month, so picking another day of the same month keeps the same day objects.
+  const monthStartMs = startOfMonth(selectedDate).getTime();
+  const monthDays = useMemo(() => getMonthGridDays(new Date(monthStartMs)), [monthStartMs]);
+  const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
+  const visibleDays = keepMonthGrid || calendarExpanded ? monthDays : weekDays;
   const visibleStart = visibleDays[0] ?? selectedDate;
   const visibleEnd = visibleDays[visibleDays.length - 1] ?? selectedDate;
   // Monthly habits sum their whole calendar month, which can extend past a

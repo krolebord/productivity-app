@@ -16,7 +16,7 @@ import { useReorderable } from "@productivity/core/use-reorderable";
 import { useDb } from "@productivity/core/user-db/db-context";
 import { differenceInCalendarDays, format } from "date-fns";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Canvas, Path, Skia } from "react-native-skia";
 import { useCSSVariable } from "uniwind";
@@ -50,7 +50,7 @@ function daySubtitle(date: Date, todayKey: string) {
 
 export default function TodayScreen() {
   const contentInset = useTabContentInset();
-  const agenda = useAgenda(useCurrentDayKey());
+  const agenda = useAgenda(useCurrentDayKey(), { keepMonthGrid: true });
   const router = useRouter();
   const [showCompleted, setShowCompleted] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -259,6 +259,17 @@ function CalendarStrip({ agenda }: { agenda: Agenda }) {
     return rows;
   }, [dayInfos]);
 
+  // `dayInfos` always covers the month grid. Collapsed, only the selected day's week shows; the
+  // other rows mount hidden after the next frame, so expanding shows existing cells instead of
+  // creating ~35 of them on tap (which roughly halved the expand on a Pixel 7).
+  const monthKey = format(selectedDate, "yyyy-MM");
+  const [mountedMonth, setMountedMonth] = useState<string | null>(null);
+  useEffect(() => {
+    if (mountedMonth === monthKey) return;
+    const frame = requestAnimationFrame(() => startTransition(() => setMountedMonth(monthKey)));
+    return () => cancelAnimationFrame(frame);
+  }, [mountedMonth, monthKey]);
+
   return (
     <View className="gap-1">
       <View className="flex-row items-center">
@@ -289,24 +300,32 @@ function CalendarStrip({ agenda }: { agenda: Agenda }) {
           </Text>
         ))}
       </View>
-      {weeks.map((week) => (
-        <View key={week[0]?.dateKey} className="flex-row">
-          {week.map((day) => (
-            <DayCell
-              key={day.dateKey}
-              day={day}
-              selected={day.dateKey === selectedKey}
-              isToday={day.dateKey === todayKey}
-              muted={calendarExpanded && day.date.getMonth() !== selectedDate.getMonth()}
-              ringColors={ringColors}
-              onSelect={agenda.selectDateKey}
-            />
-          ))}
-        </View>
-      ))}
+      {weeks.map((week) => {
+        const shown = calendarExpanded || week.some((day) => day.dateKey === selectedKey);
+        if (!shown && mountedMonth !== monthKey) return null;
+        return (
+          <View key={week[0]?.dateKey} className="flex-row" style={shown ? SHOWN_ROW : HIDDEN_ROW}>
+            {week.map((day) => (
+              <DayCell
+                key={day.dateKey}
+                day={day}
+                selected={day.dateKey === selectedKey}
+                isToday={day.dateKey === todayKey}
+                muted={calendarExpanded && day.date.getMonth() !== selectedDate.getMonth()}
+                ringColors={ringColors}
+                onSelect={agenda.selectDateKey}
+              />
+            ))}
+          </View>
+        );
+      })}
     </View>
   );
 }
+
+// Set both ways explicitly: an unset `display` could keep a reused native view's previous value.
+const SHOWN_ROW = { display: "flex" } as const;
+const HIDDEN_ROW = { display: "none" } as const;
 
 function DayCell({
   day,
