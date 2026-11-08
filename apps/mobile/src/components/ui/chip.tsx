@@ -10,8 +10,11 @@ export function Chip({
   onPress,
   onLongPress,
   tone = "default",
+  accessibilityLabel,
 }: {
   label: string;
+  /** When the visible label is shortened, as a weekday's "Fri". */
+  accessibilityLabel?: string;
   count?: number;
   selected?: boolean;
   onPress?: () => void;
@@ -33,7 +36,7 @@ export function Chip({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={count != null ? `${label}, ${count}` : undefined}
+      accessibilityLabel={accessibilityLabel ?? (count != null ? `${label}, ${count}` : undefined)}
       onPress={onPress}
       onLongPress={onLongPress}
       disabled={!onPress && !onLongPress}

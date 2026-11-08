@@ -21,18 +21,20 @@ import {
 import { useDb } from "@productivity/core/user-db/db-context";
 import { format, isSameYear, isToday, isYesterday } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Keyboard, Pressable, Text, type TextInputInstance, View } from "react-native";
-import { ActionButton } from "../../../components/action-button";
+import { type RefObject, useMemo, useRef, useState } from "react";
+import { Alert, Keyboard, Platform, Pressable, Text, type TextInputInstance, View } from "react-native";
 import { useAskAssistant, useAssistantEnabled } from "../../../components/assistant-button";
 import { DateTimeSheet } from "../../../components/date-time-field";
+import { EditorShell } from "../../../components/item-editor";
 import { SheetHeader } from "../../../components/screen-header";
+import { ActionSheet, type ActionSheetItem } from "../../../components/ui/action-sheet";
+import { Button } from "../../../components/ui/button";
 import { PickerChip } from "../../../components/ui/chip";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { FieldError } from "../../../components/ui/form";
 import { Icon, MaterialIcon } from "../../../components/ui/icon";
+import { IconButton } from "../../../components/ui/icon-button";
 import { Input } from "../../../components/ui/input";
-import { KeyboardScreen } from "../../../components/ui/keyboard-screen";
 import { SelectSheet } from "../../../components/ui/select-sheet";
 import { IMPORTANCE_STYLE, parseAmountInput, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
 import { cn } from "../../../lib/utils";
@@ -200,19 +202,19 @@ function TransactionForm({
   const [savedCount, setSavedCount] = useState(0);
   const [showNotes, setShowNotes] = useState(Boolean(existing?.notes));
   const [picker, setPicker] = useState<Picker | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   // Outlives `picker`, so the account sheet's title and checkmark don't change while it slides out.
   const [accountTarget, setAccountTarget] = useState<AccountPickerTarget>({ field: "accountId", title: "Account" });
   const receivedRef = useRef<TextInputInstance>(null);
   const amountRef = useRef<TextInputInstance>(null);
   const titleRef = useRef<TextInputInstance>(null);
   const notesRef = useRef<TextInputInstance>(null);
-  const [focusAmountOnOpen] = useState(!existing);
-
-  // A new entry opens on the amount with the decimal pad up. Not `autoFocus`: the amount input
-  // remounts when a transfer switches between one and two amounts, and that mustn't refocus it.
-  useEffect(() => {
-    if (focusAmountOnOpen) amountRef.current?.focus();
-  }, [focusAmountOnOpen]);
+  // A new entry opens on the amount with the decimal pad up. `autoFocus`, not `focus()` on mount:
+  // Android only opens the keyboard for a field focused once it's attached, which `autoFocus` waits
+  // for. Keep it constant: Android reads it at attach time, so turning it off right after the first
+  // render cancels it. It also refocuses the amount when a transfer switches between one and two
+  // amounts, which is where typing continues anyway.
+  const autoFocusAmount = !existing;
 
   const importanceByCategory = useMemo(() => inferCategoryImportance(importanceRows), [importanceRows]);
 
@@ -247,11 +249,9 @@ function TransactionForm({
 
   const isNegative = form.amount.startsWith("-");
 
-  // The sheets are pinned to the bottom, so the decimal pad would cover them.
-  const openPicker = (next: Picker) => {
-    Keyboard.dismiss();
-    setPicker(next);
-  };
+  // The keyboard stays with its field: both platforms hide it while a picker is up and show it again
+  // once the picker closes, so typing carries on where it was (PickerScreen handles that on iOS).
+  const openPicker = (next: Picker) => setPicker(next);
   const closePicker = () => setPicker(null);
   const focusTitle = () => titleRef.current?.focus();
 
@@ -273,13 +273,8 @@ function TransactionForm({
     }
   };
 
-  const toggleSign = () => {
-    if (form.type === "adjustment") {
-      update({ amount: isNegative ? form.amount.slice(1) : `-${form.amount}` });
-    } else if (form.type === "expense" || form.type === "income") {
-      changeType(form.type === "expense" ? "income" : "expense");
-    }
-  };
+  // An adjustment can raise or lower the balance; expenses and income take their sign from the type.
+  const toggleSign = () => update({ amount: isNegative ? form.amount.slice(1) : `-${form.amount}` });
 
   const swapAccounts = () =>
     update({
@@ -353,24 +348,13 @@ function TransactionForm({
           destination.currency,
         )
       : null;
-  const sign =
-    form.type === "expense"
-      ? "−"
-      : form.type === "income"
-        ? "+"
-        : form.type === "adjustment"
-          ? isNegative
-            ? "−"
-            : "+"
-          : null;
-  const signLabel =
-    form.type === "expense"
-      ? "Switch to income"
-      : form.type === "income"
-        ? "Switch to expense"
-        : isNegative
-          ? "Make positive"
-          : "Make negative";
+  const sign = form.type === "adjustment" ? (isNegative ? "−" : "+") : null;
+  const signLabel = isNegative ? "Make positive" : "Make negative";
+  const menuItems: ActionSheetItem[] = [
+    ...(assistantEnabled ? [{ label: "Ask assistant", icon: "message-circle" as const, onPress: askAssistant }] : []),
+    { label: "Delete transaction", icon: "trash-2", destructive: true, onPress: confirmDelete },
+  ];
+  const saveDisabled = unchanged || (form.type === "transfer" && !canTransfer);
   const importanceStyle = form.importance ? IMPORTANCE_STYLE[form.importance] : null;
 
   // The chips leave out the currency: the amount above them shows it.
@@ -392,15 +376,46 @@ function TransactionForm({
   };
 
   return (
-    <KeyboardScreen
+    <EditorShell
+      contentClassName="px-4 pt-4"
+      toolbarClassName="gap-3"
       header={
         <SheetHeader
           title={screenTitle(existing != null, form.type)}
           onCancel={() => router.back()}
-          onDone={() => save()}
-          doneLabel="Save"
-          doneDisabled={unchanged || (form.type === "transfer" && !canTransfer)}
+          actions={
+            existing && (
+              <IconButton
+                icon="more-vertical"
+                label="More actions"
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setMenuOpen(true);
+                }}
+                size={22}
+              />
+            )
+          }
         />
+      }
+      // Save sits on the keyboard, under the thumb: this is the form people fill in most, often several in a row.
+      toolbar={
+        <>
+          {!existing && (
+            <View className="flex-1">
+              <Button
+                variant="outline"
+                label="Add another"
+                accessibilityLabel="Save and add another"
+                onPress={() => save(true)}
+                disabled={saveDisabled}
+              />
+            </View>
+          )}
+          <View className="flex-1">
+            <Button label="Save" onPress={() => save()} disabled={saveDisabled} />
+          </View>
+        </>
       }
     >
       <TypeToggle value={form.type} onChange={changeType} />
@@ -411,6 +426,7 @@ function TransactionForm({
             <View className="min-w-0 flex-1 items-center gap-2">
               <AmountInput
                 inputRef={amountRef}
+                autoFocus={autoFocusAmount}
                 label={`Sent amount (${source?.currency})`}
                 value={form.amount}
                 onChangeText={changeAmount}
@@ -453,6 +469,7 @@ function TransactionForm({
             )}
             <AmountInput
               inputRef={amountRef}
+              autoFocus={autoFocusAmount}
               label={form.type === "adjustment" ? "Balance change" : "Amount"}
               value={form.amount.replace(/^-/, "")}
               onChangeText={changeAmount}
@@ -547,24 +564,19 @@ function TransactionForm({
             placeholder="Note"
             multiline
             textAlignVertical="top"
-            className="min-h-20 rounded-lg border border-border bg-card px-3 py-2.5"
+            className={cn("min-h-11 rounded-lg px-3 py-2.5 text-center text-base", !form.notes && "bg-muted/50")}
           />
         )}
       </View>
 
       <FieldError message={error} className="-mt-1 text-center" />
 
-      <View className="flex-row gap-3 border-border border-t pt-5">
-        {existing ? (
-          <>
-            {assistantEnabled && <ActionButton icon="message-circle" label="Ask assistant" onPress={askAssistant} />}
-            <ActionButton icon="trash-2" label="Delete" destructive onPress={confirmDelete} />
-          </>
-        ) : (
-          <ActionButton icon="plus" label="Create & add another" onPress={() => save(true)} />
-        )}
-      </View>
-
+      <ActionSheet
+        visible={menuOpen}
+        title="Transaction actions"
+        items={menuItems}
+        onClose={() => setMenuOpen(false)}
+      />
       <SelectSheet
         visible={picker === "account"}
         title={accountTarget.title}
@@ -607,7 +619,7 @@ function TransactionForm({
         onChange={(effectiveAt) => update({ effectiveAt })}
         onClose={closePicker}
       />
-    </KeyboardScreen>
+    </EditorShell>
   );
 }
 
@@ -664,6 +676,7 @@ function AmountInput({
   currency,
   className,
   onSubmitEditing,
+  autoFocus = false,
 }: {
   inputRef?: RefObject<TextInputInstance | null>;
   label: string;
@@ -671,8 +684,9 @@ function AmountInput({
   onChangeText: (text: string) => void;
   currency?: string;
   className?: string;
-  /** Where the keypad's Next key goes (iOS 26 floats one above the decimal pad; Android has one). */
+  /** Where the keypad's Next key goes, on Android. */
   onSubmitEditing?: () => void;
+  autoFocus?: boolean;
 }) {
   const textClassName = cn("font-semibold tabular-nums", className);
   return (
@@ -697,8 +711,11 @@ function AmountInput({
           placeholder="0"
           placeholderTextColorClassName="accent-muted-foreground/40"
           keyboardType="decimal-pad"
-          returnKeyType="next"
+          // iOS 26 floats a Next key above the decimal pad, over the editor's Save bar; without a
+          // return key type it shows none.
+          returnKeyType={Platform.OS === "ios" ? undefined : "next"}
           onSubmitEditing={onSubmitEditing}
+          autoFocus={autoFocus}
           style={noFontPadding}
           className={cn("absolute inset-0 p-0 text-center", textClassName)}
         />

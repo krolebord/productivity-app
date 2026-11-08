@@ -16,6 +16,7 @@ import { GestureDetector, usePanGesture } from "react-native-gesture-handler";
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { cn } from "../lib/utils";
+import { CheckboxIndicator } from "./ui/checkbox";
 import { Icon } from "./ui/icon";
 import { Input } from "./ui/input";
 
@@ -204,14 +205,7 @@ function ChecklistRow({
         onPress={onToggle}
         className="h-11 w-8 items-center justify-center"
       >
-        <View
-          className={cn(
-            "size-5 items-center justify-center rounded-md border-2",
-            done ? "border-primary bg-primary" : "border-muted-foreground",
-          )}
-        >
-          {done && <Icon name="check" size={14} colorClassName="accent-primary-foreground" />}
-        </View>
+        <CheckboxIndicator checked={done} />
       </Pressable>
       <Input
         ref={inputRef}

@@ -24,7 +24,7 @@ import { useTabContentInset } from "../../../components/assistant-button";
 import { GlobalActions } from "../../../components/global-actions";
 import { type DragHandle, ReorderableList } from "../../../components/reorderable-list";
 import { ScreenHeader } from "../../../components/screen-header";
-import { CheckCircle } from "../../../components/ui/check-circle";
+import { Checkbox, HabitCheck } from "../../../components/ui/checkbox";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { Icon } from "../../../components/ui/icon";
 import { IconButton } from "../../../components/ui/icon-button";
@@ -497,7 +497,7 @@ function InboxSection({
 function InboxRow({ task, selectedLabel, actions }: { task: AgendaTask; selectedLabel: string; actions: RowActions }) {
   return (
     <View className="min-h-11 flex-row items-center gap-3">
-      <CheckCircle
+      <Checkbox
         checked={false}
         optimistic
         label={`Complete ${taskLabel(task)}`}
@@ -572,7 +572,7 @@ function TaskRow({
 
   return (
     <View className={cn("min-h-11 flex-row items-center gap-3", handle && "h-full", completed && "opacity-60")}>
-      <CheckCircle
+      <Checkbox
         checked={completed}
         optimistic
         label={completed ? "Mark incomplete" : "Mark complete"}
@@ -646,16 +646,24 @@ function HabitRow({
 
   return (
     <View className={`min-h-11 flex-row items-center gap-3 ${done ? "opacity-60" : ""}`}>
-      <CheckCircle
-        checked={done}
-        disabled={!editable}
-        // Increments and confirmed resets don't flip `done` on every press.
-        optimistic={isSimple && !done}
-        label={done ? `Uncheck ${habit.name}` : isSimple ? `Complete ${habit.name}` : `Add 1 to ${habit.name}`}
-        onPress={() =>
-          done ? confirmHabitReset(habit, value, () => onToggle(false)) : isSimple ? onToggle(true) : onIncrement()
-        }
-      />
+      {isSimple ? (
+        <Checkbox
+          checked={done}
+          disabled={!editable}
+          // Confirmed resets don't flip `done` on every press.
+          optimistic={!done}
+          label={done ? `Uncheck ${habit.name}` : `Complete ${habit.name}`}
+          onPress={() => (done ? confirmHabitReset(habit, value, () => onToggle(false)) : onToggle(true))}
+        />
+      ) : (
+        <HabitCheck
+          checked={done}
+          progress={habit.target > 0 ? value / habit.target : 0}
+          disabled={!editable}
+          label={done ? `Uncheck ${habit.name}` : `Add 1 to ${habit.name}`}
+          onPress={() => (done ? confirmHabitReset(habit, value, () => onToggle(false)) : onIncrement())}
+        />
+      )}
       <View className="flex-1 py-2">
         <View className="flex-row items-center gap-2">
           <Icon name="repeat" size={12} colorClassName="accent-muted-foreground" />

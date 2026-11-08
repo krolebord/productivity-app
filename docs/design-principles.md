@@ -22,6 +22,9 @@ Pick the transition by what the screen is, not by what the nearest file does.
 - `SheetHeader` buttons: cancel is a ✕ on both platforms; confirm is a filled ✓ on iOS (iOS 26 sheets)
   and text ("Save") on Android (Material full-screen dialog). Pass `doneLabel` even on iOS: it's the
   accessibility label. A custom `cancelLabel` stays text, since it's an action, not a dismissal.
+- Exception: forms filled in often and in runs (transactions) put Save (and "Add another") in a bottom bar
+  that rides on the keyboard, under the thumb; the header keeps ✕ and the ⋮ menu. Rarely opened forms
+  (habit, account, tokens) keep Save in the header. Both editors share `EditorShell` (`components/item-editor.tsx`).
 - Pickers and filter panels are controls, not routes: render `FormSheet` or `PickerScreen` (`components/ui/`)
   next to the trigger and drive it with `isOpen`/`visible`, so `value`/`onChange` stay typed props. A route
   can't take a callback and can be deep-linked or restored on its own; keep routes for pages and editors.
@@ -33,3 +36,15 @@ Pick the transition by what the screen is, not by what the nearest file does.
 - `FormSheet` handles the experimental sheet's bugs (mounts content only while open, Android drag handle);
   keep those fixes in the wrapper. Its content needs no bottom inset.
 - Native Android UI (dialogs, pickers, cursor) takes the app's colors from `apps/mobile/plugins/android-theme.js`; keep it in sync with `src/global.css`.
+
+## Checkboxes
+
+Mobile matches web: the shape says what kind of thing it is.
+
+- **Square** for ticking things off and picking: tasks, simple (done / not done) habits, checklist items
+  in notes and tasks, markdown task lists, multi-select rows such as tags. Use `Checkbox`, or
+  `CheckboxIndicator` when the whole row takes the press (`apps/mobile/src/components/ui/checkbox.tsx`).
+- **Circle** only for habits with a target above one: it fills clockwise as progress is logged and shows
+  a check once done (`HabitCheck`; web's counted habit in `today-view.tsx`).
+- Single choice is a trailing ✓ (`FormOption`, `SelectSheet` rows), never a checkbox.
+- Markdown checkboxes are styled in `components/markdown.tsx` (`taskList`); keep them the same shape.

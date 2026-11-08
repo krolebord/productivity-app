@@ -59,6 +59,7 @@ export function SheetHeader({
   doneLabel = "Done",
   doneDisabled = false,
   donePending = false,
+  actions,
 }: {
   title: string;
   onCancel?: () => void;
@@ -68,6 +69,8 @@ export function SheetHeader({
   doneDisabled?: boolean;
   /** Shows a spinner in place of the confirm button while its action runs. */
   donePending?: boolean;
+  /** Icon buttons (a ⋮ menu) before the confirm button, or in its place. */
+  actions?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const inSheet = useInFormSheet();
@@ -87,7 +90,8 @@ export function SheetHeader({
       <Text numberOfLines={1} className="max-w-[55%] font-semibold text-base text-foreground">
         {title}
       </Text>
-      <View className="flex-1 items-end">
+      <View className="flex-1 flex-row items-center justify-end gap-1">
+        {actions}
         {onDone &&
           (donePending ? (
             <View className="size-10 items-center justify-center">

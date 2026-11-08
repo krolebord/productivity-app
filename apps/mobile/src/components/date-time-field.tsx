@@ -1,8 +1,9 @@
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { format } from "date-fns";
+import { format, isSameDay, isToday, isYesterday, subDays } from "date-fns";
 import { Platform, Pressable, Text, View } from "react-native";
 import { useUniwind } from "uniwind";
 import { SheetHeader } from "./screen-header";
+import { Chip } from "./ui/chip";
 import { FormRow } from "./ui/form";
 import { FormSheet } from "./ui/form-sheet";
 
@@ -68,7 +69,14 @@ export function DateTimeSheet({
     <FormSheet isOpen={visible} onNativeDismiss={onClose}>
       <View>
         <SheetHeader title={title} onDone={onClose} />
-        <View className="p-4">
+        <View className="gap-4 p-4">
+          <DayShortcuts
+            value={value}
+            onPick={(next) => {
+              onChange(next);
+              onClose();
+            }}
+          />
           <View className="overflow-hidden rounded-xl bg-card">
             <FormRow label="Date">
               <DateTimeField mode="date" value={value} onChange={(day) => onChange(withDate(value, day))} />
@@ -80,6 +88,27 @@ export function DateTimeSheet({
         </View>
       </View>
     </FormSheet>
+  );
+}
+
+/**
+ * One-tap picks for the usual cases, each closing the sheet: Now (today, current time), then
+ * yesterday and the day before, which keep the chosen time. The day before reads as its weekday.
+ */
+function DayShortcuts({ value, onPick }: { value: Date; onPick: (value: Date) => void }) {
+  const now = new Date();
+  const dayBefore = subDays(now, 2);
+  return (
+    <View className="flex-row gap-2">
+      <Chip label="Now" selected={isToday(value)} onPress={() => onPick(now)} />
+      <Chip label="Yesterday" selected={isYesterday(value)} onPress={() => onPick(withDate(value, subDays(now, 1)))} />
+      <Chip
+        label={format(dayBefore, "EEE")}
+        accessibilityLabel={format(dayBefore, "EEEE")}
+        selected={isSameDay(value, dayBefore)}
+        onPress={() => onPick(withDate(value, dayBefore))}
+      />
+    </View>
   );
 }
 

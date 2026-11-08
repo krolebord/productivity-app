@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { KeyboardAvoidingView, Modal, Platform } from "react-native";
+import { type ReactNode, useRef } from "react";
+import { KeyboardAvoidingView, Modal, Platform, TextInput, type TextInputInstance } from "react-native";
 
 /**
  * A full-screen picker page over the current screen, for picks that scroll or take typing (tags,
@@ -22,6 +22,19 @@ export function PickerScreen({
   onClose: () => void;
   children: ReactNode;
 }) {
+  // A full-screen modal takes the keyboard's field on iOS and doesn't give it back, so the field
+  // that had it is refocused once the page is gone. Android's modal window returns it by itself.
+  // Read during render: by the time an effect runs, the modal has already taken focus.
+  const wasVisible = useRef(false);
+  const focusedBefore = useRef<TextInputInstance | null>(null);
+  if (visible && !wasVisible.current) {
+    focusedBefore.current = TextInput.State.currentlyFocusedInput() as TextInputInstance | null;
+  }
+  wasVisible.current = visible;
+  const refocus = () => {
+    focusedBefore.current?.focus();
+    focusedBefore.current = null;
+  };
   return (
     <Modal
       visible={visible}
@@ -30,6 +43,7 @@ export function PickerScreen({
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}
+      onDismiss={Platform.OS === "ios" ? refocus : undefined}
     >
       {/* Android doesn't resize an edge-to-edge modal for the keyboard, so pad it here; on iOS the
           lists inset themselves (`automaticallyAdjustKeyboardInsets`) and scroll under it. */}

@@ -16,13 +16,23 @@ type ButtonProps = {
   loading?: boolean;
   disabled?: boolean;
   variant?: keyof typeof VARIANTS;
+  /** When the visible label is shorter than what the button does. */
+  accessibilityLabel?: string;
 };
 
-export function Button({ label, onPress, loading = false, disabled = false, variant = "primary" }: ButtonProps) {
+export function Button({
+  label,
+  onPress,
+  loading = false,
+  disabled = false,
+  variant = "primary",
+  accessibilityLabel,
+}: ButtonProps) {
   const styles = VARIANTS[variant];
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       onPress={onPress}
       disabled={disabled || loading}

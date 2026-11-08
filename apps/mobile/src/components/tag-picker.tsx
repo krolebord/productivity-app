@@ -4,8 +4,8 @@ import { normalizeTag } from "@productivity/core/tags";
 import { useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { cn } from "../lib/utils";
 import { ScreenHeader } from "./screen-header";
+import { CheckboxIndicator } from "./ui/checkbox";
 import { Icon } from "./ui/icon";
 import { Input } from "./ui/input";
 import { PickerScreen } from "./ui/picker-screen";
@@ -133,14 +133,7 @@ function TagRow({ tag, checked, onPress }: { tag: string; checked: boolean; onPr
     >
       <Icon name="tag" size={20} colorClassName="accent-muted-foreground" />
       <Text className="flex-1 text-base text-foreground">{tag}</Text>
-      <View
-        className={cn(
-          "size-6 items-center justify-center rounded-md border-2",
-          checked ? "border-primary bg-primary" : "border-muted-foreground",
-        )}
-      >
-        {checked && <Icon name="check" size={16} colorClassName="accent-primary-foreground" />}
-      </View>
+      <CheckboxIndicator checked={checked} />
     </Pressable>
   );
 }
