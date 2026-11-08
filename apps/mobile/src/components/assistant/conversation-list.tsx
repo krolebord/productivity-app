@@ -11,7 +11,6 @@ import {
 } from "@productivity/core/conversation-list";
 import { deleteConversation, useConversationTurnStarts } from "@productivity/core/data/conversations";
 import { useDb } from "@productivity/core/user-db/db-context";
-import { generateId } from "@sqlite-sync/core";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -49,16 +48,13 @@ export function confirmDeleteConversation(conversation: Pick<ConversationListIte
   ]);
 }
 
-/** Deletes a chat and its composer state; deleting the open one moves the assistant to the next. */
+/** Deletes a chat and its composer state; the assistant button then opens a new chat. */
 export function useDeleteConversation() {
   const db = useDb();
-  return (id: string, conversations: readonly Pick<ConversationListItem, "id">[]) => {
+  return (id: string) => {
     deleteConversation(db.db, id);
     clearAssistantChat(id);
-    if (id === getPreferences().assistantConversationId) {
-      const next = conversations.find((row) => row.id !== id);
-      setPreference("assistantConversationId", next?.id ?? generateId());
-    }
+    if (id === getPreferences().assistantConversationId) setPreference("assistantConversationId", null);
   };
 }
 

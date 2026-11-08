@@ -1,8 +1,10 @@
 import type { AttachRef } from "@productivity/core/agent/attach";
+import { useConversations } from "@productivity/core/data/conversations";
 import { useRouter } from "expo-router";
 import { Platform, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { attachToAssistant } from "../lib/assistant-chats";
+import { attachToAssistant, startConversationId } from "../lib/assistant-chats";
+import { setPreference } from "../lib/preferences";
 import { useSession } from "../lib/session";
 import { Icon } from "./ui/icon";
 
@@ -16,15 +18,23 @@ export function useTabContentInset() {
   return insets.bottom + TAB_BAR_CLEARANCE + BUTTON_SIZE + 16;
 }
 
-/** Floating button over the tabs that opens the full-screen assistant. */
+/**
+ * Floating button over the tabs that opens the assistant on a chat: a new one, or the last one
+ * while it's still in play.
+ */
 export function AssistantButton() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const conversations = useConversations();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Open assistant"
-      onPress={() => router.push("/assistant")}
+      onPress={() => {
+        const id = startConversationId(conversations);
+        setPreference("assistantConversationId", id);
+        router.push("/assistant");
+      }}
       className="absolute right-5 size-14 items-center justify-center rounded-full bg-primary shadow-lg active:opacity-80"
       style={{ bottom: insets.bottom + TAB_BAR_CLEARANCE }}
     >
@@ -39,8 +49,8 @@ export function useAssistantEnabled() {
 }
 
 /**
- * Attaches a row to the assistant's composer and opens it, the mobile take on the web's
- * Cmd-click. Returns to an assistant already under the current screen (a transaction opened
+ * Attaches a row to the assistant's composer and opens it on that chat, the mobile take on the
+ * web's Cmd-click. Returns to an assistant already under the current screen (a transaction opened
  * from a chat) instead of stacking a second one.
  */
 export function useAskAssistant() {

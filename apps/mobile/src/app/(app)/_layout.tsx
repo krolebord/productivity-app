@@ -46,13 +46,13 @@ export default function AppLayout() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="integrations" />
         <Stack.Screen name="rates" />
-        {/* A page you stay in, not a layer: a push with swipe-back on iOS (a sheet's swipe-down would
-            fight scrolling up the chat), the same fade-and-rise as the editors on Android. */}
+        {/* A place you stay, not a layer: a push with swipe-back on iOS (a sheet's swipe-down would
+            fight scrolling up the chat), the same fade-and-rise as the editors on Android. The chat
+            and the Chats list are two views of it, so back always leaves the assistant. */}
         <Stack.Screen
           name="assistant"
           options={{ animation: Platform.OS === "android" ? "fade_from_bottom" : "default" }}
         />
-        <Stack.Screen name="assistant-chats" />
         <Stack.Screen name="agents" />
         <Stack.Screen name="memories" />
         <Stack.Screen name="skills" />

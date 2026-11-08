@@ -1,5 +1,7 @@
 import { type AttachRef, appendToDraft, formatAttachToken } from "@productivity/core/agent/attach";
+import { isConversationUnread } from "@productivity/core/conversation-list";
 import type { SubmitLock } from "@productivity/core/submit-lock";
+import type { ConversationItem } from "@productivity/core/user-db/migrations";
 import { generateId } from "@sqlite-sync/core";
 import { useSyncExternalStore } from "react";
 import type { PickedFile } from "./assistant-uploads";
@@ -110,4 +112,35 @@ export function attachToAssistant(ref: AttachRef) {
     setPreference("assistantConversationId", id);
   }
   appendToAssistantDraft(id, formatAttachToken(ref));
+}
+
+// Opening the assistant starts a new chat unless the last one is still in play: touched or viewed
+// within this window, running, with an unread reply, or holding a draft (e.g. context just attached).
+const REOPEN_WITHIN_MS = 30 * 60_000;
+
+// When a chat was last left. In memory only: after a restart only the chat's own updatedAt counts.
+let lastViewed: { id: string; at: number } | null = null;
+
+/** Remembers the chat being left, for the reopen window. */
+export function markAssistantChatLeft(id: string) {
+  lastViewed = { id, at: Date.now() };
+}
+
+/** The chat the assistant button opens: the remembered one while it's still in play, else a new one. */
+export function startConversationId(conversations: readonly ConversationItem[]) {
+  const remembered = getPreferences().assistantConversationId;
+  if (!remembered) return generateId();
+  const row = conversations.find((conversation) => conversation.id === remembered);
+  // Not started yet: already a fresh chat.
+  if (!row) return remembered;
+  const chat = getAssistantChat(remembered);
+  const touchedAt = Math.max(row.updatedAt, lastViewed?.id === remembered ? lastViewed.at : 0);
+  const inPlay =
+    row.turnStatus === "running" ||
+    isConversationUnread(row) ||
+    Date.now() - touchedAt < REOPEN_WITHIN_MS ||
+    !!chat.draft ||
+    chat.files.length > 0 ||
+    chat.lock != null;
+  return inPlay ? remembered : generateId();
 }

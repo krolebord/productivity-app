@@ -13,11 +13,7 @@ import {
   resolveAssistantModelId,
 } from "@productivity/core/agent/models";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@productivity/core/agent/uploads";
-import {
-  conversationTitle,
-  isConversationUnread,
-  summarizeConversationActivity,
-} from "@productivity/core/conversation-list";
+import { conversationTitle, summarizeConversationActivity } from "@productivity/core/conversation-list";
 import {
   catchUpConversationLastRead,
   useConversationMessages,
@@ -42,16 +38,19 @@ import {
   type TextInputInstance,
   View,
 } from "react-native";
+import Animated, { FadeIn, ReduceMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AttachmentChips, ModelPicker, ReasoningEffortPicker } from "../../components/assistant/composer-controls";
 import {
   ActivityBadge,
+  ConversationList,
   confirmDeleteConversation,
   useDeleteConversation,
 } from "../../components/assistant/conversation-list";
 import { SkillStarters } from "../../components/assistant/skill-starters";
 import { ToolMessage } from "../../components/assistant/tool-message";
 import { Markdown } from "../../components/markdown";
+import { ScreenHeader } from "../../components/screen-header";
 import { ActionSheet } from "../../components/ui/action-sheet";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Icon } from "../../components/ui/icon";
@@ -62,6 +61,7 @@ import {
   appendToAssistantDraft,
   clearAssistantSubmitLock,
   getAssistantChat,
+  markAssistantChatLeft,
   setAssistantDraft,
   setAssistantFiles,
   setAssistantSubmitLock,
@@ -81,59 +81,88 @@ function rpcErrorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : "Something went wrong. Try again.";
 }
 
-// Opening the assistant starts a new chat unless the last one is still in play: touched or viewed
-// within this window, running, with an unread reply, or holding a draft (e.g. context just attached).
-const REOPEN_WITHIN_MS = 30 * 60_000;
+// Switching between the chat and the Chats list swaps the view in place: they're two views of
+// one page, so neither may look like a push that back would undo.
+const viewEnter = FadeIn.duration(150).reduceMotion(ReduceMotion.System);
 
-// When the assistant was last left, and on which chat. In memory only: after a restart only the
-// chat's own updatedAt counts.
-let lastViewed: { id: string; at: number } | null = null;
+/**
+ * The assistant: one page in the app's stack that shows either a chat or the Chats list, so
+ * back (‹, swipe or Android's) always leaves it. Whatever opens it picks the chat first by
+ * setting the `assistantConversationId` preference (see components/assistant-button.tsx).
+ */
+export default function AssistantScreen() {
+  const remembered = usePreference("assistantConversationId");
+  const [view, setView] = useState<"chat" | "list">("chat");
+  const focusNonce = useComposerFocusNonce();
 
-function startConversationId(remembered: string | null, conversations: readonly ConversationItem[]) {
-  if (!remembered) return generateId();
-  const row = conversations.find((conversation) => conversation.id === remembered);
-  // Not started yet: already a fresh chat.
-  if (!row) return remembered;
-  const chat = getAssistantChat(remembered);
-  const touchedAt = Math.max(row.updatedAt, lastViewed?.id === remembered ? lastViewed.at : 0);
-  const inPlay =
-    row.turnStatus === "running" ||
-    isConversationUnread(row) ||
-    Date.now() - touchedAt < REOPEN_WITHIN_MS ||
-    !!chat.draft ||
-    chat.files.length > 0 ||
-    chat.lock != null;
-  return inPlay ? remembered : generateId();
+  // Deleting the open chat leaves none; start a new one rather than reusing a deleted id.
+  useEffect(() => {
+    if (!remembered) setPreference("assistantConversationId", generateId());
+  }, [remembered]);
+
+  // Attaching context from elsewhere ("Ask assistant") brings the chat back into view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the nonce is the trigger.
+  useEffect(() => setView("chat"), [focusNonce]);
+
+  const open = (id: string) => {
+    setPreference("assistantConversationId", id);
+    setView("chat");
+  };
+
+  if (!remembered) return <View className="flex-1 bg-background" />;
+
+  return (
+    <Animated.View key={view} entering={viewEnter} className="flex-1 bg-background">
+      {view === "chat" ? (
+        <ChatView conversationId={remembered} onShowChats={() => setView("list")} />
+      ) : (
+        <ChatsView activeId={remembered} onOpen={open} />
+      )}
+    </Animated.View>
+  );
 }
 
-export default function AssistantScreen() {
+function ChatsView({ activeId, onOpen }: { activeId: string; onOpen: (id: string) => void }) {
+  const router = useRouter();
+  const conversations = useConversations();
+  const deleteConversation = useDeleteConversation();
+  return (
+    <View className="flex-1">
+      <ScreenHeader
+        title="Chats"
+        onBack={router.back}
+        actions={
+          <IconButton
+            icon="edit"
+            label="New chat"
+            onPress={() => onOpen(generateId())}
+            iconClassName="accent-muted-foreground"
+          />
+        }
+      />
+      <ConversationList
+        conversations={conversations}
+        activeId={activeId}
+        onOpen={onOpen}
+        onNew={() => onOpen(generateId())}
+        onDelete={deleteConversation}
+      />
+    </View>
+  );
+}
+
+function ChatView({ conversationId, onShowChats }: { conversationId: string; onShowChats: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const focused = useIsFocused();
   const conversations = useConversations();
   const deleteConversation = useDeleteConversation();
-  const remembered = usePreference("assistantConversationId");
-  const [startId] = useState(() => startConversationId(remembered, conversations));
-  // Until the preference catches up with startId, show startId rather than flashing the old chat.
-  const [startPending, setStartPending] = useState(remembered !== startId);
-  if (startPending && remembered === startId) setStartPending(false);
-  const conversationId = startPending ? startId : (remembered ?? startId);
   const [menuOpen, setMenuOpen] = useState(false);
   const conversation = conversations.find((row) => row.id === conversationId) ?? null;
   const activity = summarizeConversationActivity({ conversations, activeConversationId: conversationId });
 
-  // Remembered across restarts, as the web persists its active chat; attaching context
-  // from elsewhere in the app also lands in whichever chat this is.
-  useEffect(() => {
-    if (startPending) setPreference("assistantConversationId", startId);
-  }, [startId, startPending]);
-
-  useEffect(
-    () => () => {
-      lastViewed = { id: conversationId, at: Date.now() };
-    },
-    [conversationId],
-  );
+  // For the reopen window: when this chat was last on screen.
+  useEffect(() => () => markAssistantChatLeft(conversationId), [conversationId]);
 
   const usage =
     conversation && (conversation.totalCost || conversation.totalTokens)
@@ -144,22 +173,17 @@ export default function AssistantScreen() {
     // At the root: KeyboardAvoidingView measures its frame relative to its parent, so nesting
     // it under the header would under-count the keyboard overlap. Padding on Android too: the app
     // is edge-to-edge, so adjustResize no longer shrinks the window and the keyboard covers the composer.
-    <KeyboardAvoidingView className="flex-1 bg-background" behavior="padding">
+    <KeyboardAvoidingView className="flex-1" behavior="padding">
       <View
         className="flex-row items-center gap-1 border-border border-b px-2 pb-2"
         style={{ paddingTop: insets.top + 4 }}
       >
-        <IconButton icon="chevron-left" label="Back" onPress={() => router.back()} size={26} />
+        <IconButton icon="chevron-left" label="Close assistant" onPress={() => router.back()} size={26} />
         <Text numberOfLines={1} className="min-w-0 flex-1 px-1 font-semibold text-base text-foreground">
           {conversationTitle(conversation ?? { title: "" })}
         </Text>
         <View>
-          <IconButton
-            icon="list"
-            label="Chats"
-            onPress={() => router.push("/assistant-chats")}
-            iconClassName="accent-muted-foreground"
-          />
+          <IconButton icon="list" label="Chats" onPress={onShowChats} iconClassName="accent-muted-foreground" />
           <ActivityBadge activity={activity} />
         </View>
         <IconButton
@@ -189,7 +213,10 @@ export default function AssistantScreen() {
             destructive: true,
             onPress: () => {
               if (!conversation) return;
-              confirmDeleteConversation(conversation, () => deleteConversation(conversation.id, conversations));
+              confirmDeleteConversation(conversation, () => {
+                deleteConversation(conversation.id);
+                onShowChats();
+              });
             },
           },
         ]}
@@ -263,7 +290,7 @@ function Chat({
     if (submitLock && !lockHolding) clearAssistantSubmitLock(conversationId, submitLock);
   }, [conversationId, submitLock, lockHolding]);
 
-  // Viewing a chat marks its latest reply as read; not while the chats list covers it.
+  // Viewing a chat marks its latest reply as read; not while another screen covers it.
   const updatedAt = conversation?.updatedAt;
   useEffect(() => {
     if (visible && updatedAt != null) catchUpConversationLastRead(db.db, conversationId);

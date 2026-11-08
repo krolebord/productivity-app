@@ -8,7 +8,7 @@ Pick the transition by what the screen is, not by what the nearest file does.
 
 | Screen | iOS | Android | Examples |
 |---|---|---|---|
-| Going deeper (a page) | default push, swipe back | system default | Transactions, Search, Settings, assistant Chats |
+| Going deeper (a page) | default push, swipe back | system default | Transactions, Search, Settings |
 | Editing / a layer on top | `presentation: "modal"` (native sheet) | `fade_from_bottom` | task, note, transaction editors |
 | A place you stay (long-lived, scrolls, own navigation) | default push, swipe back | `fade_from_bottom` | Assistant |
 | Short pick that fits (no scrolling, no typing) | `FormSheet` (native sheet sized to content) | same | period, date and time, lists of ≤10 options |
@@ -18,6 +18,9 @@ Pick the transition by what the screen is, not by what the nearest file does.
 | Tabs | instant | instant | Today, Finances, Notes, More |
 
 - Don't open a sheet for something people stay in: its swipe-down closes it while they scroll up.
+- The on-screen ‹ always does what Android back and the iOS swipe do. Views of the same page swap in
+  place with a short fade, never a push that back would undo: the assistant's chat and its Chats list
+  are one page, so back from either leaves the assistant, and the list is a header button, not a level up.
 - Editor-type screens use the shared `modal` options in `apps/mobile/src/app/(app)/_layout.tsx`.
 - `SheetHeader` buttons: cancel is a ✕ on both platforms; confirm is a filled ✓ on iOS (iOS 26 sheets)
   and text ("Save") on Android (Material full-screen dialog). Pass `doneLabel` even on iOS: it's the
