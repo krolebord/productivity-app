@@ -183,25 +183,27 @@ function SkillChip({ failed, data }: { failed: boolean; data: string }) {
   );
 }
 
+// Outside the component: React Compiler can't compile try/finally yet, and would skip DownloadChip.
+async function download(conversationId: string, file: ConversationTurnFile, setBusy: (busy: boolean) => void) {
+  setBusy(true);
+  try {
+    await shareAssistantDownload(conversationId, file);
+  } catch (error) {
+    Alert.alert("Couldn't download the file", error instanceof Error ? error.message : undefined);
+  } finally {
+    setBusy(false);
+  }
+}
+
 function DownloadChip({ conversationId, file }: { conversationId: string; file: ConversationTurnFile }) {
   const [busy, setBusy] = useState(false);
-  const download = async () => {
-    setBusy(true);
-    try {
-      await shareAssistantDownload(conversationId, file);
-    } catch (error) {
-      Alert.alert("Couldn't download the file", error instanceof Error ? error.message : undefined);
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <ToolChip
       icon="download"
       label={file.filename}
       detail={formatFileSize(file.size)}
       accessibilityLabel={`Download ${file.filename}`}
-      onPress={busy ? undefined : () => void download()}
+      onPress={busy ? undefined : () => void download(conversationId, file, setBusy)}
     >
       {busy && <ActivityIndicator size="small" colorClassName="accent-muted-foreground" />}
     </ToolChip>

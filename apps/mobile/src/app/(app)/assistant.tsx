@@ -115,9 +115,9 @@ export default function AssistantScreen() {
   const remembered = usePreference("assistantConversationId");
   const [startId] = useState(() => startConversationId(remembered, conversations));
   // Until the preference catches up with startId, show startId rather than flashing the old chat.
-  const startPending = useRef(remembered !== startId);
-  if (remembered === startId) startPending.current = false;
-  const conversationId = startPending.current ? startId : (remembered ?? startId);
+  const [startPending, setStartPending] = useState(remembered !== startId);
+  if (startPending && remembered === startId) setStartPending(false);
+  const conversationId = startPending ? startId : (remembered ?? startId);
   const [menuOpen, setMenuOpen] = useState(false);
   const conversation = conversations.find((row) => row.id === conversationId) ?? null;
   const activity = summarizeConversationActivity({ conversations, activeConversationId: conversationId });
@@ -125,8 +125,8 @@ export default function AssistantScreen() {
   // Remembered across restarts, as the web persists its active chat; attaching context
   // from elsewhere in the app also lands in whichever chat this is.
   useEffect(() => {
-    if (startPending.current) setPreference("assistantConversationId", startId);
-  }, [startId]);
+    if (startPending) setPreference("assistantConversationId", startId);
+  }, [startId, startPending]);
 
   useEffect(
     () => () => {

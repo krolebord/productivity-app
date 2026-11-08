@@ -39,6 +39,8 @@ export function ActionSheet({
   const { height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const [presented, setPresented] = useState(visible);
+  // Mount on open; unmounting waits for the exit animation below.
+  if (visible && !presented) setPresented(true);
   const [ready, setReady] = useState(false);
   const [sheetHeight, setSheetHeight] = useState(0);
   const [progress] = useState(() => new Animated.Value(0));
@@ -50,10 +52,6 @@ export function ActionSheet({
     pending.current = null;
     action?.();
   }, []);
-
-  useEffect(() => {
-    if (visible) setPresented(true);
-  }, [visible]);
 
   useEffect(() => {
     if (!presented || !ready || sheetHeight === 0) return;

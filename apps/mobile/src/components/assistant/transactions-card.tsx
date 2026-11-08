@@ -6,6 +6,7 @@ import {
 import { useAccountLabels } from "@productivity/core/data/accounts";
 import { useTransactionsByIds } from "@productivity/core/data/transactions";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Text, View } from "react-native";
 import { useDisplayCurrency } from "../../lib/finance";
 import { cn } from "../../lib/utils";
@@ -24,7 +25,8 @@ function TransactionsList({ spec }: { spec: TransactionsSpec }) {
   const transactionsById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
   const accountLabels = new Map(accounts.map((account) => [account.id, account.labelText]));
   const hasInline = spec.items.some((item) => item.kind === "inline");
-  const now = Date.now();
+  // Read once: undated inline items show when the card appeared, not a time that drifts per render.
+  const [now] = useState(Date.now);
 
   return (
     <View className="w-full overflow-hidden rounded-xl border border-border bg-card">

@@ -16,7 +16,7 @@ import type {
 } from "@productivity/core/user-db/migrations";
 import { formatDistanceToNow } from "date-fns";
 import { useFocusEffect, useRouter } from "expo-router";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../components/screen-header";
@@ -297,18 +297,16 @@ const SYNC_POLL_TIMEOUT_MS = 30_000;
  * seconds, while the screen is focused, until the account's last-synced time moves or ~30s pass.
  */
 function useSyncPolling(reload: () => Promise<void>, statusById: Map<string, CalendarSyncStatusReport>) {
-  const [watch, setWatch] = useState<{ connectionId: string; baseline: number | null; until: number } | null>(null);
-  const lastSyncedAt = watch ? statusById.get(watch.connectionId)?.lastSyncedAt : undefined;
-
-  useEffect(() => {
-    if (watch && lastSyncedAt !== undefined && lastSyncedAt !== watch.baseline) setWatch(null);
-  }, [watch, lastSyncedAt]);
+  const [request, setRequest] = useState<{ connectionId: string; baseline: number | null; until: number } | null>(null);
+  // Polling stops once the account's last-synced time moves past the baseline.
+  const lastSyncedAt = request ? statusById.get(request.connectionId)?.lastSyncedAt : undefined;
+  const watch = request && (lastSyncedAt === undefined || lastSyncedAt === request.baseline) ? request : null;
 
   useFocusEffect(
     useCallback(() => {
       if (!watch) return;
       const interval = setInterval(() => {
-        if (Date.now() > watch.until) setWatch(null);
+        if (Date.now() > watch.until) setRequest(null);
         else void reload();
       }, SYNC_POLL_INTERVAL_MS);
       return () => clearInterval(interval);
@@ -316,7 +314,7 @@ function useSyncPolling(reload: () => Promise<void>, statusById: Map<string, Cal
   );
 
   return (connectionId: string) => {
-    setWatch({
+    setRequest({
       connectionId,
       baseline: statusById.get(connectionId)?.lastSyncedAt ?? null,
       until: Date.now() + SYNC_POLL_TIMEOUT_MS,
