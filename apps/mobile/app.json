@@ -55,6 +55,7 @@
         }
       ],
       "./plugins/android-theme",
+      "./plugins/android-build-memory",
       "./plugins/rns-gamma"
     ],
     "extra": {
