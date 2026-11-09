@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useCSSVariable, useUniwind } from "uniwind";
 import { SessionProvider, useSession } from "../lib/session";
+import { publishSignedOutWidgets } from "../widgets/refresh";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -17,6 +18,8 @@ function RootStack() {
 
   useEffect(() => {
     if (state.status !== "loading") SplashScreen.hideAsync();
+    // Signed in, the user DB publishes the widgets (UserDbProvider); signed out, they say "Sign in".
+    if (state.status === "signed-out") publishSignedOutWidgets();
   }, [state.status]);
 
   if (state.status === "loading") return null;

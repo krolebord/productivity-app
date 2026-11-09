@@ -19,6 +19,20 @@ export function markdownToPlainText(markdown: string, maxLength?: number): strin
   return maxLength != null && text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}…` : text;
 }
 
+// A task list item's marker and box: "- [ ] ", "* [x] ", "1. [ ] ".
+const TASK_MARKER_RE = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])[ \t]+\[([ xX])\](?:[ \t]+|$)/gm;
+
+/**
+ * Like `markdownToPlainText`, but keeps checklists readable: "- [ ] milk" becomes "☐ milk" and a
+ * ticked item "☑ milk". For previews where a list of bare words would lose what they are (widgets).
+ */
+export function markdownToPreviewText(markdown: string, maxLength?: number): string {
+  const marked = markdown.replace(TASK_MARKER_RE, (_, indent: string, mark: string) =>
+    mark === " " ? `${indent}☐ ` : `${indent}☑ `,
+  );
+  return markdownToPlainText(marked, maxLength);
+}
+
 /**
  * A GFM task list item (`- [ ] …`) in note markdown. `segmentIndex` is its position
  * within its run of plain blocks: the native renderer numbers tasks per text segment,

@@ -6,12 +6,12 @@ import {
   type AgendaTaskRow,
   type DayHabitProgress,
   parseDateKey,
+  taskLabel,
 } from "@productivity/core/agenda";
 import { type CalendarDayInfo, useAgenda } from "@productivity/core/data/agenda";
 import { saveItemOrder } from "@productivity/core/data/items";
 import { formatDueDateLabel } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
-import { markdownToPlainText } from "@productivity/core/note-text";
 import { useReorderable } from "@productivity/core/use-reorderable";
 import { useDb } from "@productivity/core/user-db/db-context";
 import { differenceInCalendarDays, format } from "date-fns";
@@ -535,10 +535,6 @@ function AgendaRowView({ row, overdue, actions }: { row: AgendaRow; overdue: boo
       actions={actions}
     />
   );
-}
-
-function taskLabel(task: AgendaTask) {
-  return task.title.trim() || markdownToPlainText(task.content, 100) || "Untitled";
 }
 
 function TaskTitle({ task, completed = false, lines = 2 }: { task: AgendaTask; completed?: boolean; lines?: number }) {

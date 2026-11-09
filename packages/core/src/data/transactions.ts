@@ -1,4 +1,4 @@
-import { type SelectQueryBuilder, sql } from "kysely";
+import { type Kysely, type SelectQueryBuilder, sql } from "kysely";
 import { IMPORTANCE_TIERS, type TransactionType } from "../transactions";
 import { useDbQuery } from "../user-db/db-context";
 import type { UserDb } from "../user-db/migrations";
@@ -243,18 +243,34 @@ type AccountScope = { excludedAccountIds?: readonly string[] };
 type TimeRange = { start: number; end: number };
 
 /** Summed amounts per (type, account currency) within a time range. */
-export function useFlowTotalsByCurrency({ start, end, excludedAccountIds = [] }: TimeRange & AccountScope) {
-  const { data } = useDbQuery((db) =>
+export const flowTotalsByCurrencyQuery =
+  ({ start, end, excludedAccountIds = [] }: TimeRange & AccountScope) =>
+  (db: Kysely<UserDb>) =>
     db
       .selectFrom("transaction_entry")
       .select((eb) => ["type", "accountCurrency", eb.fn.sum<number>("amount").as("total")])
       .where("effectiveAt", ">=", start)
       .where("effectiveAt", "<=", end)
       .$if(excludedAccountIds.length > 0, (qb) => qb.where("accountId", "not in", excludedAccountIds))
-      .groupBy(["type", "accountCurrency"]),
-  );
+      .groupBy(["type", "accountCurrency"]);
+
+export function useFlowTotalsByCurrency(params: TimeRange & AccountScope) {
+  const { data } = useDbQuery(flowTotalsByCurrencyQuery(params));
   return data;
 }
+
+/** Summed expenses per (category, account currency) within a time range, for `topCategories`. */
+export const expenseCategoryTotalsQuery =
+  ({ start, end, excludedAccountIds = [] }: TimeRange & AccountScope) =>
+  (db: Kysely<UserDb>) =>
+    db
+      .selectFrom("transaction_entry")
+      .select((eb) => ["category", "accountCurrency", eb.fn.sum<number>("amount").as("total")])
+      .where("type", "=", "expense")
+      .where("effectiveAt", ">=", start)
+      .where("effectiveAt", "<=", end)
+      .$if(excludedAccountIds.length > 0, (qb) => qb.where("accountId", "not in", excludedAccountIds))
+      .groupBy(["category", "accountCurrency"]);
 
 export function useExpenseEntries({ start, end, excludedAccountIds = [] }: TimeRange & AccountScope) {
   const { data } = useDbQuery((db) =>

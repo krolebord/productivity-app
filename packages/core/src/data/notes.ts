@@ -1,18 +1,25 @@
+import type { Kysely } from "kysely";
 import { parseTags } from "../tags";
 import { type UserDbDatabase, useDbQuery } from "../user-db/db-context";
+import type { UserDb } from "../user-db/migrations";
 import { discardItemIfBlank, isBlankItem, saveItemDraft } from "./items";
 
+/** Notes as the Notes tab lists them; dated notes belong on the agenda instead. */
+const notesQuery = (q: Kysely<UserDb>) => q.selectFrom("item").where("type", "=", "note").where("dueAt", "is", null);
+
+/** Every note in the user's manual order (the Notes tab's order). */
+export const notesListQuery = (q: Kysely<UserDb>) => notesQuery(q).selectAll().orderBy("order", "asc");
+
+export const notesCountQuery = (q: Kysely<UserDb>) =>
+  notesQuery(q).select((eb) => eb.fn.countAll<number>().as("count"));
+
 export function useNotesList() {
-  const { data } = useDbQuery(
-    (db) =>
-      db.selectFrom("item").selectAll().where("type", "=", "note").where("dueAt", "is", null).orderBy("order", "asc"),
-    {
-      mapData: (notes) => ({
-        notes: notes,
-        timestamp: Date.now(),
-      }),
-    },
-  );
+  const { data } = useDbQuery(notesListQuery, {
+    mapData: (notes) => ({
+      notes: notes,
+      timestamp: Date.now(),
+    }),
+  });
   return data;
 }
 

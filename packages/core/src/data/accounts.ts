@@ -1,16 +1,19 @@
 import { generateId } from "@sqlite-sync/core";
+import type { Kysely } from "kysely";
 import { useCallback, useState } from "react";
 import { reorderByOrder } from "../reorder";
 import { createTransactionInTransaction } from "../transactions";
 import { type UserDbDatabase, useDb, useDbQuery } from "../user-db/db-context";
-import type { AccountItem } from "../user-db/migrations";
+import type { AccountItem, UserDb } from "../user-db/migrations";
 
 export type AccountFields = Pick<AccountItem, "currency" | "description" | "labelColor" | "labelText"> & {
   balance: number;
 };
 
+export const accountsQuery = (q: Kysely<UserDb>) => q.selectFrom("account").selectAll().orderBy("order", "asc");
+
 export function useAccounts() {
-  const { data } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"));
+  const { data } = useDbQuery(accountsQuery);
   return data;
 }
 
@@ -19,7 +22,7 @@ export function useAccounts() {
  * reorder can tell whether the query has caught up with it.
  */
 export function useTimestampedAccounts() {
-  const { data } = useDbQuery((db) => db.selectFrom("account").selectAll().orderBy("order", "asc"), {
+  const { data } = useDbQuery(accountsQuery, {
     mapData: (accounts) => ({ accounts, timestamp: Date.now() }),
   });
   return data;

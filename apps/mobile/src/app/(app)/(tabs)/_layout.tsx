@@ -5,19 +5,21 @@ import { useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import { useCSSVariable } from "uniwind";
 import { AssistantButton, useAssistantEnabled } from "../../../components/assistant-button";
+import { wasLaunchedForToday } from "../../../lib/launch-link";
 import { getPreferences } from "../../../lib/preferences";
 
 /**
  * Opens the default home tab once the tabs mount, like the web's redirect from "/". The tab order
  * is fixed by the triggers, so it switches tabs rather than changing the initial route; a launch
- * that deep-linked somewhere else is left alone.
+ * that deep-linked somewhere else (the Today widget included) is left alone.
  */
 function useOpenDefaultHome() {
   const router = useRouter();
   const pathname = usePathname();
   const [initialPath] = useState(pathname);
   useEffect(() => {
-    if (initialPath === "/" && getPreferences().defaultHome === "finances") router.navigate("/finances");
+    if (initialPath !== "/" || wasLaunchedForToday()) return;
+    if (getPreferences().defaultHome === "finances") router.navigate("/finances");
   }, [initialPath, router]);
 }
 

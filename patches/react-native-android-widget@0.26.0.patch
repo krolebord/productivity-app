@@ -1,0 +1,49 @@
+diff --git a/android/src/main/java/com/reactnativeandroidwidget/oss/HeadlessJsTaskWorker.java b/android/src/main/java/com/reactnativeandroidwidget/oss/HeadlessJsTaskWorker.java
+index 867f716191d66ff4750b8101c2e317fb27d851c8..a95506fbbeb2703bc18e73b52299d4409eb80169 100644
+--- a/android/src/main/java/com/reactnativeandroidwidget/oss/HeadlessJsTaskWorker.java
++++ b/android/src/main/java/com/reactnativeandroidwidget/oss/HeadlessJsTaskWorker.java
+@@ -71,19 +71,34 @@ public abstract class HeadlessJsTaskWorker extends ListenableWorker implements H
+     protected abstract HeadlessJsTaskConfig getTaskConfig(Data data);
+ 
+     protected void startTask(final HeadlessJsTaskConfig taskConfig) {
+-        ReactHost reactHost = this.getReactHost();
++        final ReactHost reactHost = this.getReactHost();
+         ReactContext reactContext = reactHost.getCurrentReactContext();
+ 
+-        if (reactContext == null) {
+-            reactHost.addReactInstanceEventListener(new ReactInstanceEventListener() {
+-                public void onReactContextInitialized(ReactContext reactContext) {
+-                    HeadlessJsTaskWorker.this.invokeStartTask(reactContext, taskConfig);
+-                    reactHost.removeReactInstanceEventListener(this);
+-                }
+-            });
+-            reactHost.start();
+-        } else {
++        // Patched: a context can exist before its instance is initialized (cold start, or several
++        // widget updates arriving while React boots). Starting the task then fails with
++        // "CatalystInstance not available" and the task is never finished, so wait for the instance.
++        if (reactContext != null && reactContext.hasActiveReactInstance()) {
+             this.invokeStartTask(reactContext, taskConfig);
++            return;
++        }
++
++        final java.util.concurrent.atomic.AtomicBoolean started = new java.util.concurrent.atomic.AtomicBoolean(false);
++        final ReactInstanceEventListener listener = new ReactInstanceEventListener() {
++            public void onReactContextInitialized(ReactContext initializedContext) {
++                reactHost.removeReactInstanceEventListener(this);
++                if (started.compareAndSet(false, true)) {
++                    HeadlessJsTaskWorker.this.invokeStartTask(initializedContext, taskConfig);
++                }
++            }
++        };
++        reactHost.addReactInstanceEventListener(listener);
++        reactHost.start();
++
++        // The instance may have finished initializing between the check above and adding the listener.
++        ReactContext current = reactHost.getCurrentReactContext();
++        if (current != null && current.hasActiveReactInstance() && started.compareAndSet(false, true)) {
++            reactHost.removeReactInstanceEventListener(listener);
++            this.invokeStartTask(current, taskConfig);
+         }
+     }
+ 

@@ -1,4 +1,5 @@
 import { addMonths, endOfMonth, startOfMonth } from "date-fns";
+import type { Kysely } from "kysely";
 import { useCallback, useMemo, useState } from "react";
 import {
   type AgendaHabit,
@@ -25,6 +26,7 @@ import {
 import { combineLocalDateAndTime, localMidnightMs } from "../date-time";
 import { isCalendarBackedTask } from "../google-calendar/mapping";
 import { useDb, useDbQuery } from "../user-db/db-context";
+import type { UserDb } from "../user-db/migrations";
 import { setHabitEntryValue as writeHabitEntryValue } from "./habits";
 import { createTask as insertTask, rescheduleTask, scheduleAllDayTask, setTaskCompleted } from "./tasks";
 
@@ -42,22 +44,21 @@ export function useAgendaHabits(): AgendaHabit[] {
   );
 }
 
-/**
- * Tasks due inside `[rangeStartMs, rangeEndMs)` plus incomplete tasks due before `overdueBeforeMs`.
- */
-export function useScheduledTasks({
-  rangeStartMs,
-  rangeEndMs,
-  overdueBeforeMs,
-}: {
+export type ScheduledTasksRange = {
   rangeStartMs: number;
   rangeEndMs: number;
   overdueBeforeMs: number;
-}) {
-  // Any item with a dueAt belongs on the agenda regardless of kind, since dated
-  // notes predate the explicit task type. Leading with dueAt lets item_due drive
-  // both range branches instead of scanning every item.
-  const { data } = useDbQuery((q) =>
+};
+
+/**
+ * Tasks due inside `[rangeStartMs, rangeEndMs)` plus incomplete tasks due before `overdueBeforeMs`.
+ */
+export const scheduledTasksQuery =
+  ({ rangeStartMs, rangeEndMs, overdueBeforeMs }: ScheduledTasksRange) =>
+  (q: Kysely<UserDb>) =>
+    // Any item with a dueAt belongs on the agenda regardless of kind, since dated
+    // notes predate the explicit task type. Leading with dueAt lets item_due drive
+    // both range branches instead of scanning every item.
     q
       .selectFrom("item")
       .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order", "providerType"])
@@ -67,8 +68,10 @@ export function useScheduledTasks({
           eb.and([eb("dueAt", ">=", rangeStartMs), eb("dueAt", "<", rangeEndMs)]),
           eb.and([eb("dueAt", "<", overdueBeforeMs), eb("completedAt", "is", null)]),
         ]),
-      ),
-  );
+      );
+
+export function useScheduledTasks(range: ScheduledTasksRange) {
+  const { data } = useDbQuery(scheduledTasksQuery(range));
   return data as AgendaTask[];
 }
 

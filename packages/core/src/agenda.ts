@@ -1,5 +1,6 @@
 import { addDays, endOfMonth, format, getISODay, startOfMonth, startOfWeek } from "date-fns";
 import { localMidnightMs } from "./date-time";
+import { markdownToPlainText } from "./note-text";
 import { dateKeyInZone, hourInZone, zonedMidnightMs } from "./time-zone";
 
 export type AgendaBucket = "overdue" | "morning" | "afternoon" | "evening" | "night" | "anytime";
@@ -54,6 +55,11 @@ export type AgendaTask = {
   order: number | null;
   providerType: string | null;
 };
+
+/** A task's name in lists: its title, else the start of its text. */
+export function taskLabel(task: Pick<AgendaTask, "title" | "content">): string {
+  return task.title.trim() || markdownToPlainText(task.content, 100) || "Untitled";
+}
 
 export type AgendaTaskRow = {
   kind: "task";

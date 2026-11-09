@@ -1,10 +1,11 @@
+import type { Kysely } from "kysely";
 import { useCallback } from "react";
 import type { AppCurrencyCode } from "../currency/currencies";
 import { APP_CURRENCIES } from "../currency/currencies";
 import { clampDashboardRangeValue, type DashboardRangeConfig, type DashboardRangeMode } from "../dashboard-range-store";
 import { DASHBOARD_SETTINGS_DEFAULTS, DASHBOARD_SETTINGS_ID } from "../dashboard-settings-defaults";
 import { type UserDbDatabase, useDb, useDbQuery } from "../user-db/db-context";
-import type { DashboardSettingsItem } from "../user-db/migrations";
+import type { DashboardSettingsItem, UserDb } from "../user-db/migrations";
 
 const appCurrencySet = new Set<string>(APP_CURRENCIES);
 
@@ -32,7 +33,11 @@ export function isAppCurrency(value: string): value is AppCurrencyCode {
   return appCurrencySet.has(value);
 }
 
-function normalizeDashboardSettings(row?: DashboardSettingsItem): DashboardSettings {
+export const dashboardSettingsQuery = (q: Kysely<UserDb>) =>
+  q.selectFrom("dashboard_settings").selectAll().where("id", "=", DASHBOARD_SETTINGS_ID).limit(1);
+
+/** The stored settings row with defaults filled in and out-of-range values clamped. */
+export function normalizeDashboardSettings(row?: DashboardSettingsItem): DashboardSettings {
   if (!row) return DEFAULT_DASHBOARD_SETTINGS;
 
   return {
@@ -110,9 +115,7 @@ export function updateDashboardSettings(db: UserDbDatabase, patch: DashboardSett
  */
 export function useDashboardSettings() {
   const db = useDb();
-  const { data: rows } = useDbQuery((db) =>
-    db.selectFrom("dashboard_settings").selectAll().where("id", "=", DASHBOARD_SETTINGS_ID).limit(1),
-  );
+  const { data: rows } = useDbQuery(dashboardSettingsQuery);
   const syncedRow = rows[0];
   const settings = normalizeDashboardSettings(syncedRow);
 

@@ -83,6 +83,26 @@
       }
     },
     {
+      "includes": ["apps/mobile/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "expo-widgets": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md).",
+                  "@expo/ui/swift-ui": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md).",
+                  "@expo/ui/swift-ui/modifiers": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md).",
+                  "react-native-android-widget": "Only src/widgets/android-widgets.android.tsx and src/widgets/android/ import it, so it stays out of the iOS bundle (see docs/widgets.md)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["apps/mobile/src/**", "!apps/mobile/src/components/ui/**"],
       "linter": {
         "rules": {
@@ -98,7 +118,63 @@
                   "react-native-screens/experimental": {
                     "importNames": ["FormSheet"],
                     "message": "Use FormSheet from components/ui/form-sheet: it sets the theme, sheet headers and ScrollView context (see docs/design-principles.md)."
-                  }
+                  },
+                  "expo-widgets": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md).",
+                  "@expo/ui/swift-ui": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md).",
+                  "@expo/ui/swift-ui/modifiers": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md).",
+                  "react-native-android-widget": "Only src/widgets/android-widgets.android.tsx and src/widgets/android/ import it, so it stays out of the iOS bundle (see docs/widgets.md)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/mobile/src/widgets/ios-widgets.ios.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react-native": {
+                    "importNames": ["TextInput", "Switch"],
+                    "message": "Use Input / Switch from components/ui: they carry the theme defaults and platform fixes (see AGENTS.md)."
+                  },
+                  "react-native-screens/experimental": {
+                    "importNames": ["FormSheet"],
+                    "message": "Use FormSheet from components/ui/form-sheet: it sets the theme, sheet headers and ScrollView context (see docs/design-principles.md)."
+                  },
+                  "react-native-android-widget": "Only src/widgets/android-widgets.android.tsx and src/widgets/android/ import it, so it stays out of the iOS bundle (see docs/widgets.md)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/mobile/src/widgets/android-widgets.android.tsx", "apps/mobile/src/widgets/android/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react-native": {
+                    "importNames": ["TextInput", "Switch"],
+                    "message": "Use Input / Switch from components/ui: they carry the theme defaults and platform fixes (see AGENTS.md)."
+                  },
+                  "react-native-screens/experimental": {
+                    "importNames": ["FormSheet"],
+                    "message": "Use FormSheet from components/ui/form-sheet: it sets the theme, sheet headers and ScrollView context (see docs/design-principles.md)."
+                  },
+                  "expo-widgets": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md).",
+                  "@expo/ui/swift-ui": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md).",
+                  "@expo/ui/swift-ui/modifiers": "Only src/widgets/ios-widgets.ios.tsx imports expo-widgets and @expo/ui, so they never reach the Android bundle (see docs/widgets.md)."
                 }
               }
             }

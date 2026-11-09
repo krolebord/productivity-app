@@ -2,6 +2,7 @@ import { DbProvider } from "@productivity/core/user-db/db-context";
 import { syncDbSchema, type UserDb } from "@productivity/core/user-db/migrations";
 import { createSyncedDb, createWsRemoteSource, type SyncedDb } from "@sqlite-sync/react-native";
 import { type ReactNode, useEffect, useState } from "react";
+import { startWidgetPublishing } from "../widgets/session";
 import { getApiSessionToken } from "./api";
 import { userDbSyncUrl } from "./config";
 
@@ -63,7 +64,12 @@ export function UserDbProvider({
           return;
         }
         opened = db;
-        unsubscribe = db.subscribe("reload-requested", () => setEpoch((value) => value + 1)).unsubscribe;
+        const stopReload = db.subscribe("reload-requested", () => setEpoch((value) => value + 1)).unsubscribe;
+        const stopWidgets = startWidgetPublishing(db);
+        unsubscribe = () => {
+          stopReload();
+          stopWidgets();
+        };
         setState({ status: "ready", db });
       },
       (error: unknown) => {

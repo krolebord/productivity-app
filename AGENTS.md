@@ -11,6 +11,7 @@ Auth uses magic links (sent via the Cloudflare Email binding) and Google OAuth (
 - [sqlite-sync docs](docs/sqlite-sync.md) — full docs for the offline-first sync library used for user data
 - [Currency API docs](docs/currency-api.md) — Frankfurter API used for exchange rates
 - [Google Calendar docs](docs/google-calendar.md) — one-way read-only event → task mirror
+- [Home-screen widgets](docs/widgets.md) — how the Notes, Today and Finances widgets get their data, and the platform gotchas
 - [Design principles](docs/design-principles.md) — UI rules to follow (e.g. which mobile transition each kind of screen uses); read before adding screens
 
 ## Repository Structure
@@ -131,6 +132,35 @@ in `apps/mobile/src/lib/user-db.tsx` and uses core's `data/*` hooks like the web
   with `cn`, only defaults and platform fixes. They set styles explicitly rather than relying on
   defaults, because React Native reuses native views across screens and an unset style keeps the
   previous view's value (the sign-in code field's letter spacing once leaked into the Today input).
+
+### Home-screen widgets
+
+Notes, Today and Finances widgets on Android (`react-native-android-widget`) and iOS (`expo-widgets` +
+`@expo/ui`). Full write-up in [docs/widgets.md](docs/widgets.md); the rules that bite:
+
+- **Widgets never read SQLite.** Core builds small, versioned (`v: 1`) display-ready snapshots per kind
+  (`packages/core/src/widgets/`: pure builders + the queries they read, tested in `widgets.test.ts`);
+  the app publishes them (`apps/mobile/src/widgets/refresh.ts`) after the first sync settles, on
+  (debounced) changes to exactly the queries a snapshot was read from, at midnight, on foreground and
+  background (`session.ts`), and the signed-out state on sign-out. Only kinds whose content hash changed
+  are published (iOS reload budget, extension memory). `refreshWidgets(db)` is the entry a future
+  background job would call.
+- **Platform files:** `ios-widgets.ios.tsx` is the only importer of `expo-widgets`/`@expo/ui`, and
+  `android-widgets.android.tsx` + `widgets/android/` the only importers of `react-native-android-widget`
+  (Biome `noRestrictedImports`; each has a no-op default file). `expo.autolinking.android.exclude` keeps
+  expo-widgets' Android module (Glance, an old WorkManager) out of the Android build.
+- **Entry:** `apps/mobile/index.ts` (`main`) registers the Android task handler and runs `createWidget`
+  on every launch, headless Android ones included. Keep both there.
+- Every widget layout/handler file starts with `"use no memo"`: React Compiler breaks the Android
+  renderer, and iOS layouts are serialized into the extension. iOS layout functions can't use imports or
+  module values, so they inline their palette and helpers.
+- **Over the air vs. native:** layouts, builders and snapshot changes ship over the air. Anything in
+  `app.json` (a widget, a name, sizes, iOS families, `updatePeriodMillis`) changes the fingerprint on
+  both platforms and needs a new build. Widget names in `widgets/kinds.ts` are native names too.
+- `patches/react-native-android-widget@0.26.0.patch` fixes dropped updates during a cold start.
+- iOS widget props live in UserDefaults, which can't hold `null`: the iOS publisher strips nulls, and
+  `initialProps` placeholders must not contain any.
+- Deep links `today`, `note/new`, `task/new` aren't routes: `+native-intent.tsx` rewrites them.
 
 ## Technology Stack
 
