@@ -59,6 +59,8 @@ export type TodayWidgetDay = {
   dateKey: string;
   /** Local midnight that starts this day (epoch ms). */
   startsAt: number;
+  /** Local midnight that ends it (epoch ms); 23 or 25 hours later on a DST change. */
+  endsAt: number;
   /** "Monday, November 9". */
   title: string;
   /** Incomplete tasks due before this day: the count and the first few. */
@@ -72,7 +74,11 @@ export type TodayWidgetDay = {
   total: number;
 };
 
-export type TodayWidgetSnapshot = SnapshotBase<"today", "ok" | "signedOut"> & {
+/**
+ * `stale` is never built from the DB: it's what a widget draws once the last day of an `ok`
+ * snapshot has ended and the app hasn't published since (see `staleTodayWidgetSnapshot`).
+ */
+export type TodayWidgetSnapshot = SnapshotBase<"today", "ok" | "signedOut" | "stale"> & {
   links: { open: string; today: string; newTask: string };
   /** Today, then tomorrow, so the widget is right after midnight without the app. */
   days: TodayWidgetDay[];
@@ -181,6 +187,24 @@ export function pickTodayWidgetDay(days: readonly TodayWidgetDay[] | undefined, 
     if (day.startsAt <= now) picked = day;
   }
   return picked;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * When a Today snapshot runs out: the end of the last day it carries, or undefined without days.
+ * From then on a widget would show a past day as today, so it draws the stale form instead.
+ */
+export function todayWidgetExpiresAt(days: readonly TodayWidgetDay[] | undefined): number | undefined {
+  const last = days?.[days.length - 1];
+  if (!last) return undefined;
+  // Snapshots written before `endsAt` existed lack it.
+  return last.endsAt ?? last.startsAt + DAY_MS;
+}
+
+/** A Today snapshot past its last day: no days, and layouts ask to open the app, which republishes. */
+export function staleTodayWidgetSnapshot(snapshot: TodayWidgetSnapshot): TodayWidgetSnapshot {
+  return { ...snapshot, state: "stale", days: [] };
 }
 
 /**

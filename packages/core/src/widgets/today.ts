@@ -87,6 +87,7 @@ function buildDay(dateKey: string, tasks: readonly AgendaTask[], ctx: WidgetCont
   return {
     dateKey,
     startsAt: zonedMidnightMs(dateKey, ctx.timeZone),
+    endsAt: zonedMidnightMs(shiftDateKey(dateKey, 1), ctx.timeZone),
     title: format(parseDateKey(dateKey), "EEEE, MMMM d"),
     overdue: {
       count: overdue.length,

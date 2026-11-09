@@ -19,7 +19,8 @@ at the bottom edge behind a short fade, and keep a fixed footer that opens the f
 
 Every widget has a signed-out state ("Sign in", tap opens the app), an empty state ("No notes yet",
 "Nothing planned", "No accounts yet"), and a state for before the app has ever published: the
-`initialProps` placeholder on iOS (also the gallery preview), "Open the app" on Android.
+`initialProps` placeholder on iOS (also the gallery preview), "Open the app" on Android. Today also
+has a stale state ("Open the app to refresh your day") for when its snapshot has run out; see "Midnight".
 
 ## Architecture
 
@@ -96,6 +97,15 @@ over without the app. Android has no timeline: the handler picks the day for the
 (`pickTodayWidgetDay`) whenever it draws, and the Today widget sets `updatePeriodMillis` (30 min, the
 minimum) so Android redraws it from the file after midnight. Notes and Finances don't depend on the
 clock within a day; Finances' month rolls over when the app next publishes.
+
+**Stale Today.** Nothing refreshes widgets in the background in v1, so a snapshot runs out when
+tomorrow ends (`todayWidgetExpiresAt`: the last day's `endsAt`). Past that, a widget would show an old
+day under "Today", so it draws "Open the app / to refresh your day" instead; the tap opens Today, and
+the foreground refresh republishes. iOS gets it as a third timeline entry at that midnight
+(`staleTodayWidgetSnapshot`, `state: "stale"`), so the layout reads the state from its props and doesn't
+depend on when WidgetKit renders the entry. Android compares the clock at draw time, on the same
+periodic redraw. Notes and Finances have no such state: they show what the app last published,
+however old (`writtenAt` is there for a future "updated …" line).
 
 ### Deep links
 

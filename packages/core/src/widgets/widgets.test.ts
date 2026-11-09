@@ -12,6 +12,8 @@ import {
   createWidgetLinker,
   pickTodayWidgetDay,
   signedOutWidgetSnapshot,
+  staleTodayWidgetSnapshot,
+  todayWidgetExpiresAt,
   type WidgetContext,
   widgetSnapshotHash,
 } from "./snapshots";
@@ -195,6 +197,37 @@ describe("today widget", () => {
     expect(pickTodayWidgetDay(days, midnight)?.dateKey).toBe("2026-11-10");
     expect(pickTodayWidgetDay(days, NOW - 86_400_000)?.dateKey).toBe("2026-11-09");
     expect(pickTodayWidgetDay([], NOW)).toBeUndefined();
+  });
+
+  it("runs out when its last day ends, and has a stale form for after that", () => {
+    const snapshot = buildTodayWidgetSnapshot(readTodayWidgetInputs(db, ctx), ctx);
+    expect(snapshot.days.map((day) => day.endsAt)).toEqual([
+      zonedMidnightMs("2026-11-10", TZ),
+      zonedMidnightMs("2026-11-11", TZ),
+    ]);
+    expect(todayWidgetExpiresAt(snapshot.days)).toBe(zonedMidnightMs("2026-11-11", TZ));
+    expect(todayWidgetExpiresAt([])).toBeUndefined();
+    expect(todayWidgetExpiresAt(undefined)).toBeUndefined();
+
+    const stale = staleTodayWidgetSnapshot(snapshot);
+    expect(stale).toMatchObject({ state: "stale", days: [], links: snapshot.links });
+    expect(widgetSnapshotHash(stale)).not.toBe(widgetSnapshotHash(snapshot));
+  });
+
+  it("ends a day at the next local midnight across a DST change", () => {
+    // Clocks go back on November 1, 2026 in New York: that day is 25 hours long.
+    const dst = { ...ctx, now: at("2026-10-31", 15) };
+    const { days } = buildTodayWidgetSnapshot(readTodayWidgetInputs(db, dst), dst);
+    const last = days[days.length - 1];
+    expect(last?.dateKey).toBe("2026-11-01");
+    expect((last?.endsAt ?? 0) - (last?.startsAt ?? 0)).toBe(25 * 3_600_000);
+    expect(todayWidgetExpiresAt(days)).toBe(zonedMidnightMs("2026-11-02", TZ));
+  });
+
+  it("gives a snapshot written before days had an end 24 hours for its last day", () => {
+    const { days } = buildTodayWidgetSnapshot(readTodayWidgetInputs(db, ctx), ctx);
+    const old = days.map(({ endsAt: _endsAt, ...day }) => day) as typeof days;
+    expect(todayWidgetExpiresAt(old)).toBe(zonedMidnightMs("2026-11-10", TZ) + 86_400_000);
   });
 
   it("caps the listed rows but counts them all", async () => {

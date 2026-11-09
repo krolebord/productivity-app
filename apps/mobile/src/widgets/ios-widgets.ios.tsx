@@ -26,11 +26,13 @@ import {
   monospacedDigit,
   widgetURL,
 } from "@expo/ui/swift-ui/modifiers";
-import type {
-  FinancesWidgetSnapshot,
-  NotesWidgetSnapshot,
-  TodayWidgetSnapshot,
-  WidgetSnapshotOf,
+import {
+  type FinancesWidgetSnapshot,
+  type NotesWidgetSnapshot,
+  staleTodayWidgetSnapshot,
+  type TodayWidgetSnapshot,
+  todayWidgetExpiresAt,
+  type WidgetSnapshotOf,
 } from "@productivity/core/widgets/snapshots";
 import { createWidget, type WidgetEnvironment } from "expo-widgets";
 import { WIDGET_NAMES, type WidgetPublisher } from "./kinds";
@@ -300,6 +302,11 @@ const TodayLayout = (input: Partial<TodayWidgetSnapshot> | undefined, env: Widge
     </HStack>
   );
 
+  // The timeline's last entry: the days the app published have ended, and it hasn't run since.
+  // Opening it republishes.
+  if (props.state === "stale") {
+    return root(links?.today, [header, message("Open the app", "to refresh your day"), footer]);
+  }
   if (overdue.count === 0 && remaining === 0) {
     return root(links?.today, [
       header,
@@ -535,17 +542,21 @@ function withoutNulls<T>(props: T): T {
 
 /**
  * Today goes out as a timeline, one entry per day starting at its local midnight, so the widget
- * turns over at midnight without the app. Each entry carries only its own day.
+ * turns over at midnight without the app. Each entry carries only its own day. A last entry at
+ * the end of the last day is the stale form: without it the widget would keep showing that day
+ * as today until the app next runs.
  */
 export const iosWidgetPublisher: WidgetPublisher | null = {
   async publish(kind, published) {
     const snapshot = withoutNulls(published);
     if (kind === "today") {
       const today = snapshot as WidgetSnapshotOf<"today">;
-      if (today.days.length > 0) {
-        todayWidget.updateTimeline(
-          today.days.map((day) => ({ date: new Date(day.startsAt), props: { ...today, days: [day] } })),
-        );
+      const expiresAt = todayWidgetExpiresAt(today.days);
+      if (expiresAt != null) {
+        todayWidget.updateTimeline([
+          ...today.days.map((day) => ({ date: new Date(day.startsAt), props: { ...today, days: [day] } })),
+          { date: new Date(expiresAt), props: staleTodayWidgetSnapshot(today) },
+        ]);
       } else {
         todayWidget.updateSnapshot(today);
       }

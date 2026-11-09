@@ -4,6 +4,7 @@ import {
   pickTodayWidgetDay,
   type TodayWidgetRow,
   type TodayWidgetSnapshot,
+  todayWidgetExpiresAt,
 } from "@productivity/core/widgets/snapshots";
 import { FlexWidget, TextWidget } from "react-native-android-widget";
 import type { WidgetPalette } from "../theme";
@@ -27,7 +28,8 @@ const SECTION_HEIGHT = 22;
  * Today, simplified: overdue tasks, then the day's open tasks and events in a scrolling list, and
  * how many are done. The list holds the whole snapshot; "+N more" opens Today for what it left out.
  * The snapshot carries today and tomorrow; this picks by the clock at draw time, and the widget's
- * periodic update (app.json) redraws it from the file after midnight.
+ * periodic update (app.json) redraws it from the file after midnight. Once tomorrow has ended too
+ * the snapshot is stale: rather than show a past day as today, it asks to open the app.
  */
 export function TodayWidget({
   colors,
@@ -44,7 +46,9 @@ export function TodayWidget({
     );
   }
 
-  const day = pickTodayWidgetDay(snapshot.days, now);
+  const expiresAt = todayWidgetExpiresAt(snapshot.days);
+  const stale = expiresAt != null && now >= expiresAt;
+  const day = stale ? undefined : pickTodayWidgetDay(snapshot.days, now);
   const overdue = day?.overdue ?? { count: 0, rows: [] };
   const rows = day?.rows ?? [];
   const remaining = Math.max(day?.remaining ?? 0, rows.length);
@@ -63,7 +67,10 @@ export function TodayWidget({
         plusLabel="New task"
         colors={colors}
       />
-      {nothingLeft ? (
+      {stale ? (
+        // Opening the app republishes (the foreground refresh in session.ts).
+        <Message title="Open the app" detail="to refresh your day" uri={links?.today} colors={colors} />
+      ) : nothingLeft ? (
         <Message
           title={day && day.total > 0 ? "All done" : "Nothing planned"}
           detail={day && day.total > 0 ? undefined : "Tap + to add a task"}
