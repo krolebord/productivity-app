@@ -1,8 +1,15 @@
 import { parseDateKey } from "@productivity/core/agenda";
 import { deleteItem, isBlankItem, useItem } from "@productivity/core/data/items";
-import { detachTaskFromCalendar, discardTaskIfBlank, saveTask, type TaskFields } from "@productivity/core/data/tasks";
+import {
+  detachTaskFromCalendar,
+  discardTaskIfBlank,
+  saveTask,
+  type TaskFields,
+  taskRowFields,
+} from "@productivity/core/data/tasks";
 import { localMidnightMs } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
+import { adoptRowChanges, createItemEditorSync, markItemSaved } from "@productivity/core/item-editor-sync";
 import { parseTags, serializeTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
@@ -48,16 +55,44 @@ function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | und
     content: task?.content ?? "",
     tags: parseTags(task?.tags),
     dueAt: task?.dueAt ?? null,
-    hasDueTime: task?.hasDueTime ?? false,
+    hasDueTime: Boolean(task?.hasDueTime),
     completedAt: task?.completedAt ?? null,
   }));
   const fieldsRef = useRef(fields);
+  const toTaskFields = (next: typeof fields): TaskFields => ({ ...next, tags: serializeTags(next.tags) });
   // Until its first save inserts it, a new task has no row; after that (or for a task opened
   // from its row) a missing row means it was deleted elsewhere, and saves mustn't recreate it.
   const isDraft = useRef(!task);
-  const autosave = useAutosave((value: TaskFields) => {
-    if (saveTask(db.db, id, value, { draft: isDraft.current })) isDraft.current = false;
+  // Saves write only what the user changed, so they can't revert a change made elsewhere
+  // (another device, the assistant, calendar sync).
+  const sync = useRef(createItemEditorSync(task && taskRowFields(task), toTaskFields(fields)));
+  // Remounts the details, which only read their markdown on mount, when they changed elsewhere.
+  const [contentRevision, setContentRevision] = useState(0);
+  // Reads the fields when it runs rather than when it was scheduled: a field adopted from the
+  // row in between must not be saved back as the older value.
+  const autosave = useAutosave(() => {
+    const value = toTaskFields(fieldsRef.current);
+    if (saveTask(db.db, id, value, { draft: isDraft.current, base: sync.current.saved })) {
+      isDraft.current = false;
+      markItemSaved(sync.current, value);
+    }
   });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the row changes.
+  useEffect(() => {
+    if (!task) return;
+    const adopted = adoptRowChanges(sync.current, taskRowFields(task), toTaskFields(fieldsRef.current));
+    if (!adopted) return;
+    const { tags, ...rest } = adopted;
+    const next = { ...fieldsRef.current, ...rest, ...(tags === undefined ? {} : { tags: parseTags(tags) }) };
+    fieldsRef.current = next;
+    setFields(next);
+    // Tags are held parsed: the baseline takes the form they'd be saved in, or tags stored in
+    // another form would count as edited here from now on.
+    if (tags !== undefined) sync.current.saved = { ...sync.current.saved, tags: toTaskFields(next).tags };
+    if (adopted.content !== undefined) setContentRevision((revision) => revision + 1);
+  }, [task]);
+
   const { expectDeletion } = useCloseWhenDeleted(task, {
     message: "This task was deleted elsewhere",
     onClose: () => {
@@ -79,7 +114,7 @@ function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | und
     const next = { ...fieldsRef.current, ...patch };
     fieldsRef.current = next;
     setFields(next);
-    autosave.schedule({ ...next, tags: serializeTags(next.tags) });
+    autosave.schedule();
   };
 
   const toggleCompleted = () => {
@@ -119,6 +154,7 @@ function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | und
       kind="task"
       openedBlank={openedBlank}
       value={fields}
+      contentRevision={contentRevision}
       onChange={update}
       onClose={() => router.back()}
       completed={completed}

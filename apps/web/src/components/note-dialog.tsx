@@ -4,9 +4,16 @@ import {
   discardNoteIfBlank,
   isBlankNote,
   type NoteFields,
+  noteRowFields,
   saveNote,
   useNoteTagSuggestions,
 } from "@productivity/core/data/notes";
+import {
+  adoptRowChanges,
+  createItemEditorSync,
+  type ItemEditorSync,
+  markItemSaved,
+} from "@productivity/core/item-editor-sync";
 import { parseTags, serializeTags, UNTAGGED } from "@productivity/core/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@productivity/core/use-debounced-callback";
 import { useDb } from "@productivity/core/user-db/db-context";
@@ -65,6 +72,8 @@ export function useCreateNote() {
 }
 
 type DraftFlag = { current: boolean };
+/** The editor's fields, read when a save runs rather than when it was queued. */
+type FieldsRef = { readonly current: NoteFields };
 
 type NoteDialogContentHandle = {
   /** Commits pending tag text and returns the fields to save. */
@@ -76,6 +85,8 @@ type NoteDialogContentHandle = {
    * opened from its row, a missing row means it was deleted elsewhere and isn't recreated.
    */
   draft: DraftFlag;
+  /** What the row is known to hold, so saves write only what changed here (see ItemEditorSync). */
+  sync: ItemEditorSync<NoteFields>;
 };
 
 function NoteDialogContent({
@@ -91,7 +102,7 @@ function NoteDialogContent({
   ref: Ref<NoteDialogContentHandle>;
   noteId: string;
   draftTags: string | null;
-  queueSave: DebouncedCallback<[string, NoteFields, DraftFlag]>;
+  queueSave: DebouncedCallback<[string, FieldsRef, DraftFlag, ItemEditorSync<NoteFields>]>;
   onClose: () => void;
   onDelete: () => void;
   onConvertToTask: () => void;
@@ -111,6 +122,9 @@ function NoteDialogContent({
     content: note?.content ?? "",
     tags: note?.tags ?? draftTags ?? "[]",
   });
+  const sync = useRef(createItemEditorSync(note && noteRowFields(note), fieldsRef.current));
+  // The editor only reads its content on mount; a new revision remounts it on the row's content.
+  const [editorContent, setEditorContent] = useState({ revision: 0, markdown: note?.content ?? "" });
 
   // The row disappearing once it was seen means the note was deleted, e.g. on another device.
   // Not `draft`: that clears on the first insert, before the query may have picked the row up.
@@ -122,10 +136,24 @@ function NoteDialogContent({
     if (deletedElsewhere) onDeletedElsewhere();
   }, [deletedElsewhere]);
 
+  // Fields changed elsewhere (another device, the assistant) that haven't been edited here
+  // since the last save are shown; the others keep what was typed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the row changes.
+  useEffect(() => {
+    if (!note) return;
+    const adopted = adoptRowChanges(sync.current, noteRowFields(note), fieldsRef.current);
+    if (!adopted) return;
+    fieldsRef.current = { ...fieldsRef.current, ...adopted };
+    if (adopted.title !== undefined) setTitle(adopted.title);
+    if (adopted.tags !== undefined) setTags(parseTags(adopted.tags));
+    const markdown = adopted.content;
+    if (markdown !== undefined) setEditorContent((current) => ({ revision: current.revision + 1, markdown }));
+  }, [note]);
+
   const updateNote = (fields: Partial<NoteFields>) => {
     if (fields.title !== undefined) setTitle(fields.title);
     fieldsRef.current = { ...fieldsRef.current, ...fields };
-    queueSave(noteId, { ...fieldsRef.current }, draft);
+    queueSave(noteId, fieldsRef, draft, sync.current);
   };
 
   useImperativeHandle(ref, () => ({
@@ -135,6 +163,7 @@ function NoteDialogContent({
     },
     openedBlank,
     draft,
+    sync: sync.current,
   }));
 
   const handleTagsChange = (next: string[]) => {
@@ -172,8 +201,9 @@ function NoteDialogContent({
           placeholder="Add tags..."
         />
         <NoteEditor
+          key={editorContent.revision}
           ref={editorRef}
-          initialContent={note?.content ?? ""}
+          initialContent={editorContent.markdown}
           placeholder="Take a note..."
           onChange={(markdown) => {
             updateNote({ content: markdown });
@@ -221,9 +251,16 @@ export function NoteDialog() {
 
   const contentRef = useRef<NoteDialogContentHandle>(null);
 
-  const queueSave = useDebounceCallback((id: string, fields: NoteFields, draft: DraftFlag) => {
-    if (saveNote(db.db, id, fields, { draft: draft.current })) draft.current = false;
-  }, 1000);
+  const queueSave = useDebounceCallback(
+    (id: string, fieldsRef: FieldsRef, draft: DraftFlag, sync: ItemEditorSync<NoteFields>) => {
+      const fields = { ...fieldsRef.current };
+      if (saveNote(db.db, id, fields, { draft: draft.current, base: sync.saved })) {
+        draft.current = false;
+        markItemSaved(sync, fields);
+      }
+    },
+    1000,
+  );
   useFlushOnHide(queueSave.flush);
 
   function saveAndClose() {
@@ -253,8 +290,12 @@ export function NoteDialog() {
     const fields = content?.commit();
     if (!noteId || !content || !fields) return;
     queueSave.cancel();
-    if (saveNote(db.db, noteId, fields, { draft: content.draft.current, insertBlank: true }))
+    if (
+      saveNote(db.db, noteId, fields, { draft: content.draft.current, insertBlank: true, base: content.sync.saved })
+    ) {
       content.draft.current = false;
+      markItemSaved(content.sync, fields);
+    }
     convertNoteToTask(db.db, noteId);
     closeDialog();
     openTaskDialog(noteId);

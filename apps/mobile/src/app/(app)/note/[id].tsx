@@ -4,8 +4,10 @@ import {
   discardNoteIfBlank,
   isBlankNote,
   type NoteFields,
+  noteRowFields,
   saveNote,
 } from "@productivity/core/data/notes";
+import { adoptRowChanges, createItemEditorSync, markItemSaved } from "@productivity/core/item-editor-sync";
 import { parseTags, serializeTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { NoteItem } from "@productivity/core/user-db/migrations";
@@ -56,10 +58,36 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
   // Until its first save inserts it, a new note has no row; after that (or for a note opened
   // from its row) a missing row means it was deleted elsewhere, and saves mustn't recreate it.
   const isDraft = useRef(!note);
-  const save = (value: NoteFields, options?: { insertBlank: boolean }) => {
-    if (saveNote(db.db, id, value, { draft: isDraft.current, ...options })) isDraft.current = false;
+  // Saves write only what the user changed, so they can't revert a change made elsewhere.
+  const sync = useRef(createItemEditorSync(note && noteRowFields(note), toNoteFields(fields)));
+  // Remounts the body, which only reads its markdown on mount, when it changed elsewhere.
+  const [contentRevision, setContentRevision] = useState(0);
+  // Reads the fields when it runs rather than when it was scheduled: a field adopted from the
+  // row in between must not be saved back as the older value.
+  const save = (options?: { insertBlank: boolean }) => {
+    const value = toNoteFields(fieldsRef.current);
+    if (saveNote(db.db, id, value, { draft: isDraft.current, base: sync.current.saved, ...options })) {
+      isDraft.current = false;
+      markItemSaved(sync.current, value);
+    }
   };
-  const autosave = useAutosave((value: NoteFields) => save(value));
+  const autosave = useAutosave(() => save());
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the row changes.
+  useEffect(() => {
+    if (!note) return;
+    const adopted = adoptRowChanges(sync.current, noteRowFields(note), toNoteFields(fieldsRef.current));
+    if (!adopted) return;
+    const { tags, ...text } = adopted;
+    const next = { ...fieldsRef.current, ...text, ...(tags === undefined ? {} : { tags: parseTags(tags) }) };
+    fieldsRef.current = next;
+    setFields(next);
+    // Tags are held parsed: the baseline takes the form they'd be saved in, or tags stored in
+    // another form would count as edited here from now on.
+    if (tags !== undefined) sync.current.saved = { ...sync.current.saved, tags: toNoteFields(next).tags };
+    if (adopted.content !== undefined) setContentRevision((revision) => revision + 1);
+  }, [note]);
+
   const { expectDeletion } = useCloseWhenDeleted(note, {
     message: "This note was deleted elsewhere",
     onClose: () => {
@@ -81,19 +109,19 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
     const next = { ...fieldsRef.current, ...patch };
     fieldsRef.current = next;
     setFields(next);
-    autosave.schedule(toNoteFields(next));
+    autosave.schedule();
   };
 
   const askAssistant = () => {
     // The assistant reads the synced row, so get the latest text into it first.
     autosave.cancel();
-    save(toNoteFields(fieldsRef.current), { insertBlank: true });
+    save({ insertBlank: true });
     ask({ table: "item", id });
   };
 
   const convertToTask = () => {
     autosave.cancel();
-    save(toNoteFields(fieldsRef.current), { insertBlank: true });
+    save({ insertBlank: true });
     convertNoteToTask(db.db, id);
     router.replace({ pathname: "/task/[id]", params: { id } });
   };
@@ -119,6 +147,7 @@ function NoteEditor({ id, note, draftTags }: { id: string; note: NoteItem | unde
       kind="note"
       openedBlank={openedBlank}
       value={fields}
+      contentRevision={contentRevision}
       onChange={update}
       onClose={() => router.back()}
       actions={

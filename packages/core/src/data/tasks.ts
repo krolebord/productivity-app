@@ -5,7 +5,8 @@ import { combineLocalDateAndTime, localMidnightMs } from "../date-time";
 import { DETACHED_PROVIDER_TYPE } from "../google-calendar/mapping";
 import { parseTags } from "../tags";
 import { type UserDbDatabase, useDbQuery } from "../user-db/db-context";
-import { discardItemIfBlank, nextItemOrder, saveItemDraft } from "./items";
+import type { NoteItem } from "../user-db/migrations";
+import { discardItemIfBlank, nextItemOrder, type SaveItemDraftOptions, saveItemDraft } from "./items";
 
 export function useTaskTagSuggestions() {
   const { data } = useDbQuery((q) => q.selectFrom("item").select("tags"), {
@@ -59,16 +60,26 @@ export type TaskFields = {
   completedAt: number | null;
 };
 
+/** A task row's editable fields, as the editors save them. */
+export function taskRowFields(
+  task: Pick<NoteItem, "title" | "content" | "tags" | "dueAt" | "hasDueTime" | "completedAt">,
+): TaskFields {
+  return {
+    title: task.title,
+    content: task.content ?? "",
+    tags: task.tags,
+    dueAt: task.dueAt ?? null,
+    // SQLite hands booleans back as 0/1.
+    hasDueTime: Boolean(task.hasDueTime),
+    completedAt: task.completedAt ?? null,
+  };
+}
+
 /**
  * Saves a task editor's fields. Like notes, "New task" opens on a fresh id with `draft` set
  * and the row is only inserted once the task has a title or details (see saveItemDraft).
  */
-export function saveTask(
-  db: UserDbDatabase,
-  id: string,
-  fields: TaskFields,
-  options?: { draft?: boolean; insertBlank?: boolean },
-): boolean {
+export function saveTask(db: UserDbDatabase, id: string, fields: TaskFields, options?: SaveItemDraftOptions): boolean {
   return saveItemDraft(db, id, "task", fields, options);
 }
 

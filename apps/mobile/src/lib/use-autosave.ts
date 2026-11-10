@@ -6,14 +6,17 @@ import { AppState } from "react-native";
  * (including a swiped-away modal) or the app goes to the background. Writes scheduled
  * after unmount (e.g. a child committing its draft on the way out) are saved right away,
  * unless the editor was discarded (its record deleted), after which nothing is saved.
+ *
+ * `save` reads the editor's fields when it runs, not when it was scheduled, so a field that
+ * changed in between (adopted from the row after a remote edit) is saved as it is now.
  */
-export function useAutosave<T>(save: (value: T) => void, delay = 600) {
+export function useAutosave(save: () => void, delay = 600) {
   const saveRef = useRef(save);
   // Updated after each commit, not during render; layout effects run before the unmount flush.
   useLayoutEffect(() => {
     saveRef.current = save;
   });
-  const pending = useRef<{ value: T } | null>(null);
+  const pending = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
   const discarded = useRef(false);
@@ -21,15 +24,15 @@ export function useAutosave<T>(save: (value: T) => void, delay = 600) {
   const flush = useCallback(() => {
     if (timer.current != null) clearTimeout(timer.current);
     timer.current = null;
-    const next = pending.current;
-    pending.current = null;
-    if (next && !discarded.current) saveRef.current(next.value);
+    const wasPending = pending.current;
+    pending.current = false;
+    if (wasPending && !discarded.current) saveRef.current();
   }, []);
 
   const cancel = useCallback(() => {
     if (timer.current != null) clearTimeout(timer.current);
     timer.current = null;
-    pending.current = null;
+    pending.current = false;
   }, []);
 
   /** Drops pending and future saves, for an editor whose record is being deleted. */
@@ -38,16 +41,13 @@ export function useAutosave<T>(save: (value: T) => void, delay = 600) {
     cancel();
   }, [cancel]);
 
-  const schedule = useCallback(
-    (value: T) => {
-      if (discarded.current) return;
-      pending.current = { value };
-      if (!mounted.current) return flush();
-      if (timer.current != null) clearTimeout(timer.current);
-      timer.current = setTimeout(flush, delay);
-    },
-    [flush, delay],
-  );
+  const schedule = useCallback(() => {
+    if (discarded.current) return;
+    pending.current = true;
+    if (!mounted.current) return flush();
+    if (timer.current != null) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, delay);
+  }, [flush, delay]);
 
   useEffect(() => {
     mounted.current = true;

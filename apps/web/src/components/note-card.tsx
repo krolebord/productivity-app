@@ -1,8 +1,8 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { deleteItem } from "@productivity/core/data/items";
+import { type NoteListItem, notePreviewMarkdown } from "@productivity/core/data/notes";
 import { parseTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
-import type { NoteItem } from "@productivity/core/user-db/migrations";
 import { Trash2 } from "lucide-react";
 import { NoteMarkdown } from "@/components/note-markdown";
 import { useInlineConfirm } from "@/components/ui/inline-confirm";
@@ -14,7 +14,7 @@ export function NoteCardContent({
   onTagClick,
   activeTags,
 }: {
-  note: NoteItem;
+  note: NoteListItem;
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
 }) {
@@ -25,9 +25,9 @@ export function NoteCardContent({
   return (
     <div className="px-4 py-3">
       {note.title && <p className="mb-1 line-clamp-2 font-medium text-sm leading-snug">{note.title}</p>}
-      {note.content ? (
+      {note.preview ? (
         <NoteMarkdown
-          content={note.content}
+          content={notePreviewMarkdown(note.preview)}
           className="max-h-72 overflow-hidden text-muted-foreground text-sm leading-relaxed"
         />
       ) : (
@@ -69,7 +69,7 @@ export function NoteCardContent({
 }
 
 type NoteCardProps = {
-  note: NoteItem;
+  note: NoteListItem;
   onOpen: () => void;
   onTagClick?: (tag: string) => void;
   activeTags?: string[];

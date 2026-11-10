@@ -4,10 +4,17 @@ import {
   discardTaskIfBlank,
   saveTask,
   type TaskFields,
+  taskRowFields,
   useTaskTagSuggestions,
 } from "@productivity/core/data/tasks";
 import { localMidnightMs } from "@productivity/core/date-time";
 import { isCalendarBackedTask } from "@productivity/core/google-calendar/mapping";
+import {
+  adoptRowChanges,
+  createItemEditorSync,
+  type ItemEditorSync,
+  markItemSaved,
+} from "@productivity/core/item-editor-sync";
 import { parseTags, serializeTags } from "@productivity/core/tags";
 import { type DebouncedCallback, useDebounceCallback } from "@productivity/core/use-debounced-callback";
 import { useDb } from "@productivity/core/user-db/db-context";
@@ -51,6 +58,8 @@ export function useCreateTask() {
 }
 
 type DraftFlag = { current: boolean };
+/** The editor's fields, read when a save runs rather than when it was queued. */
+type FieldsRef = { readonly current: TaskFields };
 
 type TaskDialogContentHandle = {
   /** Commits pending tag text and returns the fields to save. */
@@ -72,7 +81,7 @@ function TaskDialogContent({
 }: {
   ref: Ref<TaskDialogContentHandle>;
   taskId: string;
-  queueSave: DebouncedCallback<[string, TaskFields, DraftFlag]>;
+  queueSave: DebouncedCallback<[string, FieldsRef, DraftFlag, ItemEditorSync<TaskFields>]>;
   onClose: () => void;
   onDelete: () => void;
   onDetach: () => void;
@@ -87,7 +96,7 @@ function TaskDialogContent({
   const [title, setTitle] = useState(task?.title ?? "");
   const [tags, setTags] = useState<string[]>(() => parseTags(task?.tags));
   const [dueAt, setDueAt] = useState<number | null>(task?.dueAt ?? null);
-  const [hasDueTime, setHasDueTime] = useState(task?.hasDueTime ?? false);
+  const [hasDueTime, setHasDueTime] = useState(Boolean(task?.hasDueTime));
   const [completedAt, setCompletedAt] = useState<number | null>(task?.completedAt ?? null);
   const editorRef = useRef<NoteEditorHandle>(null);
   const fieldsRef = useRef<TaskFields>({
@@ -95,9 +104,13 @@ function TaskDialogContent({
     content: task?.content ?? "",
     tags: task?.tags ?? "[]",
     dueAt: task?.dueAt ?? null,
-    hasDueTime: task?.hasDueTime ?? false,
+    hasDueTime: Boolean(task?.hasDueTime),
     completedAt: task?.completedAt ?? null,
   });
+  // What the row is known to hold, so saves write only what changed here (see ItemEditorSync).
+  const sync = useRef(createItemEditorSync(task && taskRowFields(task), fieldsRef.current));
+  // The editor only reads its content on mount; a new revision remounts it on the row's content.
+  const [editorContent, setEditorContent] = useState({ revision: 0, markdown: task?.content ?? "" });
 
   useImperativeHandle(ref, () => ({
     commit: () => {
@@ -118,11 +131,28 @@ function TaskDialogContent({
     if (deletedElsewhere) onDeletedElsewhere();
   }, [deletedElsewhere]);
 
+  // Fields changed elsewhere (another device, the assistant, calendar sync) that haven't been
+  // edited here since the last save are shown; the others keep what was entered.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the row changes.
+  useEffect(() => {
+    if (!task) return;
+    const adopted = adoptRowChanges(sync.current, taskRowFields(task), fieldsRef.current);
+    if (!adopted) return;
+    fieldsRef.current = { ...fieldsRef.current, ...adopted };
+    if (adopted.title !== undefined) setTitle(adopted.title);
+    if (adopted.tags !== undefined) setTags(parseTags(adopted.tags));
+    if (adopted.dueAt !== undefined) setDueAt(adopted.dueAt);
+    if (adopted.hasDueTime !== undefined) setHasDueTime(adopted.hasDueTime);
+    if (adopted.completedAt !== undefined) setCompletedAt(adopted.completedAt);
+    const markdown = adopted.content;
+    if (markdown !== undefined) setEditorContent((current) => ({ revision: current.revision + 1, markdown }));
+  }, [task]);
+
   const updateTask = (fields: Partial<TaskFields>) => {
     if (fields.title !== undefined) setTitle(fields.title);
     if (fields.completedAt !== undefined) setCompletedAt(fields.completedAt);
     fieldsRef.current = { ...fieldsRef.current, ...fields };
-    queueSave(taskId, { ...fieldsRef.current }, draft);
+    queueSave(taskId, fieldsRef, draft, sync.current);
   };
 
   const handleScheduleChange = (fields: TaskScheduleFields) => {
@@ -165,8 +195,9 @@ function TaskDialogContent({
           className="rounded-none border-0 border-b bg-transparent! px-0 font-semibold text-base shadow-none focus-visible:border-primary focus-visible:ring-0"
         />
         <NoteEditor
+          key={editorContent.revision}
           ref={editorRef}
-          initialContent={task?.content ?? ""}
+          initialContent={editorContent.markdown}
           placeholder="Add details..."
           onChange={(content) => updateTask({ content })}
           onEscape={onClose}
@@ -229,9 +260,16 @@ export function TaskDialog() {
 
   const contentRef = useRef<TaskDialogContentHandle>(null);
 
-  const queueSave = useDebounceCallback((id: string, fields: TaskFields, draft: DraftFlag) => {
-    if (saveTask(db.db, id, fields, { draft: draft.current })) draft.current = false;
-  }, 1000);
+  const queueSave = useDebounceCallback(
+    (id: string, fieldsRef: FieldsRef, draft: DraftFlag, sync: ItemEditorSync<TaskFields>) => {
+      const fields = { ...fieldsRef.current };
+      if (saveTask(db.db, id, fields, { draft: draft.current, base: sync.saved })) {
+        draft.current = false;
+        markItemSaved(sync, fields);
+      }
+    },
+    1000,
+  );
   useFlushOnHide(queueSave.flush);
 
   function saveAndClose() {

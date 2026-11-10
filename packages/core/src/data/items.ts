@@ -32,6 +32,17 @@ export function nextItemOrder(trx: Pick<SyncedDbTransaction<UserDb>, "executeKys
 export const isBlankItem = (item: { title?: string | null; content?: string | null }) =>
   !item.title?.trim() && !item.content?.trim();
 
+export type SaveItemDraftOptions = { draft?: boolean; insertBlank?: boolean; base?: ItemFieldsPatch };
+
+/** The fields of `fields` whose value differs from `base`. */
+export function changedItemFields<Fields extends object>(fields: Fields, base: Partial<Fields>): Partial<Fields> {
+  const patch: Partial<Fields> = {};
+  for (const key of Object.keys(fields) as (keyof Fields)[]) {
+    if (fields[key] !== base[key]) patch[key] = fields[key];
+  }
+  return patch;
+}
+
 /**
  * Saves an editor's fields for a note or task and returns whether its row exists afterwards.
  * "New note"/"New task" opens an editor on a fresh id without a row (`draft`), and the row is
@@ -40,18 +51,25 @@ export const isBlankItem = (item: { title?: string | null; content?: string | nu
  * actions that need the row (Make task, Ask assistant). Outside a draft a missing row means
  * the item was deleted, e.g. on another device, and saving doesn't bring it back; editors
  * stop passing `draft` once this returns true.
+ *
+ * `base` is what the editor believes the row holds (what it loaded or last saved). An existing
+ * row then only gets the fields that differ from it, so a field the user didn't touch can't
+ * overwrite a newer value synced in from another device or written by the assistant.
  */
 export function saveItemDraft(
   db: UserDbDatabase,
   id: string,
   type: NoteItem["type"],
   fields: ItemFieldsPatch & { title: string; tags: string },
-  { draft = false, insertBlank = false }: { draft?: boolean; insertBlank?: boolean } = {},
+  { draft = false, insertBlank = false, base }: SaveItemDraftOptions = {},
 ): boolean {
   return db.executeTransaction((trx) => {
     const [existing] = trx.executeKysely((q) => q.selectFrom("item").select("id").where("id", "=", id)).rows;
     if (existing) {
-      trx.executeKysely((q) => q.updateTable("item").set(fields).where("id", "=", id));
+      const patch = base ? changedItemFields(fields, base) : fields;
+      if (Object.keys(patch).length > 0) {
+        trx.executeKysely((q) => q.updateTable("item").set(patch).where("id", "=", id));
+      }
       return true;
     }
     if (!draft || (!insertBlank && isBlankItem(fields))) return false;

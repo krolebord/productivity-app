@@ -2,12 +2,12 @@ import type { CollisionDetection, DragEndEvent, DragOverEvent, DragStartEvent } 
 import { closestCenter, DragOverlay } from "@dnd-kit/core";
 import { reorderItems, setItemOrder } from "@productivity/core/data/items";
 import { createNoteView, deleteNoteView, useNoteViews } from "@productivity/core/data/note-views";
-import { useNotesList } from "@productivity/core/data/notes";
+import { type NoteListItem, useNoteSearchMatches, useNotesList } from "@productivity/core/data/notes";
 import { filterTagCounts, filterTagOptions, matchesTagFilter, type TagFilter } from "@productivity/core/note-filter";
 import { noteViewSearch, viewMatchesSearch } from "@productivity/core/note-views";
 import { UNTAGGED } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
-import type { NoteItem, NoteViewItem } from "@productivity/core/user-db/migrations";
+import type { NoteViewItem } from "@productivity/core/user-db/migrations";
 import { formatForDisplay } from "@tanstack/hotkeys";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CheckIcon, MinusIcon, PlusIcon, SearchIcon, StickyNote, XIcon } from "lucide-react";
@@ -130,7 +130,7 @@ export const Route = createFileRoute("/_app/notes")({
   validateSearch: notesSearchSchema,
 });
 
-const noteKey = (note: NoteItem) => note.id;
+const noteKey = (note: NoteListItem) => note.id;
 
 function arrayMove<T>(array: T[], from: number, to: number): T[] {
   const next = array.slice();
@@ -251,13 +251,12 @@ function NotesPage() {
     return notes.filter((note) => matchesTagFilter(note, filter));
   }, [notes, hasTagFilter, filter]);
 
-  const visibleNotes = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return tagMatchedNotes;
-    return tagMatchedNotes.filter(
-      (note) => note.title.toLowerCase().includes(q) || (note.content ?? "").toLowerCase().includes(q),
-    );
-  }, [tagMatchedNotes, query]);
+  // The list only carries the start of each body; the search reads whole ones.
+  const searchMatches = useNoteSearchMatches(query);
+  const visibleNotes = useMemo(
+    () => (searchMatches ? tagMatchedNotes.filter((note) => searchMatches.has(note.id)) : tagMatchedNotes),
+    [tagMatchedNotes, searchMatches],
+  );
 
   const allFilterTags = useMemo(() => filterTagOptions(notes, { include, exclude }), [notes, include, exclude]);
 

@@ -1,10 +1,15 @@
 import { useNoteViews } from "@productivity/core/data/note-views";
-import { useNotesList } from "@productivity/core/data/notes";
+import {
+  type NoteListItem,
+  notePreviewMarkdown,
+  useNoteSearchMatches,
+  useNotesList,
+} from "@productivity/core/data/notes";
 import { filterTagCounts, filterTagOptions, matchesTagFilter, type TagFilter } from "@productivity/core/note-filter";
 import { markdownToPlainText } from "@productivity/core/note-text";
 import { effectiveMatch, noteViewSearch, viewMatchesSearch } from "@productivity/core/note-views";
 import { parseTags, serializeTags, UNTAGGED } from "@productivity/core/tags";
-import type { NoteItem, NoteViewItem } from "@productivity/core/user-db/migrations";
+import type { NoteViewItem } from "@productivity/core/user-db/migrations";
 import { generateId } from "@sqlite-sync/core";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
@@ -44,14 +49,12 @@ export default function NotesScreen() {
     return views.find((view) => viewMatchesSearch(view, current))?.id ?? null;
   }, [views, include, exclude, filter.match]);
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return notes.filter((note) => {
-      if (!matchesTagFilter(note, filter)) return false;
-      if (!q) return true;
-      return note.title.toLowerCase().includes(q) || (note.content ?? "").toLowerCase().includes(q);
-    });
-  }, [notes, query, filter]);
+  // The list only carries the start of each body; the search reads whole ones.
+  const searchMatches = useNoteSearchMatches(query);
+  const visible = useMemo(
+    () => notes.filter((note) => matchesTagFilter(note, filter) && (!searchMatches || searchMatches.has(note.id))),
+    [notes, searchMatches, filter],
+  );
 
   const toggleTag = (tag: string) => {
     if (exclude.includes(tag)) {
@@ -220,13 +223,13 @@ function NoteCard({
   onTagPress,
   onPress,
 }: {
-  note: NoteItem;
+  note: NoteListItem;
   activeTags: string[];
   onTagPress: (tag: string) => void;
   onPress: () => void;
 }) {
   const title = note.title.trim();
-  const preview = useMemo(() => markdownToPlainText(note.content ?? "", 220), [note.content]);
+  const preview = useMemo(() => markdownToPlainText(notePreviewMarkdown(note.preview), 220), [note.preview]);
   const tags = parseTags(note.tags);
 
   return (

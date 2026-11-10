@@ -1,6 +1,5 @@
-import { notesCountQuery, notesListQuery } from "../data/notes";
+import { type NoteListItem, notePreviewMarkdown, notesCountQuery, notesListQuery } from "../data/notes";
 import { markdownToPreviewText } from "../note-text";
-import type { NoteItem } from "../user-db/migrations";
 import { readRows, type WidgetDbReader } from "./reader";
 import { type NotesWidgetSnapshot, WIDGET_PATHS, WIDGET_SNAPSHOT_VERSION, type WidgetContext } from "./snapshots";
 
@@ -11,7 +10,7 @@ const PREVIEW_LENGTH = 140;
 const UNTITLED_TITLE_LENGTH = 60;
 
 export type NotesWidgetInputs = {
-  notes: Pick<NoteItem, "id" | "title" | "content">[];
+  notes: Pick<NoteListItem, "id" | "title" | "preview">[];
   total: number;
 };
 
@@ -33,7 +32,8 @@ export function buildNotesWidgetSnapshot(
     links: { open: link(WIDGET_PATHS.open), notes: link(WIDGET_PATHS.notes), newNote: link(WIDGET_PATHS.newNote) },
     notes: notes.slice(0, NOTES_WIDGET_LIMIT).map((note) => {
       const title = note.title.trim();
-      const content = note.content ?? "";
+      // The start of the body, which is all the short previews below read.
+      const content = notePreviewMarkdown(note.preview);
       return {
         id: note.id,
         // Like the Notes tab, a note without a title leads with its text.

@@ -15,6 +15,7 @@ export function ItemDocumentEditor({
   kind,
   openedBlank,
   value,
+  contentRevision = 0,
   onChange,
   onClose,
   completed = false,
@@ -27,6 +28,8 @@ export function ItemDocumentEditor({
   kind: "task" | "note";
   openedBlank: boolean;
   value: ItemDocumentFields;
+  /** Bump when `value.content` was replaced from outside: the document only reads it on mount. */
+  contentRevision?: number;
   onChange: (patch: Partial<ItemDocumentFields>) => void;
   onClose: () => void;
   completed?: boolean;
@@ -105,6 +108,7 @@ export function ItemDocumentEditor({
             autoFocus={openedBlank}
           />
           <NoteDocument
+            key={contentRevision}
             ref={document}
             markdown={value.content}
             placeholder={contentPlaceholder}
