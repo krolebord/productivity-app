@@ -33,7 +33,7 @@ const habit: AgendaHabit = {
 };
 
 describe("Today widget", () => {
-  it("uses Today order, includes inbox and habits, and caps all unfinished rows together", () => {
+  it("uses Today order with habits, caps agenda rows, and leaves the inbox no slots when full", () => {
     const inputs = {
       inbox: [task("inbox", null)],
       habits: [habit],
@@ -45,7 +45,6 @@ describe("Today widget", () => {
     };
     const [today, tomorrow] = buildTodayWidgetSnapshot(inputs, ctx).days;
     expect(today.rows.map((row) => row.id)).toEqual([
-      "inbox",
       "overdue",
       "task0",
       "task1",
@@ -55,12 +54,32 @@ describe("Today widget", () => {
       "task5",
       "task6",
       "task7",
+      "task8",
     ]);
-    expect([today.remaining, today.done, today.total]).toEqual([13, 1, 14]);
+    expect([today.remaining, today.done, today.total]).toEqual([12, 1, 13]);
+    expect(today.inbox).toEqual({ count: 1, rows: [] });
     expect(tomorrow.startsAt).toBe(at("2026-11-10", 0));
     const [habitDay] = buildTodayWidgetSnapshot({ tasks: [], habits: [habit] }, ctx).days;
     expect(habitDay.rows[0]?.kind).toBe("habit");
     expect(habitDay.rows[0]?.url).toContain("today");
+  });
+  it("puts inbox tasks after the agenda, in the slots it leaves, outside the done count", () => {
+    const inputs = {
+      inbox: Array.from({ length: 12 }, (_, i) => task(`inbox${i}`, null)),
+      tasks: [
+        task("a", at("2026-11-09", 12)),
+        task("b", at("2026-11-09", 12)),
+        task("done", at("2026-11-09", 12), ctx.now),
+      ],
+    };
+    const [today] = buildTodayWidgetSnapshot(inputs, ctx).days;
+    expect(today.rows.map((row) => row.id)).toEqual(["a", "b"]);
+    expect([today.remaining, today.done, today.total]).toEqual([2, 1, 3]);
+    expect(today.inbox?.count).toBe(12);
+    expect(today.inbox?.rows.map((row) => row.id)).toEqual(Array.from({ length: 8 }, (_, i) => `inbox${i}`));
+    expect(today.inbox?.rows[0]).toMatchObject({ time: null, due: null, url: "productivity:///task/inbox0" });
+    const [inboxOnly] = buildTodayWidgetSnapshot({ tasks: [], inbox: inputs.inbox.slice(0, 3) }, ctx).days;
+    expect([inboxOnly.remaining, inboxOnly.total, inboxOnly.inbox?.rows.length]).toEqual([0, 0, 3]);
   });
   it("mixes habits into page sections and only hides a counted habit once its target is reached", () => {
     const water = { ...habit, id: "water", name: "Water", target: 3, timeOfDay: "morning" as const };

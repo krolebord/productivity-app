@@ -153,7 +153,7 @@ describe("today widget", () => {
     });
   });
 
-  it("matches Today section order, with inbox first and a done count", () => {
+  it("matches Today section order, with the inbox apart and a done count", () => {
     const snapshot = buildTodayWidgetSnapshot(readTodayWidgetInputs(db, ctx), ctx);
     expect(snapshot.links).toEqual({
       open: "productivity:///",
@@ -166,7 +166,6 @@ describe("today widget", () => {
     expect(today?.startsAt).toBe(zonedMidnightMs("2026-11-09", TZ));
     expect(today?.overdue).toEqual({ count: 0, rows: [] });
     expect(today?.rows.map((row) => [row.title, row.time, row.event])).toEqual([
-      ["inbox", null, false],
       ["overdue", null, false],
       ["morning", "09:30", false],
       ["standup", "12:00", true],
@@ -175,8 +174,10 @@ describe("today widget", () => {
       ["Call the bank", "18:00", false],
       ["late", "23:30", false],
     ]);
-    expect(today?.rows[1]).toMatchObject({ due: "Nov 5", url: "productivity:///task/overdue" });
-    expect(today).toMatchObject({ remaining: 8, done: 1, total: 9 });
+    expect(today?.rows[0]).toMatchObject({ due: "Nov 5", url: "productivity:///task/overdue" });
+    expect(today).toMatchObject({ remaining: 7, done: 1, total: 8 });
+    expect(today?.inbox?.count).toBe(1);
+    expect(today?.inbox?.rows.map((row) => row.id)).toEqual(["inbox"]);
   });
 
   it("carries tomorrow, where today's unfinished tasks are overdue", () => {
@@ -186,7 +187,6 @@ describe("today widget", () => {
     expect(tomorrow?.title).toBe("Tuesday, November 10");
     expect(tomorrow?.startsAt).toBe(zonedMidnightMs("2026-11-10", TZ));
     expect(tomorrow?.rows.map((row) => row.id)).toEqual([
-      "inbox",
       "overdue",
       "morning",
       "standup",
@@ -197,7 +197,8 @@ describe("today widget", () => {
       "tomorrow",
     ]);
     expect(tomorrow?.rows.filter((row) => row.due)).toHaveLength(7);
-    expect(tomorrow).toMatchObject({ remaining: 9, done: 0, total: 9 });
+    expect(tomorrow).toMatchObject({ remaining: 8, done: 0, total: 8 });
+    expect(tomorrow?.inbox?.rows.map((row) => row.id)).toEqual(["inbox"]);
   });
 
   it("picks the day that has started", () => {

@@ -7,7 +7,7 @@ library bugs are in [widgets-research.md](widgets-research.md).
 | Kind | iOS families | Android | Shows |
 |---|---|---|---|
 | Notes | `systemSmall`, `systemLarge` | opens 2×2, resizable to 4×4; titles only below ~250 dp wide, cards with a preview above | the first 10 notes in the Notes tab's manual order (small: 4 titles) |
-| Today | `systemLarge` | opens 4×4, minimum 4×3 | date, first 10 unfinished inbox tasks and agenda items (including habits) in Today page order; titles up to two lines, "x of y done" |
+| Today | `systemLarge` | opens 4×4, minimum 4×3 | date, unfinished agenda items (including habits) in Today page order, then inbox tasks under an "Inbox" label in the slots left of 10; titles up to two lines, "x of y done" (agenda only) |
 | Finances | `systemSmall`, `systemMedium` | opens 2×2, resizes horizontally and vertically down to 2×1 | current net worth in the display currency and Net (income minus expenses) for the saved dashboard period; wide adds income/spending, with top 3 categories when at least 160 dp tall |
 
 **Lists show the whole snapshot** (up to 10 rows), and the widget's size decides how many are visible.
@@ -321,9 +321,13 @@ update or store submission was made.
 
 ### Dashboard and Today consistency
 
-Today includes the unfinished inbox first, then agenda sections in the mobile page's actual display
-order, including habits. One ten-item cap applies to the combined list, including overdue items.
-Completed items contribute to the completion summary but are not drawn. Habits use a simple repeat
+Today lists agenda sections in the mobile page's actual display order, including habits and overdue
+items, then the unfinished inbox under its own "Inbox · N" label (the in-app Today shows the inbox
+first but collapsed; on the widget it would crowd out the day's plan). One ten-row cap applies: the
+agenda takes its rows first and `inbox.rows` only fills what is left, while `inbox.count` keeps the
+"+N more" honest. Snapshots from before the split have no `inbox` and list it first in `rows`.
+Completed agenda items contribute to the completion summary but are not drawn; the inbox is not
+counted in it. Habits use a simple repeat
 icon and open Today; they do not expose interactive progress controls. Both platform layouts allow
 up to two title lines. Android rows measure their content, including system text scaling.
 

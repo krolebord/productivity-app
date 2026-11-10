@@ -67,13 +67,22 @@ export type TodayWidgetDay = {
   title: string;
   /** Legacy snapshots: overdue tasks were listed separately. New snapshots include them in rows. */
   overdue: { count: number; rows: TodayWidgetRow[] };
-  /** Unfinished inbox and agenda rows in Today order, capped at ten. */
+  /**
+   * Unfinished agenda rows in Today order, capped at ten. Snapshots written before `inbox` existed
+   * listed inbox tasks here too, first.
+   */
   rows: TodayWidgetRow[];
-  /** All unfinished inbox and agenda rows (`rows` may hold fewer). */
+  /** All unfinished agenda rows (`rows` may hold fewer). */
   remaining: number;
-  /** Done and total across inbox and agenda items (completed rows are not listed). */
+  /** Done and total across agenda items only (completed rows are not listed). */
   done: number;
   total: number;
+  /**
+   * Unfinished inbox tasks, drawn after the agenda under their own label. `rows` only fills the
+   * slots the agenda leaves under the ten-row cap; `count` is the whole inbox. Missing on older
+   * snapshots.
+   */
+  inbox?: { count: number; rows: TodayWidgetRow[] };
 };
 
 /**

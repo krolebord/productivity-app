@@ -24,6 +24,7 @@ import {
   lineLimit,
   minimumScaleFactor,
   monospacedDigit,
+  padding,
   widgetURL,
 } from "@expo/ui/swift-ui/modifiers";
 import {
@@ -250,6 +251,9 @@ const TodayLayout = (input: Partial<TodayWidgetSnapshot> | undefined, env: Widge
   const remaining = Math.max(day?.remaining ?? 0, rows.length);
   const done = day?.done ?? 0;
   const total = day?.total ?? 0;
+  // Older snapshots carry no inbox (they listed it first in rows).
+  const inboxRows = day?.inbox?.rows ?? [];
+  const inboxCount = Math.max(day?.inbox?.count ?? 0, inboxRows.length);
 
   type Row = (typeof rows)[number];
   const row = (item: Row) => {
@@ -300,14 +304,14 @@ const TodayLayout = (input: Partial<TodayWidgetSnapshot> | undefined, env: Widge
   if (props.state === "stale") {
     return root(links?.today, [header, message("Open the app", "to refresh your day"), footer]);
   }
-  if (overdue.count === 0 && remaining === 0) {
+  if (overdue.count === 0 && remaining === 0 && inboxCount === 0) {
     return root(links?.today, [
       header,
       total > 0 ? message("All done", null) : message("Nothing planned", "Tap + to add a task"),
       footer,
     ]);
   }
-  // Every row in the snapshot (overdue first), clipped at the bottom with a fade: iOS doesn't tell
+  // Every row in the snapshot (overdue first, inbox last), clipped at the bottom with a fade: iOS doesn't tell
   // a layout its height, so the footer opens Today instead of counting what's hidden.
   return root(links?.today, [
     header,
@@ -337,6 +341,20 @@ const TodayLayout = (input: Partial<TodayWidgetSnapshot> | undefined, env: Widge
         ) : null}
         {overdue.rows.map(row)}
         {rows.map(row)}
+        {inboxRows.length > 0 ? (
+          <Text
+            key="inbox"
+            modifiers={[
+              font({ size: 12, weight: "bold" }),
+              foregroundStyle(c.muted),
+              padding({ top: 4 }),
+              fixedSize({ vertical: true }),
+            ]}
+          >
+            {`Inbox · ${inboxCount}`}
+          </Text>
+        ) : null}
+        {inboxRows.map(row)}
       </VStack>
       {/* Fade the rows themselves out over the last 24 pt: iOS tints the widget background, so a
           gradient painted in the palette's background color shows as a band in dark mode. */}

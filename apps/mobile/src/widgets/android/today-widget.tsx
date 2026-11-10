@@ -13,8 +13,8 @@ import { CalendarIcon, Header, type LayoutProps, List, Message, MoreRow, openUri
 const SECTION_HEIGHT = 22;
 
 /**
- * Today, simplified: unfinished inbox and agenda items in page order in a scrolling list, and
- * how many are done. The list holds the whole snapshot; "+N more" opens Today for what it left out.
+ * Today, simplified: unfinished agenda items in page order in a scrolling list, then the inbox
+ * under its own label, and how many agenda items are done. The list holds the whole snapshot; "+N more" opens Today for what it left out.
  * The snapshot carries today and tomorrow; this picks by the clock at draw time, and the widget's
  * periodic update (app.json) redraws it from the file after midnight. Once tomorrow has ended too
  * the snapshot is stale: rather than show a past day as today, it asks to open the app.
@@ -40,10 +40,13 @@ export function TodayWidget({
   const overdue = day?.overdue ?? { count: 0, rows: [] };
   const rows = day?.rows ?? [];
   const remaining = Math.max(day?.remaining ?? 0, rows.length);
+  // Older snapshots carry no inbox (they listed it first in rows).
+  const inboxRows = day?.inbox?.rows ?? [];
+  const inboxCount = Math.max(day?.inbox?.count ?? 0, inboxRows.length);
 
   // Rows the snapshot left out (it caps each list); everything in it is in the scrolling list.
-  const notListed = remaining - rows.length + (overdue.count - overdue.rows.length);
-  const nothingLeft = overdue.count === 0 && remaining === 0;
+  const notListed = remaining - rows.length + (overdue.count - overdue.rows.length) + (inboxCount - inboxRows.length);
+  const nothingLeft = overdue.count === 0 && remaining === 0 && inboxCount === 0;
 
   return (
     <Shell colors={colors} uri={links?.today}>
@@ -84,6 +87,21 @@ export function TodayWidget({
           ))}
           {rows.map((row) => (
             <Row key={row.id} row={row} colors={colors} />
+          ))}
+          {inboxRows.length > 0 ? (
+            <FlexWidget
+              key="inbox"
+              style={{ height: SECTION_HEIGHT, width: "match_parent", justifyContent: "flex-end" }}
+            >
+              <TextWidget
+                text={`Inbox · ${inboxCount}`}
+                maxLines={1}
+                style={{ fontSize: 12, fontWeight: "700", color: colors.mutedForeground }}
+              />
+            </FlexWidget>
+          ) : null}
+          {inboxRows.map((row) => (
+            <Row key={`inbox:${row.id}`} row={row} colors={colors} />
           ))}
           {notListed > 0 && links ? (
             <MoreRow key="more" text={`+${notListed} more`} uri={links.today} colors={colors} />

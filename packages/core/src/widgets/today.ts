@@ -86,7 +86,10 @@ function toWidgetRow(row: AgendaTaskRow, { timeZone, link }: WidgetContext, over
   };
 }
 
-/** Inbox precedes the agenda on Today; the cap applies across all sections. */
+/**
+ * Agenda rows first, in Today order; inbox tasks only fill what the ten-row cap leaves, since
+ * they matter less than the day's plan. Progress counts the agenda only.
+ */
 function buildDay(dateKey: string, inputs: TodayWidgetInputs, ctx: WidgetContext): TodayWidgetDay {
   const sections = buildAgendaSections({
     selectedKey: dateKey,
@@ -99,36 +102,37 @@ function buildDay(dateKey: string, inputs: TodayWidgetInputs, ctx: WidgetContext
   const all = sections.flatMap(orderTodaySectionRows);
   const done = all.filter((row) => (row.kind === "task" ? row.completed : row.done)).length;
   const open = all.filter((row) => (row.kind === "task" ? !row.completed : !row.done));
-  const inbox = (inputs.inbox ?? []).map((task) =>
-    toWidgetRow({ kind: "task", id: task.id, task, bucket: "anytime", completed: false, sortTime: null }, ctx, false),
+  const rows = open.slice(0, DAY_ROW_LIMIT).map(
+    (row): TodayWidgetRow =>
+      row.kind === "task"
+        ? toWidgetRow(row, ctx, row.bucket === "overdue")
+        : {
+            id: `habit:${row.id}:${row.dateKey}`,
+            title: row.habit.name,
+            kind: "habit",
+            time: null,
+            event: false,
+            due: row.bucket === "overdue" ? format(parseDateKey(row.dateKey), "MMM d") : null,
+            url: ctx.link(WIDGET_PATHS.today),
+          },
   );
-  const rows = [
-    ...inbox,
-    ...open.map(
-      (row): TodayWidgetRow =>
-        row.kind === "task"
-          ? toWidgetRow(row, ctx, row.bucket === "overdue")
-          : {
-              id: `habit:${row.id}:${row.dateKey}`,
-              title: row.habit.name,
-              kind: "habit",
-              time: null,
-              event: false,
-              due: row.bucket === "overdue" ? format(parseDateKey(row.dateKey), "MMM d") : null,
-              url: ctx.link(WIDGET_PATHS.today),
-            },
-    ),
-  ];
+  const inbox = inputs.inbox ?? [];
+  const inboxRows = inbox
+    .slice(0, DAY_ROW_LIMIT - rows.length)
+    .map((task) =>
+      toWidgetRow({ kind: "task", id: task.id, task, bucket: "anytime", completed: false, sortTime: null }, ctx, false),
+    );
   return {
     dateKey,
     startsAt: zonedMidnightMs(dateKey, ctx.timeZone),
     endsAt: zonedMidnightMs(shiftDateKey(dateKey, 1), ctx.timeZone),
     title: format(parseDateKey(dateKey), "EEEE, MMMM d"),
     overdue: { count: 0, rows: [] },
-    rows: rows.slice(0, DAY_ROW_LIMIT),
-    remaining: rows.length,
+    rows,
+    remaining: open.length,
     done,
-    total: rows.length + done,
+    total: open.length + done,
+    inbox: { count: inbox.length, rows: inboxRows },
   };
 }
 
