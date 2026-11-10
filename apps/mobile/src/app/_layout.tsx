@@ -12,6 +12,9 @@ import { AppUpdateProvider } from "../components/app-update-provider";
 import { SessionProvider, useSession } from "../lib/session";
 import { publishSignedOutWidgets } from "../widgets/refresh";
 
+// Expo Router renders this in place of the app when a screen throws while rendering.
+export { ErrorScreen as ErrorBoundary } from "../components/error-screen";
+
 SplashScreen.preventAutoHideAsync();
 
 function RootStack() {
