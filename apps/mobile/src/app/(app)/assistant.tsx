@@ -17,8 +17,9 @@ import { conversationTitle, summarizeConversationActivity } from "@productivity/
 import {
   catchUpConversationLastRead,
   setConversationPinned,
-  useConversationMessages,
+  useConversationMessageExists,
   useConversations,
+  useConversationTail,
 } from "@productivity/core/data/conversations";
 import { isSubmitLockHolding, type SubmitLock } from "@productivity/core/submit-lock";
 import { useDb } from "@productivity/core/user-db/db-context";
@@ -29,12 +30,13 @@ import { useIsFocused, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
+  type FlatListInstance,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
-  type ScrollViewInstance,
   Text,
   type TextInputInstance,
   View,
@@ -75,6 +77,8 @@ import { setPreference, usePreference } from "../../lib/preferences";
 
 // Within this distance of the end, new content keeps the transcript pinned to the bottom.
 const STICK_TO_BOTTOM_THRESHOLD = 80;
+// Messages read from the transcript's end at first, and how many more each scroll back to the top adds.
+const MESSAGE_PAGE_SIZE = 40;
 
 const warmAgent = createAgentWarmer((conversationId) => api.assistant.ensureProjection({ conversationId }));
 
@@ -265,7 +269,8 @@ function Chat({
   const keyboardVisible = useKeyboardVisible();
   // Debounced like the banner, so a quick reconnect doesn't flicker Send.
   const { offline } = useConnectionBanner();
-  const messages = useConversationMessages(conversationId);
+  // Newest first: the transcript is an inverted list, whose first item sits at the bottom.
+  const { messages, loadOlder } = useConversationTail(conversationId, MESSAGE_PAGE_SIZE);
   const { draft: input, files, lock: submitLock } = useAssistantChat(conversationId);
   const preferredModel = usePreference("assistantModel");
   const preferredReasoningEffort = usePreference("assistantReasoningEffort");
@@ -274,10 +279,11 @@ function Chat({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
-  const scrollRef = useRef<ScrollViewInstance>(null);
+  const listRef = useRef<FlatListInstance>(null);
   const inputRef = useRef<TextInputInstance>(null);
-  const nearBottomRef = useRef(true);
   const backfillRef = useRef(false);
+
+  const lockMessageSynced = useConversationMessageExists(submitLock?.messageId);
 
   const model = conversation ? resolveAssistantModelId(conversation.model) : preferredModel;
   const reasoningEffort = displayedReasoningEffort(model, conversation?.reasoningEffort, preferredReasoningEffort);
@@ -286,7 +292,11 @@ function Chat({
     isSubmitLockHolding({
       lock,
       conversation,
-      hasMessage: lock != null && messages.some((message) => message.id === lock.messageId),
+      hasMessage:
+        lock != null &&
+        // Asked of the table, not the loaded tail: after a long turn the sent message is no longer in it.
+        ((lock.messageId === submitLock?.messageId && lockMessageSynced) ||
+          messages.some((message) => message.id === lock.messageId)),
     });
   const lockHolding = isLockHolding(submitLock);
   const isWorking = lockHolding || isRunning;
@@ -321,6 +331,9 @@ function Chat({
   useEffect(() => {
     if (visible && takeComposerFocusRequest()) inputRef.current?.focus();
   }, [focusNonce, visible]);
+
+  // Offset 0 is the bottom of an inverted list.
+  const scrollToBottom = () => listRef.current?.scrollToOffset({ offset: 0, animated: true });
 
   const warm = () => {
     if (!isWorking) warmAgent(conversationId);
@@ -366,7 +379,7 @@ function Chat({
       submittedUpdatedAt: conversation?.updatedAt ?? null,
     };
     setAssistantSubmitLock(conversationId, lock);
-    nearBottomRef.current = true;
+    scrollToBottom();
 
     const uploads = sentFiles.map(toUploadFile);
     const { error, data } = await safe(
@@ -403,62 +416,70 @@ function Chat({
   return (
     <View className="flex-1">
       <View className="flex-1">
-        <ScrollView
-          ref={scrollRef}
-          className="flex-1"
-          contentContainerClassName="grow gap-3 px-4 py-4"
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          scrollEventThrottle={100}
-          onScroll={({ nativeEvent }) => {
-            const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
-            const near = contentSize.height - contentOffset.y - layoutMeasurement.height < STICK_TO_BOTTOM_THRESHOLD;
-            nearBottomRef.current = near;
-            setAtBottom(near);
-          }}
-          onContentSizeChange={() => {
-            if (nearBottomRef.current) scrollRef.current?.scrollToEnd({ animated: true });
-          }}
-          // The viewport shrinks when the keyboard opens or the composer grows.
-          onLayout={() => {
-            if (nearBottomRef.current) scrollRef.current?.scrollToEnd({ animated: false });
-          }}
-        >
-          {messages.length === 0 && !isWorking ? (
-            <View className="flex-1 justify-center gap-2">
-              <EmptyState
-                icon="message-circle"
-                title="Ask anything"
-                description="About your notes, accounts, or plans."
-              />
-              <SkillStarters onPick={(skill) => appendToAssistantDraft(conversationId, skillStarterPrompt(skill))} />
-            </View>
-          ) : (
-            messages.map((message, index) => (
+        {messages.length === 0 && !isWorking ? (
+          <ScrollView
+            className="flex-1"
+            contentContainerClassName="grow justify-center gap-2 px-4 py-4"
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+          >
+            <EmptyState
+              icon="message-circle"
+              title="Ask anything"
+              description="About your notes, accounts, or plans."
+            />
+            <SkillStarters onPick={(skill) => appendToAssistantDraft(conversationId, skillStarterPrompt(skill))} />
+          </ScrollView>
+        ) : (
+          // Inverted: the list starts at, and stays anchored to, its newest message, including
+          // when the keyboard or the composer resizes it, and only mounts the rows near the
+          // viewport. Scrolling up to its end reads older messages.
+          <FlatList
+            ref={listRef}
+            inverted
+            data={messages}
+            keyExtractor={(message) => message.id}
+            className="flex-1"
+            // A transcript shorter than the screen starts at the top (the end of an inverted list).
+            contentContainerClassName="grow justify-end px-4 pt-4 pb-1"
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            scrollEventThrottle={100}
+            onScroll={({ nativeEvent }) => setAtBottom(nativeEvent.contentOffset.y < STICK_TO_BOTTOM_THRESHOLD)}
+            // Scrolled back, what's on screen stays put while replies arrive or grow below it;
+            // near the bottom, the list follows the newest one. Anchored on the message before
+            // the newest (index 1): the newest grows in place while it streams, which moves the
+            // ones before it but not itself, so anchoring on it would let its own text slide.
+            maintainVisibleContentPosition={{
+              minIndexForVisible: 1,
+              autoscrollToTopThreshold: STICK_TO_BOTTOM_THRESHOLD,
+            }}
+            onEndReachedThreshold={0.5}
+            onEndReached={loadOlder}
+            renderItem={({ item, index }) => (
               <MessageRow
-                key={message.id}
-                message={message}
+                message={item}
                 conversationId={conversationId}
                 // Text grows in place while the turn runs; only the newest message can still be streaming.
-                streaming={isRunning && index === messages.length - 1}
+                streaming={isRunning && index === 0}
               />
-            ))
-          )}
-          {isWorking && (
-            <View className="flex-row items-center gap-2">
-              <ActivityIndicator size="small" colorClassName="accent-muted-foreground" />
-              <Text className="text-muted-foreground text-sm">Thinking…</Text>
-            </View>
-          )}
-        </ScrollView>
-        {!atBottom && (
+            )}
+            // The header of an inverted list is below its newest message.
+            ListHeaderComponent={
+              isWorking ? (
+                <View className="flex-row items-center gap-2 pb-3">
+                  <ActivityIndicator size="small" colorClassName="accent-muted-foreground" />
+                  <Text className="text-muted-foreground text-sm">Thinking…</Text>
+                </View>
+              ) : undefined
+            }
+          />
+        )}
+        {!atBottom && messages.length > 0 && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Scroll to bottom"
-            onPress={() => {
-              nearBottomRef.current = true;
-              scrollRef.current?.scrollToEnd({ animated: true });
-            }}
+            onPress={scrollToBottom}
             className="absolute bottom-3 size-9 items-center justify-center self-center rounded-full border border-border bg-card shadow-md active:bg-muted"
           >
             <Icon name="arrow-down" size={18} colorClassName="accent-foreground" />
@@ -568,6 +589,12 @@ function MessageRow({
   conversationId: string;
   streaming: boolean;
 }) {
+  const content = messageContent(message, conversationId, streaming);
+  // The gap to the next message is the row's own: a message that shows nothing takes no space.
+  return content && <View className="pb-3">{content}</View>;
+}
+
+function messageContent(message: ConversationMessageItem, conversationId: string, streaming: boolean) {
   if (message.kind === "tool") return <ToolMessage message={message} conversationId={conversationId} />;
 
   if (message.role === "user") {
