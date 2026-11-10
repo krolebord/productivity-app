@@ -1,7 +1,7 @@
 import { getCurrencyOptions, getRate } from "@productivity/core/currency/convert";
 import { APP_CURRENCIES, type AppCurrencyCode } from "@productivity/core/currency/currencies";
 import { formatBalance, formatRate } from "@productivity/core/currency/format";
-import { useCurrencyRates } from "@productivity/core/data/currency-rates";
+import { useLatestCurrencyRate } from "@productivity/core/data/currency-rates";
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowRightLeftIcon, CoinsIcon, RefreshCwIcon } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -22,8 +22,7 @@ function RatesPage() {
   const [fromCurrency, setFromCurrency] = useState<AppCurrencyCode>("USD");
   const [toCurrency, setToCurrency] = useState<AppCurrencyCode>("EUR");
 
-  const rates = useCurrencyRates();
-  const latestRate = rates[0];
+  const latestRate = useLatestCurrencyRate();
 
   const { refreshRates, isRefreshing } = useRefreshRates();
 
