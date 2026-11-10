@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useCSSVariable, useUniwind } from "uniwind";
+import { AppUpdateProvider } from "../components/app-update-provider";
 import { SessionProvider, useSession } from "../lib/session";
 import { publishSignedOutWidgets } from "../widgets/refresh";
 
@@ -69,7 +70,9 @@ export default function RootLayout() {
       <KeyboardProvider>
         <ThemeProvider value={navigationTheme}>
           <SessionProvider>
-            <RootStack />
+            <AppUpdateProvider>
+              <RootStack />
+            </AppUpdateProvider>
             <StatusBar style={theme === "dark" ? "light" : "dark"} />
           </SessionProvider>
         </ThemeProvider>

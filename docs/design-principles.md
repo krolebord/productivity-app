@@ -41,6 +41,10 @@ Pick the transition by what the screen is, not by what the nearest file does.
 - Native Android UI (dialogs, pickers, cursor) takes the app's colors from `apps/mobile/plugins/android-theme.js`; keep it in sync with `src/global.css`.
 - Today task titles allow two lines, including draggable rows (their equal-height slots scale with text size).
   Completion saves immediately; rows fade out and the list closes the gap, respecting Reduce Motion.
+- Mobile OTA updates download silently. Once ready, a dismissible banner offers Restart / Later on the
+  main tabs, deferred while the keyboard is visible or a quick-add task has unsaved text. Editors and
+  other screens never offer a restart. Later hides the banner for that session; the next cold launch
+  still applies the update. Returning to the foreground checks at most once every 15 minutes.
 
 ## Checkboxes
 

@@ -22,6 +22,7 @@ import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-na
 import Animated from "react-native-reanimated";
 import { Canvas, Path, Skia } from "react-native-skia";
 import { useCSSVariable } from "uniwind";
+import { useDeferAppUpdate } from "../../../components/app-update-provider";
 import { useTabContentInset } from "../../../components/assistant-button";
 import { GlobalActions } from "../../../components/global-actions";
 import { type DragHandle, ReorderableList } from "../../../components/reorderable-list";
@@ -439,6 +440,7 @@ function QuickAddTask({
 }) {
   const [title, setTitle] = useState("");
   const [toInbox, setToInbox] = useState(false);
+  useDeferAppUpdate(title.length > 0);
 
   const submit = () => {
     if (!title.trim()) return;
