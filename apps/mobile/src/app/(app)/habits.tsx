@@ -60,7 +60,6 @@ export default function HabitsScreen() {
   const db = useDb();
   const todayKey = useCurrentDayKey();
   const habits = useAgendaHabits();
-  const { entriesByHabit } = useHabitEntries(todayKey);
   const actions = useHabitEntryActions(todayKey);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -68,6 +67,7 @@ export default function HabitsScreen() {
     const today = parseDateKey(todayKey);
     return Array.from({ length: DAYS_SHOWN }, (_, i) => addLocalDays(today, i - (DAYS_SHOWN - 1)));
   }, [todayKey]);
+  const { entriesByHabit } = useHabitEntries(toDateKey(days[0] ?? parseDateKey(todayKey)), todayKey, habits);
 
   const activeHabits = useMemo(() => habits.filter((habit) => habit.archivedAt == null), [habits]);
   const archived = habits.filter((habit) => habit.archivedAt != null);

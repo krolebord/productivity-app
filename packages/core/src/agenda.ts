@@ -149,6 +149,27 @@ export function isHabitArchivedOn(habit: Pick<AgendaHabit, "archivedAt">, dateKe
   return dateKeyOfMs(habit.archivedAt, timeZone) <= dateKey;
 }
 
+/** Enough history for a month's totals and for the previous occurrence of any calendar schedule. */
+const HABIT_ENTRY_LOOKBACK_DAYS = 31;
+
+/**
+ * The earliest entry date needed to show habits from `firstDayKey` onward, so screens load a
+ * window of entries instead of every entry ever recorded. Before the first shown day it covers:
+ * the calendar month a monthly habit sums, the last occurrence a calendar schedule can still be
+ * overdue for, and the longest "every N days" interval. An older completion can't change what is
+ * due: its next due date already lies before the first shown day.
+ */
+export function habitEntriesStartKey(
+  firstDayKey: string,
+  habits: readonly Pick<AgendaHabit, "scheduleType" | "scheduleInterval">[],
+): string {
+  let days = HABIT_ENTRY_LOOKBACK_DAYS;
+  for (const habit of habits) {
+    if (habit.scheduleType === "everyNDays") days = Math.max(days, habit.scheduleInterval);
+  }
+  return toDateKey(addLocalDays(parseDateKey(firstDayKey), -days));
+}
+
 function lastDoneDateBefore(
   habit: Pick<AgendaHabit, "target">,
   entries: HabitEntryValuesByDate | undefined,

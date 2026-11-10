@@ -4,7 +4,9 @@ import {
   buildAgendaSections,
   compareHabits,
   getDayHabitProgress,
+  getHabitProgressValue,
   getOverdueHabitOccurrence,
+  habitEntriesStartKey,
   isHabitDueOnDay,
   taskBucket,
   toDateKey,
@@ -652,5 +654,57 @@ describe("buildAgendaSections", () => {
 describe("toDateKey", () => {
   it("formats local calendar days", () => {
     expect(toDateKey(new Date(2026, 6, 9, 23, 30))).toBe("2026-07-09");
+  });
+});
+
+describe("habitEntriesStartKey", () => {
+  const firstDay = "2026-07-06";
+  const today = "2026-07-20";
+  const createdAt = new Date(2025, 0, 1).getTime();
+  const windowOf = (all: Map<string, number>, startKey: string) =>
+    new Map([...all].filter(([dateKey]) => dateKey >= startKey));
+  const shownDays = Array.from({ length: 21 }, (_, index) => toDateKey(new Date(2026, 6, 6 + index)));
+
+  it("reaches back a month, or the longest interval when that is longer", () => {
+    expect(habitEntriesStartKey(firstDay, [])).toBe("2026-06-05");
+    expect(habitEntriesStartKey(firstDay, [{ scheduleType: "everyNDays", scheduleInterval: 7 }])).toBe("2026-06-05");
+    expect(habitEntriesStartKey(firstDay, [{ scheduleType: "everyNDays", scheduleInterval: 60 }])).toBe("2026-05-07");
+    // Only "every N days" reads its interval.
+    expect(habitEntriesStartKey(firstDay, [{ scheduleType: "daily", scheduleInterval: 90 }])).toBe("2026-06-05");
+  });
+
+  it("keeps every shown day's result the same as with the whole history", () => {
+    const habits = [
+      habit({ id: "n3", scheduleType: "everyNDays", scheduleInterval: 3, createdAt }),
+      habit({ id: "n45", scheduleType: "everyNDays", scheduleInterval: 45, createdAt }),
+      habit({ id: "n60", scheduleType: "everyNDays", scheduleInterval: 60, createdAt }),
+      habit({ id: "weekly", scheduleType: "weekly", createdAt }),
+      habit({ id: "monthly", scheduleType: "monthly", target: 3, createdAt }),
+      habit({ id: "monthDays", scheduleType: "monthDays", scheduleMonthDays: [25], createdAt }),
+    ];
+    // Completions at, just inside and far outside the window, and inside the shown days.
+    const histories = [
+      entries(),
+      entries(["2025-03-01", 1]),
+      entries(["2026-05-06", 1], ["2026-05-07", 1]),
+      entries(["2026-05-20", 1], ["2026-06-04", 1]),
+      entries(["2026-06-05", 1], ["2026-06-25", 1]),
+      entries(["2026-07-01", 2], ["2026-07-05", 1]),
+      entries(["2025-12-31", 1], ["2026-07-03", 1], ["2026-07-08", 1], ["2026-07-15", 1]),
+    ];
+    const startKey = habitEntriesStartKey(firstDay, habits);
+
+    for (const h of habits) {
+      for (const all of histories) {
+        const loaded = windowOf(all, startKey);
+        for (const dateKey of shownDays) {
+          expect(isHabitDueOnDay(h, dateKey, today, loaded), `${h.id} due on ${dateKey}`).toBe(
+            isHabitDueOnDay(h, dateKey, today, all),
+          );
+          expect(getHabitProgressValue(h, dateKey, loaded)).toBe(getHabitProgressValue(h, dateKey, all));
+        }
+        expect(getOverdueHabitOccurrence(h, today, loaded)).toBe(getOverdueHabitOccurrence(h, today, all));
+      }
+    }
   });
 });

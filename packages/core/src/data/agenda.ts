@@ -14,6 +14,7 @@ import {
   getMonthGridDays,
   getWeekDays,
   type HabitEntryValuesByDate,
+  habitEntriesStartKey,
   isHabitPeriodSchedule,
   isTaskOverdueForToday,
   parseDateKey,
@@ -92,14 +93,28 @@ export function useInboxTasks() {
   return data as AgendaTask[];
 }
 
-/** Habit entries summed per habit and day, up to and including `endDateKey`. */
-export const habitEntriesQuery = (endDateKey: string) => (q: Kysely<UserDb>) =>
-  q.selectFrom("habit_entry").select(["id", "habitId", "date", "value"]).where("date", "<=", endDateKey);
+/** Habit entries dated `startDateKey` to `endDateKey`, both included. */
+export const habitEntriesQuery =
+  ({ startDateKey, endDateKey }: { startDateKey: string; endDateKey: string }) =>
+  (q: Kysely<UserDb>) =>
+    q
+      .selectFrom("habit_entry")
+      .select(["id", "habitId", "date", "value"])
+      .where("date", ">=", startDateKey)
+      .where("date", "<=", endDateKey);
 
-export function useHabitEntries(endDateKey: string) {
-  // All entries (local SQLite is cheap). Needed so everyNDays can find the last
-  // completion even when it falls outside the visible week.
-  const { data: entriesRaw } = useDbQuery(habitEntriesQuery(endDateKey));
+/**
+ * Habit entries summed per habit and day, for showing `habits` on the days from `firstDayKey`
+ * to `endDateKey`. Loads the history those days depend on (see habitEntriesStartKey) rather
+ * than every entry, which would grow, and be re-read on each check-off, forever.
+ */
+export function useHabitEntries(
+  firstDayKey: string,
+  endDateKey: string,
+  habits: readonly Pick<AgendaHabit, "scheduleType" | "scheduleInterval">[],
+) {
+  const startDateKey = habitEntriesStartKey(firstDayKey, habits);
+  const { data: entriesRaw } = useDbQuery(habitEntriesQuery({ startDateKey, endDateKey }));
 
   const entriesByHabit = useMemo(() => {
     const map = new Map<string, Map<string, number>>();
@@ -173,7 +188,7 @@ export function useAgenda(todayKey: string, { keepMonthGrid = false }: { keepMon
     overdueBeforeMs: todayStartMs,
   });
   const inboxTasks = useInboxTasks();
-  const { entriesByHabit } = useHabitEntries(entriesEndKey);
+  const { entriesByHabit } = useHabitEntries(toDateKey(visibleStart), entriesEndKey, habits);
 
   const dayInfos: CalendarDayInfo[] = useMemo(
     () =>

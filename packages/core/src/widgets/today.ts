@@ -5,6 +5,7 @@ import {
   type AgendaTaskRow,
   buildAgendaSections,
   compareHabits,
+  habitEntriesStartKey,
   orderTodaySectionRows,
   parseDateKey,
   parseScheduleMonthDays,
@@ -61,7 +62,8 @@ export function readTodayWidgetInputs(db: WidgetDbReader, { now, timeZone }: Wid
     )
     .sort(compareHabits);
   const entriesByHabit = new Map<string, Map<string, number>>();
-  for (const entry of readRows(db, habitEntriesQuery(keys[keys.length - 1]))) {
+  const entriesRange = { startDateKey: habitEntriesStartKey(keys[0], habits), endDateKey: keys[keys.length - 1] };
+  for (const entry of readRows(db, habitEntriesQuery(entriesRange))) {
     const entries = entriesByHabit.get(entry.habitId) ?? new Map<string, number>();
     entries.set(entry.date, (entries.get(entry.date) ?? 0) + entry.value);
     entriesByHabit.set(entry.habitId, entries);
