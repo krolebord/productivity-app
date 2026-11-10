@@ -7,6 +7,10 @@ import { Button } from "../../components/ui/button";
 import { useSession } from "../../lib/session";
 import { UserDbProvider } from "../../lib/user-db";
 
+// A cold widget/deep-link launch must still have somewhere to go when the editor closes,
+// including the system Back action. Keep the tabs beneath directly opened screens.
+export const unstable_settings = { anchor: "(tabs)" };
+
 // Item editors and other layers over the app (see docs/design-principles.md): a native sheet on
 // iOS, a short fade-and-rise on Android, which reads as "on top" rather than "deeper".
 const modal = {

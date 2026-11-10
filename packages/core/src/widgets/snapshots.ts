@@ -45,6 +45,8 @@ export type NotesWidgetSnapshot = SnapshotBase<"notes", "ok" | "empty" | "signed
 export type TodayWidgetRow = {
   id: string;
   title: string;
+  /** Habit rows open Today. Missing on older snapshots. */
+  kind?: "task" | "habit" | "event";
   /** "09:30" for timed rows, null for all-day ones. */
   time: string | null;
   /** Mirrored from a calendar (an event rather than a task). */
@@ -63,13 +65,13 @@ export type TodayWidgetDay = {
   endsAt: number;
   /** "Monday, November 9". */
   title: string;
-  /** Incomplete tasks due before this day: the count and the first few. */
+  /** Legacy snapshots: overdue tasks were listed separately. New snapshots include them in rows. */
   overdue: { count: number; rows: TodayWidgetRow[] };
-  /** This day's incomplete tasks and events: timed ones by time, then all-day. Trimmed; see `remaining`. */
+  /** Unfinished inbox and agenda rows in Today order, capped at ten. */
   rows: TodayWidgetRow[];
-  /** All of this day's incomplete tasks and events (`rows` may hold fewer). */
+  /** All unfinished inbox and agenda rows (`rows` may hold fewer). */
   remaining: number;
-  /** This day's tasks and events, done and total (completed rows aren't listed). */
+  /** Done and total across inbox and agenda items (completed rows are not listed). */
   done: number;
   total: number;
 };
@@ -89,7 +91,7 @@ export type TodayWidgetSnapshot = SnapshotBase<"today", "ok" | "signedOut" | "st
 export type FinancesWidgetCategory = {
   name: string;
   amount: string;
-  /** Share of the month's expenses, 0–1. */
+  /** Share of the selected period's expenses, 0–1. */
   share: number;
 };
 
@@ -102,11 +104,15 @@ export type FinancesWidgetSnapshot = SnapshotBase<"finances", "ok" | "empty" | "
   netWorthCompact: string;
   /** Net worth change since the start of the month; null when a rate is missing for either end. */
   change: { amount: string; compact: string; direction: "up" | "down" | "flat" } | null;
-  /** "November". */
+  /** Income minus expenses in the saved dashboard period; absent in older snapshots. */
+  net?: { amount: string; compact: string; direction: "up" | "down" | "flat" };
+  /** Selected dashboard range, e.g. "Last 30 days" or "Since the 25th". */
+  periodLabel?: string;
+  /** Legacy period label. */
   monthLabel: string;
   income: string;
   expense: string;
-  /** Top spending categories this month, biggest first. */
+  /** Top spending categories in the selected dashboard period, biggest first. */
   categories: FinancesWidgetCategory[];
   /** Why some money isn't counted ("2 accounts not converted"), or null. */
   notice: string | null;

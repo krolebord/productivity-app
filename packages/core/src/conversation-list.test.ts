@@ -18,6 +18,7 @@ function item(overrides: Partial<ConversationListItem> & Pick<ConversationListIt
   const updatedAt = overrides.updatedAt ?? 0;
   return {
     title: "",
+    pinned: false,
     updatedAt,
     lastReadAt: overrides.lastReadAt !== undefined ? overrides.lastReadAt : updatedAt,
     turnStatus: "idle",
@@ -206,4 +207,17 @@ describe("conversationActivityLabel", () => {
       "2 chats running, 1 chat finished, 1 chat failed",
     );
   });
+});
+
+it("puts pinned chats first in activity order without duplicating unread or running chats", () => {
+  const rows = [
+    item({ id: "old", pinned: true, updatedAt: 1, lastReadAt: 0 }),
+    item({ id: "new", pinned: true, updatedAt: 3, turnStatus: "running" }),
+    item({ id: "other", updatedAt: 2 }),
+  ];
+  const sections = groupConversations({ conversations: rows, nowMs: 10 });
+  expect(sections[0].kind).toBe("pinned");
+  expect(sections[0].conversations.map((row) => row.id)).toEqual(["new", "old"]);
+  expect(sections.flatMap((section) => section.conversations)).toHaveLength(3);
+  expect(rows.filter(isConversationUnread).map((row) => row.id)).toEqual(["old"]);
 });

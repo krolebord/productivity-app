@@ -1,3 +1,5 @@
+import { isConversationUnread } from "@productivity/core/conversation-list";
+import { useConversations } from "@productivity/core/data/conversations";
 import { useIntegrationsHasError } from "@productivity/core/data/integrations";
 import { useDb, useDbState } from "@productivity/core/user-db/db-context";
 import { formatForDisplay } from "@tanstack/hotkeys";
@@ -223,6 +225,7 @@ function SidebarPanelRow({ collapsed, onNavigate }: { collapsed: boolean; onNavi
   const activePanel = useAssistantStore((s) => s.activePanel);
   const { togglePanel } = useAssistantNavigation();
   const assistantEnabled = useAssistantEnabled();
+  const unread = useConversations().filter(isConversationUnread).length;
 
   return (
     <div className={cn("flex gap-1 p-2", collapsed ? "flex-col items-center" : "flex-row")}>
@@ -249,6 +252,7 @@ function SidebarPanelRow({ collapsed, onNavigate }: { collapsed: boolean; onNavi
           <SidebarPanel
             icon={Sparkles}
             label="Assistant"
+            unreadCount={unread}
             isOpen={activePanel === "assistant" || location.isPath("/assistant")}
             collapsed={collapsed}
             hotkey={TOGGLE_ASSISTANT_HOTKEY}
@@ -261,6 +265,7 @@ function SidebarPanelRow({ collapsed, onNavigate }: { collapsed: boolean; onNavi
           <SidebarPanel
             icon={Sparkles}
             label="Assistant"
+            unreadCount={unread}
             isOpen={location.isPath("/assistant")}
             collapsed={collapsed}
             target={{ to: "/assistant" }}
@@ -470,6 +475,7 @@ function MobileSidebar() {
   // On Today the second FAB would only re-open the same page, so it becomes
   // the assistant shortcut instead. That's the pair you hop between on a phone.
   const stackedToAssistant = location.isPath("/today") && assistantEnabled;
+  const unread = useConversations().filter(isConversationUnread).length;
 
   useEffect(() => {
     return router.subscribe("onBeforeNavigate", () => setOpen(false));
@@ -515,9 +521,19 @@ function MobileSidebar() {
           size: "icon",
           className: cn("!rounded-full fixed right-[4.25rem] z-40 size-11 shadow-lg md:hidden", FAB_BOTTOM),
         })}
-        aria-label={stackedToAssistant ? "Open assistant" : "Open today"}
+        aria-label={
+          stackedToAssistant ? (unread ? `Open assistant, ${unread} unread chats` : "Open assistant") : "Open today"
+        }
       >
         {stackedToAssistant ? <Sparkles className="size-5" /> : <CalendarCheck className="size-5" />}
+        {stackedToAssistant && unread > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-primary-foreground text-xs"
+          >
+            {unread}
+          </span>
+        )}
       </Link>
 
       <Button

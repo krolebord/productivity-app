@@ -11,11 +11,28 @@ import {
   summarizeConversationActivity,
   turnElapsedLabel,
 } from "@productivity/core/conversation-list";
-import { useConversationTurnStarts } from "@productivity/core/data/conversations";
-import { ChevronLeft, CircleAlert, Loader2, PlusIcon, Sparkles, Trash2 } from "lucide-react";
+import { setConversationPinned, useConversationTurnStarts } from "@productivity/core/data/conversations";
+import { useDb } from "@productivity/core/user-db/db-context";
+import {
+  ChevronLeft,
+  CircleAlert,
+  Loader2,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  PlusIcon,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { AssistantHeaderActions } from "@/components/assistant/assistant-header-actions";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAssistantNavigation } from "@/lib/use-assistant-navigation";
 import { useIsAssistantPage } from "@/lib/use-assistant-surface";
@@ -39,36 +56,51 @@ function useNowMs(fast: boolean) {
   return nowMs;
 }
 
-function ConversationDeleteButton({
+function ConversationActions({
   label,
+  pinned,
+  onPin,
   onDelete,
   className,
 }: {
   label: string;
+  pinned: boolean;
+  onPin: () => void;
   onDelete: () => void;
   className?: string;
 }) {
   const confirm = useConfirmDialogStore((s) => s.confirm);
   return (
-    <button
-      type="button"
-      className={cn(
-        "shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-destructive",
-        className,
-      )}
-      aria-label={`Delete ${label}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        confirm({
-          title: "Delete conversation",
-          description: `"${label}" will be permanently deleted. This cannot be undone.`,
-          confirmLabel: "Delete",
-          onConfirm: onDelete,
-        });
-      }}
-    >
-      <Trash2 className="size-3.5" />
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          "shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground data-popup-open:opacity-100",
+          className,
+        )}
+        aria-label={`Actions for ${label}`}
+      >
+        <MoreHorizontal className="size-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onPin}>
+          {pinned ? <PinOff /> : <Pin />}
+          {pinned ? "Unpin conversation" : "Pin conversation"}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          onClick={() =>
+            confirm({
+              title: "Delete conversation",
+              description: `"${label}" will be permanently deleted. This cannot be undone.`,
+              confirmLabel: "Delete",
+              onConfirm: onDelete,
+            })
+          }
+        >
+          <Trash2 /> Delete conversation
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -161,6 +193,7 @@ function ConversationRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  const db = useDb();
   const label = conversationTitle(conversation);
   const statusLabel = ROW_STATUS_LABELS[status];
 
@@ -190,11 +223,13 @@ function ConversationRow({
         <span className={cn("truncate text-sm", active ? "font-semibold" : "font-medium")}>{label}</span>
       </button>
       <div className="grid shrink-0 items-center justify-items-end pl-2">
-        <ConversationDeleteButton
+        <ConversationActions
           label={label}
+          pinned={conversation.pinned}
+          onPin={() => setConversationPinned(db.db, conversation.id, !conversation.pinned)}
           onDelete={onDelete}
           className={cn(
-            "peer col-start-1 row-start-1 z-10",
+            "peer z-10 col-start-1 row-start-1",
             "opacity-100 md:pointer-events-none md:opacity-0",
             "md:group-hover:pointer-events-auto md:group-hover:opacity-100",
             "md:focus:pointer-events-auto md:focus:opacity-100",
@@ -202,8 +237,8 @@ function ConversationRow({
         />
         <span
           className={cn(
-            "col-start-1 row-start-1 pointer-events-none font-mono text-[11px] tabular-nums",
-            "max-md:opacity-0 md:group-hover:opacity-0 md:peer-focus:opacity-0",
+            "pointer-events-none col-start-1 row-start-1 font-mono text-[11px] tabular-nums",
+            "max-md:opacity-0 md:peer-focus:opacity-0 md:group-hover:opacity-0",
             status === "running" ? "text-primary" : "text-muted-foreground",
           )}
         >

@@ -30,8 +30,10 @@ import type { UserDb } from "../user-db/migrations";
 import { setHabitEntryValue as writeHabitEntryValue } from "./habits";
 import { createTask as insertTask, rescheduleTask, scheduleAllDayTask, setTaskCompleted } from "./tasks";
 
+export const agendaHabitsQuery = (q: Kysely<UserDb>) => q.selectFrom("habit").selectAll();
+
 export function useAgendaHabits(): AgendaHabit[] {
-  const { data: habitsRaw } = useDbQuery((q) => q.selectFrom("habit").selectAll());
+  const { data: habitsRaw } = useDbQuery(agendaHabitsQuery);
 
   return useMemo(
     () =>
@@ -75,27 +77,29 @@ export function useScheduledTasks(range: ScheduledTasksRange) {
   return data as AgendaTask[];
 }
 
+export const inboxTasksQuery = (q: Kysely<UserDb>) =>
+  q
+    .selectFrom("item")
+    .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order", "providerType"])
+    .where("type", "=", "task")
+    .where("dueAt", "is", null)
+    .where("completedAt", "is", null)
+    .orderBy("order", "asc")
+    .orderBy("createdAt", "asc");
+
 export function useInboxTasks() {
-  const { data } = useDbQuery((q) =>
-    q
-      .selectFrom("item")
-      .select(["id", "title", "content", "dueAt", "hasDueTime", "completedAt", "order", "providerType"])
-      .where("type", "=", "task")
-      .where("dueAt", "is", null)
-      .where("completedAt", "is", null)
-      .orderBy("order", "asc")
-      .orderBy("createdAt", "asc"),
-  );
+  const { data } = useDbQuery(inboxTasksQuery);
   return data as AgendaTask[];
 }
 
 /** Habit entries summed per habit and day, up to and including `endDateKey`. */
+export const habitEntriesQuery = (endDateKey: string) => (q: Kysely<UserDb>) =>
+  q.selectFrom("habit_entry").select(["id", "habitId", "date", "value"]).where("date", "<=", endDateKey);
+
 export function useHabitEntries(endDateKey: string) {
   // All entries (local SQLite is cheap). Needed so everyNDays can find the last
   // completion even when it falls outside the visible week.
-  const { data: entriesRaw } = useDbQuery((q) =>
-    q.selectFrom("habit_entry").select(["id", "habitId", "date", "value"]).where("date", "<=", endDateKey),
-  );
+  const { data: entriesRaw } = useDbQuery(habitEntriesQuery(endDateKey));
 
   const entriesByHabit = useMemo(() => {
     const map = new Map<string, Map<string, number>>();

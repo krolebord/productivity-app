@@ -212,6 +212,7 @@ export function SidebarPanel({
   isOpen,
   collapsed,
   hotkey,
+  unreadCount = 0,
   onToggle,
   target,
   onNavigate,
@@ -222,26 +223,38 @@ export function SidebarPanel({
   isOpen: boolean;
   collapsed: boolean;
   hotkey?: string;
+  unreadCount?: number;
   onToggle?: () => void;
   /** When set, the panel is a page instead (mobile). */
   target?: SidebarLinkTarget;
   onNavigate?: () => void;
 }) {
   const className = cn(
-    "flex items-center justify-center gap-1.5 rounded-md border border-transparent py-1.5 font-medium text-sm transition-colors",
+    "relative flex items-center justify-center gap-1.5 rounded-md border border-transparent py-1.5 font-medium text-sm transition-colors",
     collapsed ? "size-8" : "flex-1 px-2",
     isOpen
       ? "border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground"
       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
   );
-  const tooltipLabel = hotkey ? `${label} (${formatForDisplay(hotkey)})` : label;
+  const showBadge = unreadCount > 0 && !isOpen;
+  const activityLabel = showBadge ? `${label}, ${unreadCount} unread chats` : label;
+  const tooltipLabel = hotkey ? `${activityLabel} (${formatForDisplay(hotkey)})` : activityLabel;
+  const badge = showBadge && (
+    <span
+      aria-hidden="true"
+      className="absolute top-0 right-0 flex h-4 min-w-4 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary px-0.5 text-[10px] text-primary-foreground leading-none"
+    >
+      {unreadCount > 9 ? "9+" : unreadCount}
+    </span>
+  );
 
   if (target) {
     return (
       <SidebarTooltip label={tooltipLabel} collapsed={collapsed}>
-        <Link {...target} viewTransition onClick={onNavigate} className={className}>
+        <Link {...target} viewTransition onClick={onNavigate} className={className} aria-label={activityLabel}>
           <Icon className="size-4 shrink-0" />
           {!collapsed && label}
+          {badge}
         </Link>
       </SidebarTooltip>
     );
@@ -253,12 +266,13 @@ export function SidebarPanel({
         type="button"
         onClick={onToggle}
         aria-pressed={isOpen}
-        aria-label={isOpen ? `Close ${label.toLowerCase()} panel` : `Open ${label.toLowerCase()} panel`}
+        aria-label={`${isOpen ? "Close" : "Open"} ${label.toLowerCase()} panel${showBadge ? `, ${unreadCount} unread chats` : ""}`}
         aria-keyshortcuts={hotkey}
         className={className}
       >
         <Icon className="size-4 shrink-0" />
         {!collapsed && label}
+        {badge}
       </button>
     </SidebarTooltip>
   );

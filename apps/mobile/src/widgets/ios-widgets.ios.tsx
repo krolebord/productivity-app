@@ -258,18 +258,11 @@ const TodayLayout = (input: Partial<TodayWidgetSnapshot> | undefined, env: Widge
       <HStack spacing={8} modifiers={[fixedSize({ vertical: true })]}>
         <Label
           title="Task"
-          systemImage="square"
+          systemImage={item.kind === "habit" ? "repeat" : item.event ? "calendar" : "square"}
           modifiers={[labelStyle("iconOnly"), font({ size: 15 }), foregroundStyle(c.muted)]}
         />
-        <Text modifiers={[font({ size: 15 }), lineLimit(1), foregroundStyle(c.foreground)]}>{item.title}</Text>
+        <Text modifiers={[font({ size: 15 }), lineLimit(2), foregroundStyle(c.foreground)]}>{item.title}</Text>
         <Spacer />
-        {item.event ? (
-          <Label
-            title="Event"
-            systemImage="calendar"
-            modifiers={[labelStyle("iconOnly"), font({ size: 12 }), foregroundStyle(c.muted)]}
-          />
-        ) : null}
         {trailing ? (
           <Text
             modifiers={[font({ size: 13 }), monospacedDigit(), foregroundStyle(item.due ? c.destructive : c.muted)]}
@@ -407,8 +400,7 @@ const FinancesLayout = (input: Partial<FinancesWidgetSnapshot> | undefined, env:
   if (props.state === "signedOut") return root(links?.open, message("Sign in", "to see your finances"));
   if (props.state === "empty") return root(links?.finances, message("No accounts yet", "Add one in Finances"));
 
-  const change = props.change;
-  const arrow = change?.direction === "up" ? "↑" : change?.direction === "down" ? "↓" : "→";
+  const change = props.net;
   const changeColor = change?.direction === "up" ? c.income : change?.direction === "down" ? c.expense : c.muted;
   const summary = (
     <VStack alignment="leading" spacing={2} modifiers={[frame({ maxWidth: Infinity, alignment: "topLeading" })]}>
@@ -425,10 +417,10 @@ const FinancesLayout = (input: Partial<FinancesWidgetSnapshot> | undefined, env:
       </Text>
       {change ? (
         <Text modifiers={[font({ size: 13, weight: "semibold" }), lineLimit(1), foregroundStyle(changeColor)]}>
-          {`${arrow} ${medium ? change.amount : change.compact}`}
+          {`Net ${medium ? change.amount : change.compact}`}
         </Text>
       ) : null}
-      {change ? label("this month") : null}
+      {change ? label(props.periodLabel ?? "") : null}
       <Spacer />
       {props.notice ? (
         <Text modifiers={[font({ size: 10 }), lineLimit(2), foregroundStyle(c.muted)]}>{props.notice}</Text>
@@ -456,7 +448,7 @@ const FinancesLayout = (input: Partial<FinancesWidgetSnapshot> | undefined, env:
     <HStack key="columns" alignment="top" spacing={16}>
       {summary}
       <VStack alignment="leading" spacing={3} modifiers={[frame({ maxWidth: Infinity, alignment: "topLeading" })]}>
-        {label(props.monthLabel ?? "This month")}
+        {label(props.periodLabel ?? "")}
         {amount("Income", props.income, c.income, false)}
         {amount("Spent", props.expense, c.expense, false)}
         <Spacer />
@@ -513,7 +505,8 @@ const FINANCES_PLACEHOLDER = {
   currency: "USD",
   netWorth: "$12,480.00",
   netWorthCompact: "$12.5K",
-  change: { amount: "+$320.00", compact: "+$320", direction: "up" },
+  net: { amount: "+$2,050.00", compact: "+$2.1K", direction: "up" },
+  periodLabel: "Last 30 days",
   monthLabel: "This month",
   income: "$4,200.00",
   expense: "$2,150.00",

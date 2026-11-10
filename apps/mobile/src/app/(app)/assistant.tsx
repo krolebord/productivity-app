@@ -16,6 +16,7 @@ import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, uploadTotalBytes } from "@productiv
 import { conversationTitle, summarizeConversationActivity } from "@productivity/core/conversation-list";
 import {
   catchUpConversationLastRead,
+  setConversationPinned,
   useConversationMessages,
   useConversations,
 } from "@productivity/core/data/conversations";
@@ -157,6 +158,7 @@ function ChatView({ conversationId, onShowChats }: { conversationId: string; onS
   const focused = useIsFocused();
   const conversations = useConversations();
   const deleteConversation = useDeleteConversation();
+  const pinDb = useDb();
   const [menuOpen, setMenuOpen] = useState(false);
   const conversation = conversations.find((row) => row.id === conversationId) ?? null;
   const activity = summarizeConversationActivity({ conversations, activeConversationId: conversationId });
@@ -207,6 +209,13 @@ function ChatView({ conversationId, onShowChats }: { conversationId: string; onS
         title={usage}
         onClose={() => setMenuOpen(false)}
         items={[
+          {
+            label: conversation?.pinned ? "Unpin conversation" : "Pin conversation",
+            icon: "bookmark",
+            onPress: () => {
+              if (conversation) setConversationPinned(pinDb.db, conversation.id, !conversation.pinned);
+            },
+          },
           {
             label: "Delete conversation",
             icon: "trash-2",

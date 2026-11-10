@@ -8,24 +8,12 @@ import {
 } from "@productivity/core/widgets/snapshots";
 import { FlexWidget, TextWidget } from "react-native-android-widget";
 import type { WidgetPalette } from "../theme";
-import {
-  CalendarIcon,
-  Header,
-  type LayoutProps,
-  List,
-  Message,
-  MORE_ROW_HEIGHT,
-  MoreRow,
-  openUri,
-  Shell,
-  Square,
-} from "./components";
+import { CalendarIcon, Header, type LayoutProps, List, Message, MoreRow, openUri, Shell, Square } from "./components";
 
-const ROW_HEIGHT = 30;
 const SECTION_HEIGHT = 22;
 
 /**
- * Today, simplified: overdue tasks, then the day's open tasks and events in a scrolling list, and
+ * Today, simplified: unfinished inbox and agenda items in page order in a scrolling list, and
  * how many are done. The list holds the whole snapshot; "+N more" opens Today for what it left out.
  * The snapshot carries today and tomorrow; this picks by the clock at draw time, and the widget's
  * periodic update (app.json) redraws it from the file after midnight. Once tomorrow has ended too
@@ -78,7 +66,7 @@ export function TodayWidget({
           colors={colors}
         />
       ) : (
-        <List>
+        <List marginBottom={8}>
           {overdue.count > 0 ? (
             <FlexWidget
               key="overdue"
@@ -102,9 +90,7 @@ export function TodayWidget({
           ) : null}
         </List>
       )}
-      <FlexWidget
-        style={{ height: MORE_ROW_HEIGHT, width: "match_parent", flexDirection: "row", alignItems: "center" }}
-      >
+      <FlexWidget style={{ paddingVertical: 4, width: "match_parent", flexDirection: "row", alignItems: "center" }}>
         <FlexWidget style={{ flex: 1 }}>
           <TextWidget
             text={day && day.total > 0 ? `${day.done} of ${day.total} done` : ""}
@@ -113,7 +99,7 @@ export function TodayWidget({
           />
         </FlexWidget>
         {links ? (
-          <FlexWidget {...openUri(links.today)} style={{ height: "match_parent", justifyContent: "center" }}>
+          <FlexWidget {...openUri(links.today)} style={{ justifyContent: "center" }}>
             <TextWidget
               text="Open Today"
               maxLines={1}
@@ -131,13 +117,18 @@ function Row({ row, colors }: { row: TodayWidgetRow; colors: WidgetPalette }) {
   return (
     <FlexWidget
       {...openUri(row.url)}
-      style={{ height: ROW_HEIGHT, width: "match_parent", flexDirection: "row", alignItems: "center" }}
+      style={{ paddingVertical: 4, width: "match_parent", flexDirection: "row", alignItems: "center" }}
     >
-      <Square colors={colors} />
+      {row.event ? (
+        <CalendarIcon colors={colors} />
+      ) : row.kind === "habit" ? (
+        <TextWidget text="↻" style={{ fontSize: 16, color: colors.mutedForeground, marginRight: 8 }} />
+      ) : (
+        <Square colors={colors} />
+      )}
       <FlexWidget style={{ flex: 1 }}>
-        <TextWidget text={row.title} maxLines={1} style={{ fontSize: 14, color: colors.foreground }} />
+        <TextWidget text={row.title} maxLines={2} style={{ fontSize: 14, color: colors.foreground }} />
       </FlexWidget>
-      {row.event ? <CalendarIcon colors={colors} /> : null}
       {trailing ? (
         <TextWidget
           text={trailing}

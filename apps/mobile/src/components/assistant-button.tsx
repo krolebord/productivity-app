@@ -1,7 +1,8 @@
 import type { AttachRef } from "@productivity/core/agent/attach";
+import { isConversationUnread } from "@productivity/core/conversation-list";
 import { useConversations } from "@productivity/core/data/conversations";
 import { useRouter } from "expo-router";
-import { Platform, Pressable } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { attachToAssistant, startConversationId } from "../lib/assistant-chats";
 import { setPreference } from "../lib/preferences";
@@ -26,10 +27,11 @@ export function AssistantButton() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const conversations = useConversations();
+  const unread = conversations.filter(isConversationUnread).length;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Open assistant"
+      accessibilityLabel={unread ? `Open assistant, ${unread} unread chats` : "Open assistant"}
       onPress={() => {
         const id = startConversationId(conversations);
         setPreference("assistantConversationId", id);
@@ -39,6 +41,11 @@ export function AssistantButton() {
       style={{ bottom: insets.bottom + TAB_BAR_CLEARANCE }}
     >
       <Icon name="message-circle" size={24} colorClassName="accent-primary-foreground" />
+      {unread > 0 && (
+        <View className="absolute -top-1 -right-1 h-5 min-w-5 items-center justify-center rounded-full border-2 border-background bg-primary px-1">
+          <Text className="font-medium text-primary-foreground text-xs">{unread}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }

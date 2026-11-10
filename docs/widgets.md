@@ -7,8 +7,8 @@ library bugs are in [widgets-research.md](widgets-research.md).
 | Kind | iOS families | Android | Shows |
 |---|---|---|---|
 | Notes | `systemSmall`, `systemLarge` | opens 2×2, resizable to 4×4; titles only below ~250 dp wide, cards with a preview above | the first 10 notes in the Notes tab's manual order (small: 4 titles) |
-| Today | `systemLarge` | opens 4×4, minimum 4×3 | date, overdue (count + first three), the day's open tasks and events (timed by time, then all-day; up to 10), "x of y done" |
-| Finances | `systemSmall`, `systemMedium` | opens 2×2, widens to 4×2 (horizontal resize only) | net worth in the display currency and its change this month; wide/medium adds the month's income, spending and top 3 categories |
+| Today | `systemLarge` | opens 4×4, minimum 4×3 | date, first 10 unfinished inbox tasks and agenda items (including habits) in Today page order; titles up to two lines, "x of y done" |
+| Finances | `systemSmall`, `systemMedium` | opens 2×2, resizes horizontally and vertically down to 2×1 | current net worth in the display currency and Net (income minus expenses) for the saved dashboard period; wide adds income/spending, with top 3 categories when at least 160 dp tall |
 
 **Lists show the whole snapshot** (up to 10 rows), and the widget's size decides how many are visible.
 Android puts them in a scrolling `ListWidget`, ending with "View N more" / "+N more" for what the
@@ -39,8 +39,8 @@ user DB ──queries──▶ core builders ──snapshot per kind──▶ pu
 - `notes.ts`, `today.ts`, `finances.ts`: per kind, a reader (`read…Inputs(db, ctx)`) that runs the
   queries and a pure builder (`build…Snapshot(inputs, ctx)`). They reuse the app's domain code:
   `notesListQuery` and `markdownToPreviewText` for notes; `scheduledTasksQuery`, `buildAgendaSections` and
-  `taskLabel` for Today; `createAmountConverter`, `sumNetWorth`, `sumFlowTotals`, `topCategories` and
-  `netWorthQuery` for Finances. Dates, money and previews are formatted in the snapshot, in the
+  `taskLabel` and `orderTodaySectionRows` for Today; `createAmountConverter`, `sumNetWorth`, `sumFlowTotals`, `topCategories` and
+  `resolveDashboardRange` for Finances. Dates, money and previews are formatted in the snapshot, in the
   app's formats (English, money via `currency/format.ts`), in the device's time zone (what the app's own
   Today and Finances screens use).
 - `reader.ts`: wraps the DB so every query a reader runs is recorded; `build.ts` returns the snapshots
@@ -96,7 +96,7 @@ publishes them as a two-entry timeline, the second dated at the next local midni
 over without the app. Android has no timeline: the handler picks the day for the current time
 (`pickTodayWidgetDay`) whenever it draws, and the Today widget sets `updatePeriodMillis` (30 min, the
 minimum) so Android redraws it from the file after midnight. Notes and Finances don't depend on the
-clock within a day; Finances' month rolls over when the app next publishes.
+clock within a day; Finances' selected dashboard period advances when the app next publishes.
 
 **Stale Today.** Nothing refreshes widgets in the background in v1, so a snapshot runs out when
 tomorrow ends (`todayWidgetExpiresAt`: the last day's `endsAt`). Past that, a widget would show an old
@@ -116,6 +116,10 @@ routes, rewritten in `src/app/+native-intent.tsx`:
 - `note/new`, `task/new` → a fresh draft id (a widget's links are fixed when drawn, so it can't mint one per tap);
 - `today` → `/`, and it marks the launch so the "default home: Finances" preference doesn't redirect it
   (`lib/launch-link.ts`).
+
+The app stack anchors direct links to `(tabs)`. Cold-started editors therefore have the app beneath
+them: both the header close button and Android Back return to the tabs rather than doing nothing or
+exiting. Test dismissal after a direct launch, as well as checking that a widget opens its editor.
 
 Android: links are `clickAction: "OPEN_URI"` per view, handled natively (no JS runs on a tap). iOS:
 `widgetURL` for the whole widget, `Link` per row on medium/large. **`Link` doesn't work in
@@ -156,6 +160,11 @@ Android: links are `clickAction: "OPEN_URI"` per view, handled natively (no JS r
   snapshot or redraw from incomplete data.
 - **Android handler stays cheap:** it may run in a headless, cold process (resize, periodic update,
   reboot). It only reads `widgets/<kind>.json`; it never opens the DB.
+- **Android text measures its own header.** Native TextViews include font padding and scale with
+  system text settings; a fixed-height two-line header clipped Today's date on a physical phone.
+- **Finances adapts to height too.** Below 160 dp it uses smaller padding/type and omits categories;
+  missing-rate notices take priority over period Net in that short layout. Its 40 dp native
+  minimum permits one launcher row; the default remains 2×2. Launcher cell dimensions vary.
 - **Fast Refresh doesn't re-run `createWidget`.** After editing an iOS layout, reload the app.
 - **Biome** (`noRestrictedImports`) keeps `expo-widgets`/`@expo/ui` in `ios-widgets.ios.tsx` and
   `react-native-android-widget` in the Android files. Biome applies only the last matching override's
@@ -283,3 +292,92 @@ measurements above predate the final mask fix. No commits, pushes, EAS builds or
 Both devices are shut down; chronod is disabled. Android was left signed in to the seeded test
 account, with system light appearance and normal midnight snapshots restored. Test Metro and tunnel were stopped. The pre-existing API and unrelated Tailnet presets were
 left alone.
+
+### Android phone follow-up
+
+A physical-phone report exposed two gaps in the earlier emulator checks: Today's two-line header
+clipped the date, and a directly launched editor had no app screen beneath it to return to. The
+Android header now measures its text naturally instead of imposing a 36 dp height. The app stack
+exports `unstable_settings.anchor: "(tabs)"`, providing a shared destination for header dismissal and
+Android Back after direct editor launches.
+
+Finances also now allows vertical resizing down to 2×1 while retaining its 2×2 default. Below 160 dp
+it reduces padding/type, omits spending categories, and keeps income/spending only at wide widths.
+Placeholder, empty and signed-out states also fit the short layout. This native sizing change
+requires a new APK.
+
+Validation: workspace typecheck, Biome (the same six existing web warnings), all 17 widget builder
+tests, and a local x86_64 Debug build passed. Device re-verification could not be completed: the Mac
+was unreachable; the local emulator booted but showed a System UI ANR, then failed its restart with
+KVM access denied. No new widget screenshots were obtained. The date at larger text sizes, one-row
+Finances at narrow/wide widths, and header/system Back after cold editor launches still need device
+checks. The local emulator was shut down, temporary KVM permissions restored, and owned test services
+stopped. No release memory measurements were taken.
+
+The updated Android preview APK was submitted to EAS:
+[widget fixes build](https://expo.dev/accounts/krolebord/projects/productivity/builds/c238771b-fc78-41ef-8817-8befe71f8ca0).
+It uses the production API, existing release app identity and existing Android credentials. No OTA
+update or store submission was made.
+
+### Dashboard and Today consistency
+
+Today includes the unfinished inbox first, then agenda sections in the mobile page's actual display
+order, including habits. One ten-item cap applies to the combined list, including overdue items.
+Completed items contribute to the completion summary but are not drawn. Habits use a simple repeat
+icon and open Today; they do not expose interactive progress controls. Both platform layouts allow
+up to two title lines. Android rows measure their content, including system text scaling.
+
+Finances reads the saved rolling-day or custom-cycle dashboard range. Net worth is the current
+included-account balance; **Net** beneath it is income minus expenses for that selected period,
+matching the finance page. Income, expenses and categories share that range and currency converter.
+The old monthly net-worth-change field is not reused as Net when rendering a cached snapshot.
+
+### QoL follow-up verification
+
+The combined Today/Finances and chat pin/badge changes passed workspace typecheck, Biome (three
+existing warnings), all 379 core tests across 37 files, and Android/iOS release-mode JavaScript
+exports with React Compiler and Hermes. These exports do not verify native widget rendering.
+An independent verifier reran the then-current 376 tests and found no confirmed defect in the
+reviewed paths. Follow-up regression coverage also checks existing-conversation migration/defaults,
+pinning without changing read receipts, dashboard cycle/range edits and counted habit completion.
+The final code pass also added the unread badge to desktop Assistant sidebar controls, alongside
+the narrow-screen web shortcut and mobile FAB; the web typecheck passed afterward.
+
+Targeted live checks subsequently passed on web, a matching iOS Debug simulator build and a matching
+Android Debug emulator build (2026-11-10). The browser blocker was the host's AppArmor restriction on
+Chrome's sandbox; the tool-prescribed `t3 browser setup --base-dir /home/agent/.t3` installed the host
+permission and browser checks then worked.
+
+- Web: chat menu pin/unpin, Pinned ordering without duplicates, pin persistence after reload,
+  preservation of unread state on pinning, per-chat read receipts, desktop/sidebar and narrow-screen
+  unread badges. Running chats were excluded; finished and failed unread chats counted. Pin changes
+  synced between web, iOS and Android without changing activity/read timestamps.
+- iOS: the FAB unread count, chat list and unpin action; Today two-line task/habit titles, section
+  order and ten-row cap in light/dark; habit links opening Today and completion removing the row and
+  updating the summary. Finances small/medium showed the custom cycle's Net $0 and unchanged $14,460
+  net worth; restoring Last 30 days restored Net +$1,960, income $3,000 and spending $1,040.
+- Android: old installed data upgraded through migration 28, pins and unread badges matched web,
+  and viewing the last unread chat cleared the badge. Today passed at 4×4 and 4×3, including scrolling,
+  two-line titles, fixed header/footer and the ten-row cap. Dark mode at 1.35 system font scale kept
+  the date and rows readable. Habit links and completion refreshed the widget and its summary.
+  Finances passed at 2×1, 4×1, 2×2 and 4×2 in light/dark. One-row widgets omit categories; the narrow
+  layout retains the selected period beside Net, while wider layouts put it above income/spending.
+
+These checks found and fixed two defects: a new `change: null` placeholder field crashed iOS
+`createWidget` even with a matching binary, and Android's Today footer needed natural height and a
+gap beneath the variable-height list. The finance period label was also moved to avoid clipping.
+All were rechecked on the affected platform. Android's Expo development client sometimes failed
+after headless widget launches/reloads; restarting the client recovered it. Cold release lifecycle
+behavior was not retested in this pass.
+
+Fresh screenshots are under `/tmp/widgets-v1-screenshots/qol-*`, including
+`qol-web-pins-unread.png`, `qol-ios-today-{light,dark}.png`,
+`qol-ios-finances-medium-30days.png`, `qol-android-today-4x3-dark-large-text.png`, and
+`qol-android-finances-{2x1-4x1,2x2-4x2}-{light,dark}.png`. The unchanged Notes layouts, signed-out/empty
+states and midnight delivery use the prior evidence above; those were not repeated. No release
+builds or memory measurements were performed. Temporary task dates and dashboard settings were
+restored, this pass's test rows removed, and appearance/text size restored. Devices and owned test
+services were stopped; iOS chronod was disabled again.
+
+Conversation pins require user DB migration 28 on the server. Deploy the server before rolling out
+clients with the new column. These QoL changes were not deployed or published as an OTA.

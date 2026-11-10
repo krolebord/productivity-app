@@ -465,6 +465,15 @@ const migrations = createMigrations((b) => ({
       build: (col) => col.notNull(),
     }),
   ],
+  28: [
+    b.addColumn({
+      table: "_conversation",
+      column: "pinned",
+      type: "boolean",
+      defaultValue: false,
+      build: (col) => col.notNull(),
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -604,6 +613,7 @@ export const syncDbSchema = defineSyncSchema({
     conversation: t.table(
       {
         title: t.text().default(""),
+        pinned: t.boolean().default(false),
         createdAt: t.integer(),
         updatedAt: t.integer(),
         lastReadAt: t

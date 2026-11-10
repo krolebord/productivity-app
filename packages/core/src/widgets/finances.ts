@@ -1,11 +1,9 @@
-import { format } from "date-fns";
-import { parseDateKey } from "../agenda";
 import { formatBalance, formatCompactBalance } from "../currency/format";
+import { resolveDashboardRange } from "../dashboard-range-store";
 import { accountsQuery } from "../data/accounts";
 import { latestCurrencyRateQuery } from "../data/currency-rates";
 import { dashboardSettingsQuery, normalizeDashboardSettings } from "../data/dashboard-settings";
 import { expenseCategoryTotalsQuery, flowTotalsByCurrencyQuery } from "../data/transactions";
-import { type NetWorthPoint, netWorthQuery } from "../finance/net-worth";
 import {
   type AccountBalance,
   type AmountConverter,
@@ -16,7 +14,6 @@ import {
   sumNetWorth,
   topCategories,
 } from "../finance/overview";
-import { todayDateKeyInZone, zonedMidnightMs } from "../time-zone";
 import type { CurrencyRateItem } from "../user-db/migrations";
 import { readRows, type WidgetDbReader } from "./reader";
 import { type FinancesWidgetSnapshot, WIDGET_PATHS, WIDGET_SNAPSHOT_VERSION, type WidgetContext } from "./snapshots";
@@ -29,24 +26,12 @@ export type FinancesWidgetInputs = {
   accounts: (AccountBalance & { excludeFromDashboard: boolean })[];
   flowRows: GroupedFlowRow[];
   categoryRows: GroupedCategoryRow[];
-  /** Net worth at the start of the month and now, from the net worth series query. */
-  netWorthStart: number | null;
-  netWorthNow: number | null;
+  periodLabel: string;
 };
 
-/** This calendar month in the user's zone: [start, end]. */
-export function widgetMonthRange(now: number, timeZone: string) {
-  const todayKey = todayDateKeyInZone(timeZone, new Date(now));
-  const [year, month] = todayKey.split("-").map(Number);
-  const nextYear = month === 12 ? year + 1 : year;
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const start = zonedMidnightMs(`${todayKey.slice(0, 7)}-01`, timeZone);
-  const nextStart = zonedMidnightMs(`${nextYear}-${String(nextMonth).padStart(2, "0")}-01`, timeZone);
-  return { start, end: nextStart - 1, firstDayKey: `${todayKey.slice(0, 7)}-01` };
-}
-
 export function readFinancesWidgetInputs(db: WidgetDbReader, { now, timeZone }: WidgetContext): FinancesWidgetInputs {
-  const { baseCurrency } = normalizeDashboardSettings(readRows(db, dashboardSettingsQuery)[0]);
+  const settings = normalizeDashboardSettings(readRows(db, dashboardSettingsQuery)[0]);
+  const { baseCurrency } = settings;
   const [latestRate] = readRows(db, latestCurrencyRateQuery);
   const accounts = readRows(db, accountsQuery).map((account) => ({
     id: account.id,
@@ -55,18 +40,8 @@ export function readFinancesWidgetInputs(db: WidgetDbReader, { now, timeZone }: 
     excludeFromDashboard: Boolean(account.excludeFromDashboard),
   }));
   const excludedAccountIds = accounts.filter((account) => account.excludeFromDashboard).map((account) => account.id);
-  const month = widgetMonthRange(now, timeZone);
-  const range = { start: month.start, end: month.end, excludedAccountIds };
-
-  // The series query values each point with the rate of its day, like the Net worth chart.
-  const series = netWorthQuery({
-    buckets: [
-      { label: "start", start: month.start, end: month.start - 1 },
-      { label: "now", start: month.start, end: month.end },
-    ],
-    baseCurrency,
-  });
-  const [start, current] = db.execute<NetWorthPoint>(series).rows;
+  const selected = resolveDashboardRange(settings, new Date(now), timeZone);
+  const range = { start: selected.rangeStart, end: selected.rangeEnd, excludedAccountIds };
 
   return {
     baseCurrency,
@@ -74,8 +49,7 @@ export function readFinancesWidgetInputs(db: WidgetDbReader, { now, timeZone }: 
     accounts,
     flowRows: readRows(db, flowTotalsByCurrencyQuery(range)),
     categoryRows: readRows(db, expenseCategoryTotalsQuery(range)),
-    netWorthStart: start?.netWorth ?? null,
-    netWorthNow: current?.netWorth ?? null,
+    periodLabel: selected.label,
   };
 }
 
@@ -98,10 +72,8 @@ export function buildFinancesWidgetSnapshot(inputs: FinancesWidgetInputs, ctx: W
   const categories = topCategories(inputs.categoryRows, convert, TOP_CATEGORIES);
   const unconvertedFlows = countUnconverted(inputs.flowRows, convert);
 
-  const change =
-    inputs.netWorthStart != null && inputs.netWorthNow != null ? inputs.netWorthNow - inputs.netWorthStart : null;
-  // Below a cent reads as no change, and a "+$0.00" with an arrow would look like news.
-  const direction = change == null || Math.abs(change) < 0.005 ? "flat" : change > 0 ? "up" : "down";
+  const net = flow.income - flow.expense;
+  const direction = Math.abs(net) < 0.005 ? "flat" : net > 0 ? "up" : "down";
   const signed = (text: string) => (direction === "up" ? `+${text}` : text);
 
   const notices = [
@@ -118,15 +90,14 @@ export function buildFinancesWidgetSnapshot(inputs: FinancesWidgetInputs, ctx: W
     currency,
     netWorth: formatBalance(netWorth, currency),
     netWorthCompact: formatCompactBalance(netWorth, currency),
-    change:
-      change == null
-        ? null
-        : {
-            amount: signed(formatBalance(change, currency)),
-            compact: signed(formatCompactBalance(change, currency)),
-            direction,
-          },
-    monthLabel: format(parseDateKey(widgetMonthRange(ctx.now, ctx.timeZone).firstDayKey), "MMMM"),
+    change: null,
+    monthLabel: inputs.periodLabel,
+    periodLabel: inputs.periodLabel,
+    net: {
+      amount: signed(formatBalance(net, currency)),
+      compact: signed(formatCompactBalance(net, currency)),
+      direction,
+    },
     income: formatBalance(flow.income, currency),
     expense: formatBalance(flow.expense, currency),
     categories: categories.map((category) => ({

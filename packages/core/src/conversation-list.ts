@@ -4,12 +4,12 @@ import type { ConversationItem } from "./user-db/migrations";
 
 export type ConversationListItem = Pick<
   ConversationItem,
-  "id" | "title" | "updatedAt" | "lastReadAt" | "turnStatus" | "model" | "totalCost" | "totalTokens"
+  "id" | "title" | "pinned" | "updatedAt" | "lastReadAt" | "turnStatus" | "model" | "totalCost" | "totalTokens"
 >;
 
 export type ConversationTurnStatus = ConversationItem["turnStatus"];
 
-export type ConversationListSectionKind = "running" | "unread" | "today" | "yesterday" | "month" | "older";
+export type ConversationListSectionKind = "pinned" | "running" | "unread" | "today" | "yesterday" | "month" | "older";
 
 export type ConversationListSection = {
   kind: ConversationListSectionKind;
@@ -17,6 +17,7 @@ export type ConversationListSection = {
 };
 
 export const CONVERSATION_LIST_SECTION_LABELS = {
+  pinned: "Pinned",
   running: "Running",
   unread: "Unread",
   today: "Today",
@@ -25,7 +26,7 @@ export const CONVERSATION_LIST_SECTION_LABELS = {
   older: "Older",
 } as const satisfies Record<ConversationListSectionKind, string>;
 
-const SECTION_ORDER = ["running", "unread", "today", "yesterday", "month", "older"] as const;
+const SECTION_ORDER = ["pinned", "running", "unread", "today", "yesterday", "month", "older"] as const;
 
 export type ConversationActivity = {
   otherRunningCount: number;
@@ -63,6 +64,7 @@ function sectionKind(input: {
   monthStart: number;
 }): ConversationListSectionKind {
   const { conversation } = input;
+  if (conversation.pinned) return "pinned";
   if (conversation.turnStatus === "running") return "running";
   if (isConversationUnread(conversation)) return "unread";
   if (conversation.updatedAt >= input.todayStart) return "today";
@@ -83,6 +85,7 @@ export function groupConversations(input: {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
   const buckets: Record<ConversationListSectionKind, ConversationListItem[]> = {
+    pinned: [],
     running: [],
     unread: [],
     today: [],
@@ -97,7 +100,7 @@ export function groupConversations(input: {
 
   return SECTION_ORDER.filter((kind) => buckets[kind].length > 0).map((kind) => ({
     kind,
-    conversations: buckets[kind],
+    conversations: buckets[kind].sort((a, b) => b.updatedAt - a.updatedAt),
   }));
 }
 

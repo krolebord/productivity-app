@@ -330,6 +330,7 @@ export class UserDbServer extends Server<Env> {
     const conversation: ConversationItem = {
       id: input.id,
       title: "",
+      pinned: false,
       createdAt: now,
       updatedAt: now,
       lastReadAt: 0,

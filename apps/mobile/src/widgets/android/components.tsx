@@ -7,7 +7,6 @@ import { FlexWidget, ListWidget, SvgWidget, TextWidget, type WidgetInfo } from "
 import type { WidgetPalette } from "../theme";
 
 export const PADDING = 14;
-const HEADER_HEIGHT = 36;
 /** Below this width (dp) layouts drop to their narrow form: about three launcher cells. */
 export const WIDE_MIN_WIDTH = 250;
 
@@ -23,11 +22,13 @@ export function Shell({
   colors,
   uri,
   children,
+  padding = PADDING,
 }: {
   colors: WidgetPalette;
   /** Where a tap on empty space goes; the app when unset. */
   uri?: string;
   children: ReactNode;
+  padding?: number;
 }) {
   return (
     <FlexWidget
@@ -37,7 +38,7 @@ export function Shell({
         width: "match_parent",
         backgroundColor: colors.background,
         borderRadius: 24,
-        padding: PADDING,
+        padding,
       }}
     >
       {children}
@@ -61,8 +62,10 @@ export function Header({
   colors: WidgetPalette;
 }) {
   return (
-    <FlexWidget style={{ height: HEADER_HEIGHT, width: "match_parent", flexDirection: "row", alignItems: "center" }}>
-      <FlexWidget {...openUri(uri)} style={{ flex: 1, height: "match_parent", justifyContent: "center" }}>
+    // Native TextViews include font padding and follow the system font scale. Let both lines
+    // measure themselves; a fixed dp height can cut the date in half on another device.
+    <FlexWidget style={{ width: "match_parent", flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+      <FlexWidget {...openUri(uri)} style={{ flex: 1, justifyContent: "center" }}>
         <TextWidget text={title} maxLines={1} style={{ fontSize: 16, fontWeight: "700", color: colors.foreground }} />
         {subtitle ? (
           <TextWidget text={subtitle} maxLines={1} style={{ fontSize: 12, color: colors.mutedForeground }} />
@@ -158,9 +161,9 @@ export function Message({
  * below, and every child is one list item. Lists show the whole snapshot; whatever the snapshot
  * left out is a trailing `MoreRow`.
  */
-export function List({ children }: { children: ReactNode }) {
+export function List({ children, marginBottom = 0 }: { children: ReactNode; marginBottom?: number }) {
   return (
-    <FlexWidget style={{ flex: 1, width: "match_parent" }}>
+    <FlexWidget style={{ flex: 1, width: "match_parent", marginBottom }}>
       <ListWidget style={{ height: "match_parent", width: "match_parent" }}>{children}</ListWidget>
     </FlexWidget>
   );

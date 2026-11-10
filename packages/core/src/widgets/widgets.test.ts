@@ -35,6 +35,16 @@ async function createTestDb() {
     "order" real default 0, tags text not null default '[]', dueAt integer, hasDueTime integer not null default 0,
     completedAt integer, providerType text, providerId text, providerUpdatedAt integer
   )`);
+  db.execute(`create table habit (
+    id text primary key, name text not null, scheduleType text not null default 'daily',
+    scheduleInterval integer not null default 1, scheduleWeekdays text not null default '[]',
+    scheduleMonthDays text not null default '[]', timeOfDay text, target real not null default 1,
+    unit text not null default '', "order" real not null default 0, archivedAt integer,
+    createdAt integer not null default 0
+  )`);
+  db.execute(
+    `create table habit_entry (id text primary key, habitId text not null, date text not null, value real not null)`,
+  );
   db.execute(`create table account (
     id text primary key, currency text not null, balance real not null default 0, labelText text not null default '',
     "order" real not null default 0, excludeFromDashboard integer not null default 0
@@ -143,7 +153,7 @@ describe("today widget", () => {
     });
   });
 
-  it("shows overdue, then timed rows by time, then all-day rows, with a done count", () => {
+  it("matches Today section order, with inbox first and a done count", () => {
     const snapshot = buildTodayWidgetSnapshot(readTodayWidgetInputs(db, ctx), ctx);
     expect(snapshot.links).toEqual({
       open: "productivity:///",
@@ -154,28 +164,19 @@ describe("today widget", () => {
     expect(today?.dateKey).toBe("2026-11-09");
     expect(today?.title).toBe("Monday, November 9");
     expect(today?.startsAt).toBe(zonedMidnightMs("2026-11-09", TZ));
-    expect(today?.overdue).toEqual({
-      count: 1,
-      rows: [
-        {
-          id: "overdue",
-          title: "overdue",
-          time: null,
-          event: false,
-          due: "Nov 5",
-          url: "productivity:///task/overdue",
-        },
-      ],
-    });
+    expect(today?.overdue).toEqual({ count: 0, rows: [] });
     expect(today?.rows.map((row) => [row.title, row.time, row.event])).toEqual([
+      ["inbox", null, false],
+      ["overdue", null, false],
       ["morning", "09:30", false],
       ["standup", "12:00", true],
-      ["Call the bank", "18:00", false],
-      ["late", "23:30", false],
       ["all-day-a", null, false],
       ["all-day-b", null, false],
+      ["Call the bank", "18:00", false],
+      ["late", "23:30", false],
     ]);
-    expect(today).toMatchObject({ remaining: 6, done: 1, total: 7 });
+    expect(today?.rows[1]).toMatchObject({ due: "Nov 5", url: "productivity:///task/overdue" });
+    expect(today).toMatchObject({ remaining: 8, done: 1, total: 9 });
   });
 
   it("carries tomorrow, where today's unfinished tasks are overdue", () => {
@@ -184,10 +185,19 @@ describe("today widget", () => {
     expect(tomorrow?.dateKey).toBe("2026-11-10");
     expect(tomorrow?.title).toBe("Tuesday, November 10");
     expect(tomorrow?.startsAt).toBe(zonedMidnightMs("2026-11-10", TZ));
-    expect(tomorrow?.overdue.count).toBe(7);
-    expect(tomorrow?.overdue.rows.map((row) => row.id)).toEqual(["overdue", "all-day-a", "all-day-b"]);
-    expect(tomorrow?.rows.map((row) => row.id)).toEqual(["tomorrow"]);
-    expect(tomorrow).toMatchObject({ remaining: 1, done: 0, total: 1 });
+    expect(tomorrow?.rows.map((row) => row.id)).toEqual([
+      "inbox",
+      "overdue",
+      "morning",
+      "standup",
+      "untitled",
+      "late",
+      "all-day-a",
+      "all-day-b",
+      "tomorrow",
+    ]);
+    expect(tomorrow?.rows.filter((row) => row.due)).toHaveLength(7);
+    expect(tomorrow).toMatchObject({ remaining: 9, done: 0, total: 9 });
   });
 
   it("picks the day that has started", () => {
@@ -313,7 +323,7 @@ describe("finances widget", () => {
     });
   });
 
-  it("sums net worth, this month's flows and top categories in the display currency", () => {
+  it("sums net worth, selected range flows and top categories in the display currency", () => {
     const snapshot = buildFinancesWidgetSnapshot(readFinancesWidgetInputs(db, ctx), ctx);
     expect(snapshot).toEqual({
       v: 1,
@@ -324,18 +334,42 @@ describe("finances widget", () => {
       currency: "EUR",
       netWorth: "€1,400.00",
       netWorthCompact: "€1.4K",
-      // Start of the month: USD 1,100 (before the 100 of food) and EUR 275 → €1,265.
-      change: { amount: "+€135.00", compact: "+€135", direction: "up" },
-      monthLabel: "November",
+      change: null,
+      net: { amount: "+€126.00", compact: "+€126", direction: "up" },
+      monthLabel: "Last 30 days",
+      periodLabel: "Last 30 days",
       income: "€300.00",
-      expense: "€165.00",
+      expense: "€174.00",
       categories: [
-        { name: "Food", amount: "€140.00", share: 140 / 165 },
-        { name: "Transport", amount: "€20.00", share: 20 / 165 },
-        { name: "Uncategorized", amount: "€5.00", share: 5 / 165 },
+        { name: "Food", amount: "€140.00", share: 140 / 174 },
+        { name: "Transport", amount: "€20.00", share: 20 / 174 },
+        { name: "Party", amount: "€9.00", share: 9 / 174 },
       ],
       notice: null,
     });
+  });
+
+  it("uses the saved cycle boundary for all flow metrics, and follows a range setting edit", () => {
+    db.execute(`update dashboard_settings set rangeMode = 'cycle', cycleDay = 5`);
+    const cycle = buildFinancesWidgetSnapshot(readFinancesWidgetInputs(db, ctx), ctx);
+    expect(cycle).toMatchObject({
+      netWorth: "€1,400.00",
+      periodLabel: "Since the 5th",
+      income: "€0.00",
+      expense: "€75.00",
+      net: { amount: "-€75.00", direction: "down" },
+    });
+    expect(cycle.categories.map((category) => category.name)).toEqual(["Food", "Transport", "Uncategorized"]);
+    db.execute(`update dashboard_settings set rangeMode = 'days', rangeDays = 1`);
+    const day = buildFinancesWidgetSnapshot(readFinancesWidgetInputs(db, ctx), ctx);
+    expect(day).toMatchObject({
+      netWorth: "€1,400.00",
+      periodLabel: "Last 1 days",
+      income: "€0.00",
+      expense: "€0.00",
+      categories: [],
+    });
+    expect(day.net?.direction).toBe("flat");
   });
 
   it("leaves out money it can't convert and says so", () => {
@@ -351,9 +385,8 @@ describe("finances widget", () => {
     });
     const snapshot = buildFinancesWidgetSnapshot(readFinancesWidgetInputs(db, ctx), ctx);
     expect(snapshot.netWorth).toBe("€1,400.00");
-    // The series can't value GBP at either end, so there's no honest change to show.
     expect(snapshot.change).toBeNull();
-    expect(snapshot.expense).toBe("€165.00");
+    expect(snapshot.expense).toBe("€174.00");
     expect(snapshot.categories.map((category) => category.name)).not.toContain("Pub");
     expect(snapshot.notice).toBe("1 account not converted · some transactions not converted");
   });

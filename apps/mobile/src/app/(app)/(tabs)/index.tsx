@@ -5,6 +5,7 @@ import {
   type AgendaTask,
   type AgendaTaskRow,
   type DayHabitProgress,
+  orderTodaySectionRows,
   parseDateKey,
   taskLabel,
 } from "@productivity/core/agenda";
@@ -17,7 +18,8 @@ import { useDb } from "@productivity/core/user-db/db-context";
 import { differenceInCalendarDays, format } from "date-fns";
 import { useRouter } from "expo-router";
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { Canvas, Path, Skia } from "react-native-skia";
 import { useCSSVariable } from "uniwind";
 import { useTabContentInset } from "../../../components/assistant-button";
@@ -30,6 +32,7 @@ import { Icon } from "../../../components/ui/icon";
 import { IconButton } from "../../../components/ui/icon-button";
 import { Input } from "../../../components/ui/input";
 import { confirmHabitReset } from "../../../lib/habits";
+import { listItemExit, listLayoutTransition } from "../../../lib/list-transitions";
 import { useCurrentDayKey } from "../../../lib/use-current-day";
 import { cn } from "../../../lib/utils";
 
@@ -59,7 +62,7 @@ export default function TodayScreen() {
   const activeSections = useMemo(
     () =>
       agenda.sections.reduce<AgendaSection[]>((result, section) => {
-        const rows = section.rows.filter((row) => !isRowDone(row));
+        const rows = orderTodaySectionRows(section).filter((row) => !isRowDone(row));
         if (rows.length > 0) result.push({ ...section, rows });
         return result;
       }, []),
@@ -123,7 +126,13 @@ export default function TodayScreen() {
         ) : (
           <>
             {activeSections.map((section) => (
-              <View key={section.bucket} className="gap-1">
+              <Animated.View
+                key={section.bucket}
+                collapsable={false}
+                layout={listLayoutTransition}
+                exiting={listItemExit}
+                className="gap-1"
+              >
                 <SectionTitle label={section.label} destructive={section.bucket === "overdue"} />
                 {section.bucket === "anytime" && (
                   <ReorderableTasks rows={section.rows} actions={actions} onDraggingChange={setDragging} />
@@ -138,10 +147,10 @@ export default function TodayScreen() {
                       actions={actions}
                     />
                   ))}
-              </View>
+              </Animated.View>
             ))}
             {completedRows.length > 0 && (
-              <View className="gap-1">
+              <Animated.View layout={listLayoutTransition} className="gap-1">
                 <CollapsibleSectionTitle
                   label={`Completed · ${completedRows.length}`}
                   expanded={showCompleted}
@@ -151,7 +160,7 @@ export default function TodayScreen() {
                   completedRows.map((row) => (
                     <AgendaRowView key={`${row.kind}:${row.id}`} row={row} overdue={false} actions={actions} />
                   ))}
-              </View>
+              </Animated.View>
             )}
           </>
         )}
@@ -163,8 +172,6 @@ export default function TodayScreen() {
 /** Untimed open tasks of a day keep the manual order set by dragging them, as on web. */
 const isManuallyOrdered = (row: AgendaRow): row is AgendaTaskRow =>
   row.kind === "task" && !row.completed && !row.task.hasDueTime;
-
-const TASK_ROW_HEIGHT = 48;
 
 type RowActions = Pick<
   Agenda,
@@ -186,6 +193,10 @@ function ReorderableTasks({
   onDraggingChange: (dragging: boolean) => void;
 }) {
   const db = useDb();
+  const { fontScale } = useWindowDimensions();
+  // Reordering maps offsets to equal-height slots: two text-base lines (24 sp each), plus
+  // the title's vertical padding. Scale the slot with the system text size as well.
+  const rowHeight = Math.max(48, Math.ceil(48 * fontScale) + 16);
   // The tasks themselves, not wrappers, so an unchanged task is the same object after a refresh.
   const tasks = useMemo(() => rows.filter(isManuallyOrdered).map((row) => row.task), [rows]);
   const save = useCallback((changes: { id: string; order: number }[]) => saveItemOrder(db.db, changes), [db]);
@@ -195,7 +206,8 @@ function ReorderableTasks({
   return (
     <ReorderableList
       items={items}
-      rowHeight={TASK_ROW_HEIGHT}
+      rowHeight={rowHeight}
+      animateChanges
       onMove={move}
       onDraggingChange={onDraggingChange}
       rowClassName="bg-background"
@@ -482,7 +494,7 @@ function InboxSection({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <View className="gap-1">
+    <Animated.View collapsable={false} layout={listLayoutTransition} exiting={listItemExit} className="gap-1">
       <CollapsibleSectionTitle
         label={`Inbox · ${tasks.length}`}
         expanded={expanded}
@@ -490,13 +502,17 @@ function InboxSection({
       />
       {expanded &&
         tasks.map((task) => <InboxRow key={task.id} task={task} selectedLabel={selectedLabel} actions={actions} />)}
-    </View>
+    </Animated.View>
   );
 }
 
 function InboxRow({ task, selectedLabel, actions }: { task: AgendaTask; selectedLabel: string; actions: RowActions }) {
   return (
-    <View className="min-h-11 flex-row items-center gap-3">
+    <Animated.View
+      layout={listLayoutTransition}
+      exiting={listItemExit}
+      className="min-h-11 flex-row items-center gap-3"
+    >
       <Checkbox
         checked={false}
         optimistic
@@ -514,7 +530,7 @@ function InboxRow({ task, selectedLabel, actions }: { task: AgendaTask; selected
         size={16}
         className="size-8"
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -537,11 +553,11 @@ function AgendaRowView({ row, overdue, actions }: { row: AgendaRow; overdue: boo
   );
 }
 
-function TaskTitle({ task, completed = false, lines = 2 }: { task: AgendaTask; completed?: boolean; lines?: number }) {
+function TaskTitle({ task, completed = false }: { task: AgendaTask; completed?: boolean }) {
   const hasTitle = task.title.trim().length > 0;
   return (
     <Text
-      numberOfLines={lines}
+      numberOfLines={2}
       className={`text-base ${hasTitle ? "text-foreground" : "text-muted-foreground"} ${completed ? "line-through" : ""}`}
     >
       {taskLabel(task)}
@@ -559,7 +575,7 @@ function TaskRow({
   task: AgendaTask;
   completed: boolean;
   overdue: boolean;
-  /** Set for rows in a reorderable list: a one-line row with a grip at the end. */
+  /** Set for rows in a reorderable list: a two-line slot with a grip at the end. */
   handle?: DragHandle;
   actions: RowActions;
 }) {
@@ -567,7 +583,11 @@ function TaskRow({
   const dueLabel = overdue && task.dueAt != null ? formatDueDateLabel(task.dueAt, task.hasDueTime) : null;
 
   return (
-    <View className={cn("min-h-11 flex-row items-center gap-3", handle && "h-full", completed && "opacity-60")}>
+    <Animated.View
+      layout={handle ? undefined : listLayoutTransition}
+      exiting={handle ? undefined : listItemExit}
+      className={cn("min-h-11 flex-row items-center gap-3", handle && "h-full", completed && "opacity-60")}
+    >
       <Checkbox
         checked={completed}
         optimistic
@@ -577,7 +597,7 @@ function TaskRow({
       <Pressable className="flex-1 py-2" onPress={() => actions.openTask(task.id)}>
         <View className="flex-row items-center gap-2">
           <View className="shrink">
-            <TaskTitle task={task} completed={completed} lines={handle ? 1 : 2} />
+            <TaskTitle task={task} completed={completed} />
           </View>
           {isCalendarBackedTask(task) && <Icon name="calendar" size={12} colorClassName="accent-muted-foreground" />}
           {timeLabel && !overdue && (
@@ -610,7 +630,7 @@ function TaskRow({
           <Icon name="menu" size={16} colorClassName="accent-muted-foreground/60" />
         </View>,
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -641,7 +661,10 @@ function HabitRow({
   const missedLabel = overdue ? format(parseDateKey(dateKey), "MMM d") : null;
 
   return (
-    <View className={`min-h-11 flex-row items-center gap-3 ${done ? "opacity-60" : ""}`}>
+    <Animated.View
+      layout={listLayoutTransition}
+      className={`min-h-11 flex-row items-center gap-3 ${done ? "opacity-60" : ""}`}
+    >
       {isSimple ? (
         <Checkbox
           checked={done}
@@ -681,6 +704,6 @@ function HabitRow({
           <Text className="font-medium text-foreground text-sm">1</Text>
         </Pressable>
       )}
-    </View>
+    </Animated.View>
   );
 }

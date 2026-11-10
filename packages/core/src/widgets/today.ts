@@ -1,6 +1,18 @@
 import { format } from "date-fns";
-import { type AgendaTask, type AgendaTaskRow, buildAgendaSections, parseDateKey, taskLabel } from "../agenda";
-import { scheduledTasksQuery } from "../data/agenda";
+import {
+  type AgendaHabit,
+  type AgendaTask,
+  type AgendaTaskRow,
+  buildAgendaSections,
+  compareHabits,
+  orderTodaySectionRows,
+  parseDateKey,
+  parseScheduleMonthDays,
+  parseScheduleWeekdays,
+  taskLabel,
+  toAgendaHabit,
+} from "../agenda";
+import { agendaHabitsQuery, habitEntriesQuery, inboxTasksQuery, scheduledTasksQuery } from "../data/agenda";
 import { isCalendarBackedTask } from "../google-calendar/mapping";
 import { dateKeyInZone, shiftDateKey, timeInZone, todayDateKeyInZone, zonedMidnightMs } from "../time-zone";
 import { readRows, type WidgetDbReader } from "./reader";
@@ -15,11 +27,15 @@ import {
 
 /** Today and tomorrow: the second entry takes over at the next local midnight. */
 const DAYS = 2;
-const OVERDUE_ROW_LIMIT = 3;
 /** More than the tallest layout lists. */
 const DAY_ROW_LIMIT = 10;
 
-export type TodayWidgetInputs = { tasks: AgendaTask[] };
+export type TodayWidgetInputs = {
+  tasks: AgendaTask[];
+  inbox?: AgendaTask[];
+  habits?: AgendaHabit[];
+  entriesByHabit?: ReadonlyMap<string, ReadonlyMap<string, number>>;
+};
 
 function dayKeys(now: number, timeZone: string) {
   const todayKey = todayDateKeyInZone(timeZone, new Date(now));
@@ -38,7 +54,19 @@ export function readTodayWidgetInputs(db: WidgetDbReader, { now, timeZone }: Wid
       overdueBeforeMs: startMs,
     }),
   ) as AgendaTask[];
-  return { tasks };
+  const inbox = readRows(db, inboxTasksQuery) as AgendaTask[];
+  const habits = readRows(db, agendaHabitsQuery)
+    .map((h) =>
+      toAgendaHabit(h, parseScheduleWeekdays(h.scheduleWeekdays), parseScheduleMonthDays(h.scheduleMonthDays)),
+    )
+    .sort(compareHabits);
+  const entriesByHabit = new Map<string, Map<string, number>>();
+  for (const entry of readRows(db, habitEntriesQuery(keys[keys.length - 1]))) {
+    const entries = entriesByHabit.get(entry.habitId) ?? new Map<string, number>();
+    entries.set(entry.date, (entries.get(entry.date) ?? 0) + entry.value);
+    entriesByHabit.set(entry.habitId, entries);
+  }
+  return { tasks, inbox, habits, entriesByHabit };
 }
 
 /** "Nov 5", as the Today tab labels overdue rows. */
@@ -58,49 +86,53 @@ function toWidgetRow(row: AgendaTaskRow, { timeZone, link }: WidgetContext, over
   };
 }
 
-/** One day as Today shows it, without habits: overdue first, then timed rows by time, then all-day. */
-function buildDay(dateKey: string, tasks: readonly AgendaTask[], ctx: WidgetContext): TodayWidgetDay {
+/** Inbox precedes the agenda on Today; the cap applies across all sections. */
+function buildDay(dateKey: string, inputs: TodayWidgetInputs, ctx: WidgetContext): TodayWidgetDay {
   const sections = buildAgendaSections({
     selectedKey: dateKey,
     todayKey: dateKey,
-    tasks,
-    habits: [],
-    entriesByHabit: new Map(),
+    tasks: inputs.tasks,
+    habits: inputs.habits ?? [],
+    entriesByHabit: inputs.entriesByHabit ?? new Map(),
     timeZone: ctx.timeZone,
   });
-  const taskRows = (rows: (typeof sections)[number]["rows"]) =>
-    rows.filter((row): row is AgendaTaskRow => row.kind === "task");
-
-  const overdue = taskRows(sections.find((section) => section.bucket === "overdue")?.rows ?? []);
-  const dayRows = taskRows(sections.filter((section) => section.bucket !== "overdue").flatMap((s) => s.rows));
-  const open = dayRows
-    .filter((row) => !row.completed)
-    .sort((a, b) => {
-      // Timed first, by time; then all-day in their manual order.
-      if (a.sortTime != null && b.sortTime != null) return a.sortTime - b.sortTime;
-      if (a.sortTime != null) return -1;
-      if (b.sortTime != null) return 1;
-      return (a.task.order ?? 0) - (b.task.order ?? 0);
-    });
-  overdue.sort((a, b) => (a.task.dueAt ?? 0) - (b.task.dueAt ?? 0));
-
+  const all = sections.flatMap(orderTodaySectionRows);
+  const done = all.filter((row) => (row.kind === "task" ? row.completed : row.done)).length;
+  const open = all.filter((row) => (row.kind === "task" ? !row.completed : !row.done));
+  const inbox = (inputs.inbox ?? []).map((task) =>
+    toWidgetRow({ kind: "task", id: task.id, task, bucket: "anytime", completed: false, sortTime: null }, ctx, false),
+  );
+  const rows = [
+    ...inbox,
+    ...open.map(
+      (row): TodayWidgetRow =>
+        row.kind === "task"
+          ? toWidgetRow(row, ctx, row.bucket === "overdue")
+          : {
+              id: `habit:${row.id}:${row.dateKey}`,
+              title: row.habit.name,
+              kind: "habit",
+              time: null,
+              event: false,
+              due: row.bucket === "overdue" ? format(parseDateKey(row.dateKey), "MMM d") : null,
+              url: ctx.link(WIDGET_PATHS.today),
+            },
+    ),
+  ];
   return {
     dateKey,
     startsAt: zonedMidnightMs(dateKey, ctx.timeZone),
     endsAt: zonedMidnightMs(shiftDateKey(dateKey, 1), ctx.timeZone),
     title: format(parseDateKey(dateKey), "EEEE, MMMM d"),
-    overdue: {
-      count: overdue.length,
-      rows: overdue.slice(0, OVERDUE_ROW_LIMIT).map((row) => toWidgetRow(row, ctx, true)),
-    },
-    rows: open.slice(0, DAY_ROW_LIMIT).map((row) => toWidgetRow(row, ctx, false)),
-    remaining: open.length,
-    done: dayRows.length - open.length,
-    total: dayRows.length,
+    overdue: { count: 0, rows: [] },
+    rows: rows.slice(0, DAY_ROW_LIMIT),
+    remaining: rows.length,
+    done,
+    total: rows.length + done,
   };
 }
 
-export function buildTodayWidgetSnapshot({ tasks }: TodayWidgetInputs, ctx: WidgetContext): TodayWidgetSnapshot {
+export function buildTodayWidgetSnapshot(inputs: TodayWidgetInputs, ctx: WidgetContext): TodayWidgetSnapshot {
   return {
     v: WIDGET_SNAPSHOT_VERSION,
     kind: "today",
@@ -111,6 +143,6 @@ export function buildTodayWidgetSnapshot({ tasks }: TodayWidgetInputs, ctx: Widg
       today: ctx.link(WIDGET_PATHS.today),
       newTask: ctx.link(WIDGET_PATHS.newTask),
     },
-    days: dayKeys(ctx.now, ctx.timeZone).map((dateKey) => buildDay(dateKey, tasks, ctx)),
+    days: dayKeys(ctx.now, ctx.timeZone).map((dateKey) => buildDay(dateKey, inputs, ctx)),
   };
 }

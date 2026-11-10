@@ -19,10 +19,11 @@ function render(
 ) {
   // Never published (fresh install, or the app hasn't run since): the app has to build one first.
   if (!snapshot) {
+    const compact = info.height < 160;
     return (
-      <Shell colors={colors}>
-        <Header title={TITLES[kind]} colors={colors} />
-        <Message title="Open the app" detail="to set up this widget" colors={colors} />
+      <Shell colors={colors} padding={compact ? 8 : undefined}>
+        {!compact ? <Header title={TITLES[kind]} colors={colors} /> : null}
+        <Message title="Open the app" detail={compact ? undefined : "to set up this widget"} colors={colors} />
       </Shell>
     );
   }

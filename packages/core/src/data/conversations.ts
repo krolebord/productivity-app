@@ -69,3 +69,8 @@ export function catchUpConversationLastRead(db: UserDbDatabase, id: string) {
 export function deleteConversation(db: UserDbDatabase, id: string) {
   db.executeKysely((q) => q.deleteFrom("conversation").where("id", "=", id));
 }
+
+/** Pin metadata does not change activity or read receipts. */
+export function setConversationPinned(db: UserDbDatabase, id: string, pinned: boolean) {
+  db.executeKysely((q) => q.updateTable("conversation").set({ pinned }).where("id", "=", id));
+}

@@ -622,3 +622,10 @@ export function toAgendaHabit(
     createdAt: habit.createdAt,
   };
 }
+
+/** Rows in the order the mobile Today screen renders each section. */
+export function orderTodaySectionRows(section: AgendaSection): AgendaRow[] {
+  if (section.bucket !== "anytime") return section.rows;
+  const manual = (row: AgendaRow) => row.kind === "task" && !row.completed && !row.task.hasDueTime;
+  return [...section.rows.filter(manual), ...section.rows.filter((row) => !manual(row))];
+}

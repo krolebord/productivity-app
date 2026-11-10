@@ -1,8 +1,8 @@
-import { type ReactElement, type ReactNode, useLayoutEffect, useRef } from "react";
-import { View } from "react-native";
+import { type ReactElement, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { GestureDetector, usePanGesture } from "react-native-gesture-handler";
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
+import { listItemExit, listLayoutTransition } from "../lib/list-transitions";
 import { cn } from "../lib/utils";
 
 type DragState = {
@@ -37,6 +37,7 @@ export function ReorderableList<T extends { id: string }>({
   onDraggingChange,
   renderItem,
   rowClassName,
+  animateChanges = false,
 }: {
   items: readonly T[];
   rowHeight: number;
@@ -45,6 +46,8 @@ export function ReorderableList<T extends { id: string }>({
   onDraggingChange: (dragging: boolean) => void;
   renderItem: (item: T, handle: DragHandle, position: number) => ReactNode;
   rowClassName?: string;
+  /** Animate insertions/removals; drag moves already animate through their shared offset. */
+  animateChanges?: boolean;
 }) {
   const index = useSharedValue(-1);
   const offset = useSharedValue(0);
@@ -60,6 +63,17 @@ export function ReorderableList<T extends { id: string }>({
   });
 
   const orderKey = items.map((item) => item.id).join("|");
+  const [membership, setMembership] = useState({ orderKey, changed: false });
+  if (animateChanges && membership.orderKey !== orderKey) {
+    const previous = new Set(membership.orderKey ? membership.orderKey.split("|") : []);
+    setMembership({
+      orderKey,
+      changed: previous.size !== items.length || items.some((item) => !previous.has(item.id)),
+    });
+  }
+  // A layout transition during a drag reorder would animate from the old slot a second time
+  // after its drag offset resets. Only membership changes need this additional transition.
+  const layout = animateChanges && membership.changed ? listLayoutTransition : undefined;
   // Release the dragged row only once the reordered list has rendered, so it doesn't flash
   // back to its old slot for a frame.
   // biome-ignore lint/correctness/useExhaustiveDependencies: orderKey is the trigger; shared values are stable.
@@ -80,19 +94,21 @@ export function ReorderableList<T extends { id: string }>({
   };
 
   return (
-    <View style={{ height: items.length * rowHeight }}>
+    <Animated.View collapsable={!animateChanges} layout={layout} style={{ height: items.length * rowHeight }}>
       {items.map((item, position) => (
         <ReorderableRow
           key={item.id}
           position={position}
           drag={drag}
           className={rowClassName}
+          animateRemoval={animateChanges}
+          animateLayout={animateChanges && membership.changed}
           onDragStart={dragStart}
           onDrop={drop}
           render={(handle) => renderItem(item, handle, position)}
         />
       ))}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -100,6 +116,8 @@ function ReorderableRow({
   position,
   drag,
   className,
+  animateRemoval,
+  animateLayout,
   onDragStart,
   onDrop,
   render,
@@ -107,6 +125,8 @@ function ReorderableRow({
   position: number;
   drag: DragState;
   className?: string;
+  animateRemoval: boolean;
+  animateLayout: boolean;
   onDragStart: () => void;
   onDrop: (from: number, to: number) => void;
   render: (handle: DragHandle) => ReactNode;
@@ -160,6 +180,8 @@ function ReorderableRow({
 
   return (
     <Animated.View
+      layout={animateLayout ? listLayoutTransition : undefined}
+      exiting={animateRemoval ? listItemExit : undefined}
       className={cn("absolute right-0 left-0", className)}
       style={[{ top: position * rowHeight, height: rowHeight, shadowColor: "#000", shadowRadius: 8 }, style]}
     >

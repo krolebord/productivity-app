@@ -5,9 +5,7 @@ import { FlexWidget, TextWidget } from "react-native-android-widget";
 import type { WidgetPalette } from "../theme";
 import { type LayoutProps, Message, openUri, Shell, WIDE_MIN_WIDTH } from "./components";
 
-const ARROWS = { up: "↑", down: "↓", flat: "→" } as const;
-
-/** Net worth and this month's change; wide also lists the month's income, spending and top categories. */
+/** Net worth and period net; wide adds flows, and taller widgets also show top categories. */
 export function FinancesWidget({
   info,
   colors,
@@ -16,63 +14,83 @@ export function FinancesWidget({
   const links = snapshot.links;
   // Any tap opens Finances.
   const uri = links?.finances;
-  if (snapshot.state === "signedOut") {
+  // One launcher row is roughly 95 dp on Pixel. Use three short lines and less padding there;
+  // categories need the second row. Use actual dp rather than guessing a launcher's cell count.
+  const compact = info.height < 160;
+  const padding = compact ? 8 : undefined;
+  if (snapshot.state === "signedOut" || snapshot.state === "empty") {
+    const signedOut = snapshot.state === "signedOut";
+    const messageUri = signedOut ? links?.open : uri;
     return (
-      <Shell colors={colors} uri={links?.open}>
+      <Shell colors={colors} uri={messageUri} padding={padding}>
         <Label text="Finances" colors={colors} />
-        <Message title="Sign in" detail="to see your finances" uri={links?.open} colors={colors} />
-      </Shell>
-    );
-  }
-  if (snapshot.state === "empty") {
-    return (
-      <Shell colors={colors} uri={uri}>
-        <Label text="Finances" colors={colors} />
-        <Message title="No accounts yet" detail="Add one in Finances" uri={uri} colors={colors} />
+        <Message
+          title={signedOut ? "Sign in" : "No accounts yet"}
+          detail={compact ? undefined : signedOut ? "to see your finances" : "Add one in Finances"}
+          uri={messageUri}
+          colors={colors}
+        />
       </Shell>
     );
   }
 
   const wide = info.width >= WIDE_MIN_WIDTH;
-  const change = snapshot.change;
+  const change = snapshot.net;
   const changeColor =
     change?.direction === "up" ? colors.income : change?.direction === "down" ? colors.expense : colors.mutedForeground;
   const summary = (
-    <FlexWidget style={{ flex: 1, height: "match_parent" }}>
+    <FlexWidget style={{ flex: 1, height: "match_parent", justifyContent: compact ? "center" : "flex-start" }}>
       <Label text="Net worth" colors={colors} />
       <TextWidget
         text={(wide ? snapshot.netWorth : snapshot.netWorthCompact) ?? ""}
         maxLines={1}
-        style={{ fontSize: 26, fontWeight: "700", color: colors.foreground, adjustsFontSizeToFit: true }}
+        style={{ fontSize: compact ? 20 : 26, fontWeight: "700", color: colors.foreground, adjustsFontSizeToFit: true }}
       />
-      {change ? (
-        <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
+      {change && !(compact && snapshot.notice) ? (
+        <FlexWidget style={{ width: "match_parent" }}>
           <TextWidget
-            text={`${ARROWS[change.direction]} ${wide ? change.amount : change.compact}`}
+            text={`Net ${wide ? change.amount : change.compact}${compact && !wide ? ` · ${snapshot.periodLabel ?? ""}` : ""}`}
             maxLines={1}
-            style={{ fontSize: 13, fontWeight: "600", color: changeColor }}
+            style={{ fontSize: compact ? 11 : 13, fontWeight: "600", color: changeColor, adjustsFontSizeToFit: true }}
           />
-          <TextWidget text=" this month" maxLines={1} style={{ fontSize: 12, color: colors.mutedForeground }} />
+          {!compact && !wide ? (
+            <TextWidget
+              text={snapshot.periodLabel ?? ""}
+              maxLines={1}
+              style={{ fontSize: 12, color: colors.mutedForeground }}
+            />
+          ) : null}
         </FlexWidget>
       ) : null}
-      <FlexWidget style={{ flex: 1 }} />
+      {!compact ? <FlexWidget style={{ flex: 1 }} /> : null}
       {snapshot.notice ? (
-        <TextWidget text={snapshot.notice} maxLines={2} style={{ fontSize: 10, color: colors.mutedForeground }} />
+        <TextWidget
+          text={snapshot.notice}
+          maxLines={compact ? 1 : 2}
+          style={{ fontSize: 10, color: colors.mutedForeground }}
+        />
       ) : null}
     </FlexWidget>
   );
 
   return (
-    <Shell colors={colors} uri={uri}>
+    <Shell colors={colors} uri={uri} padding={padding}>
       <FlexWidget {...openUri(uri)} style={{ flex: 1, width: "match_parent", flexDirection: "row" }}>
         {summary}
         {wide ? (
-          <FlexWidget style={{ flex: 1, height: "match_parent", marginLeft: 14 }}>
-            <Label text={snapshot.monthLabel ?? "This month"} colors={colors} />
+          <FlexWidget
+            style={{
+              flex: 1,
+              height: "match_parent",
+              marginLeft: 14,
+              justifyContent: compact ? "center" : "flex-start",
+            }}
+          >
+            <Label text={snapshot.periodLabel ?? ""} colors={colors} />
             <Amount label="Income" value={snapshot.income} color={colors.income} colors={colors} />
             <Amount label="Spent" value={snapshot.expense} color={colors.expense} colors={colors} />
-            <FlexWidget style={{ height: 6 }} />
-            {(snapshot.categories ?? []).map((category) => (
+            {!compact ? <FlexWidget style={{ height: 6 }} /> : null}
+            {(compact ? [] : (snapshot.categories ?? [])).map((category) => (
               <Amount
                 key={category.name}
                 label={category.name}

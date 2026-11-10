@@ -39,6 +39,8 @@ Pick the transition by what the screen is, not by what the nearest file does.
 - `FormSheet` handles the experimental sheet's bugs (mounts content only while open, Android drag handle);
   keep those fixes in the wrapper. Its content needs no bottom inset.
 - Native Android UI (dialogs, pickers, cursor) takes the app's colors from `apps/mobile/plugins/android-theme.js`; keep it in sync with `src/global.css`.
+- Today task titles allow two lines, including draggable rows (their equal-height slots scale with text size).
+  Completion saves immediately; rows fade out and the list closes the gap, respecting Reduce Motion.
 
 ## Checkboxes
 
@@ -51,3 +53,14 @@ Mobile matches web: the shape says what kind of thing it is.
   a check once done (`HabitCheck`; web's counted habit in `today-view.tsx`).
 - Single choice is a trailing ✓ (`FormOption`, `SelectSheet` rows), never a checkbox.
 - Markdown checkboxes are styled in `components/markdown.tsx` (`taskList`); keep them the same shape.
+
+## Assistant chats
+
+- Pins are synced conversation metadata. Pinned chats appear once, above other sections, ordered by
+  activity. Pinning does not change activity timestamps or mark messages read/unread.
+- Assistant shortcut badges count unread finished or failed chats, excluding running chats. Opening
+  the chat list does not acknowledge every conversation; viewing a conversation marks that one read.
+  Badges use the primary purple, with a background-colored border on the mobile FAB to separate
+  the badge from the matching button color.
+- Web badges anchor to the shortcut button's top-right corner and hide while its assistant panel
+  or page is open. Hiding the badge does not mark conversations read.

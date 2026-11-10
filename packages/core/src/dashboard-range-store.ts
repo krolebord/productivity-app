@@ -8,6 +8,7 @@ import {
   subDays,
   subMonths,
 } from "date-fns";
+import { shiftDateKey, todayDateKeyInZone, zonedMidnightMs } from "./time-zone";
 
 export type DashboardRangeMode = "days" | "cycle";
 
@@ -58,7 +59,27 @@ export interface ResolvedDashboardRange {
  * preceding comparison window of equal shape. `now` is passed in so the result
  * stays stable for a render (avoids refetching on every tick).
  */
-export function resolveDashboardRange(config: DashboardRangeConfig, now: Date): ResolvedDashboardRange {
+export function resolveDashboardRange(
+  config: DashboardRangeConfig,
+  now: Date,
+  timeZone?: string,
+): ResolvedDashboardRange {
+  if (timeZone) {
+    const key = todayDateKeyInZone(timeZone, now);
+    const [year, month, day] = key.split("-").map(Number);
+    // Calendar arithmetic uses a local date only as a carrier for the zone's date.
+    const resolved = resolveDashboardRange(config, new Date(year, month - 1, day, 12));
+    const dateKey = (ms: number) => format(new Date(ms), "yyyy-MM-dd");
+    const start = (ms: number) => zonedMidnightMs(dateKey(ms), timeZone);
+    const end = (ms: number) => zonedMidnightMs(shiftDateKey(dateKey(ms), 1), timeZone) - 1;
+    return {
+      ...resolved,
+      rangeStart: start(resolved.rangeStart),
+      rangeEnd: end(resolved.rangeEnd),
+      prevRangeStart: start(resolved.prevRangeStart),
+      prevRangeEnd: end(resolved.prevRangeEnd),
+    };
+  }
   if (config.mode === "cycle") {
     const cycleStart = cycleStartOnOrBefore(now, config.cycleDay);
     const prevStart = cycleStartOnOrBefore(subDays(cycleStart, 1), config.cycleDay);

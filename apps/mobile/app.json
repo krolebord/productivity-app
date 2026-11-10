@@ -87,10 +87,10 @@
               "label": "Finances",
               "description": "Net worth and this month's spending",
               "minWidth": "110dp",
-              "minHeight": "110dp",
+              "minHeight": "40dp",
               "targetCellWidth": 2,
               "targetCellHeight": 2,
-              "resizeMode": "horizontal"
+              "resizeMode": "horizontal|vertical"
             }
           ]
         }
