@@ -30,6 +30,55 @@ function initUserDb(userId: string) {
   });
 }
 
+type OpenUserDb = { userId: string; db: Promise<SyncedDb<UserDb>>; ui: boolean };
+
+/**
+ * The one synced DB this JS runtime has open. The screens and the background widget refresh share
+ * it: a second instance would be a second sync engine over the same file.
+ */
+let current: OpenUserDb | null = null;
+
+/** Opens the DB for the screens, taking over one a background refresh has open for the same user. */
+function openForUi(userId: string): OpenUserDb {
+  if (current && !current.ui && current.userId === userId) current.ui = true;
+  else current = { userId, db: initUserDb(userId), ui: true };
+  return current;
+}
+
+function releaseFromUi(entry: OpenUserDb) {
+  if (current === entry) current = null;
+  void entry.db.then(
+    (db) => db.dispose(),
+    () => {},
+  );
+}
+
+/**
+ * Runs `run` with the user's DB outside the UI: the one the screens have open if there is one,
+ * otherwise one opened for the call and disposed after it, unless the screens took it over
+ * meanwhile (Android attaches the UI to a runtime that was started headless). Resolves undefined
+ * without running when another user's DB is open.
+ */
+export async function withBackgroundUserDb<T>(
+  userId: string,
+  run: (db: SyncedDb<UserDb>) => Promise<T>,
+): Promise<T | undefined> {
+  current ??= { userId, db: initUserDb(userId), ui: false };
+  const entry = current;
+  if (entry.userId !== userId) return undefined;
+  try {
+    return await run(await entry.db);
+  } finally {
+    if (!entry.ui) {
+      if (current === entry) current = null;
+      await entry.db.then(
+        (db) => db.dispose(),
+        () => {},
+      );
+    }
+  }
+}
+
 type UserDbState =
   | { status: "loading" }
   | { status: "ready"; db: SyncedDb<UserDb> }
@@ -53,17 +102,13 @@ export function UserDbProvider({
   // biome-ignore lint/correctness/useExhaustiveDependencies: bumping `epoch` is how a reload or retry reopens the database.
   useEffect(() => {
     let cancelled = false;
-    let opened: SyncedDb<UserDb> | null = null;
     let unsubscribe: (() => void) | undefined;
 
     setState({ status: "loading" });
-    initUserDb(userId).then(
+    const entry = openForUi(userId);
+    entry.db.then(
       (db) => {
-        if (cancelled) {
-          void db.dispose();
-          return;
-        }
-        opened = db;
+        if (cancelled) return;
         const stopReload = db.subscribe("reload-requested", () => setEpoch((value) => value + 1)).unsubscribe;
         const stopWidgets = startWidgetPublishing(db);
         unsubscribe = () => {
@@ -82,7 +127,7 @@ export function UserDbProvider({
     return () => {
       cancelled = true;
       unsubscribe?.();
-      void opened?.dispose();
+      releaseFromUi(entry);
     };
   }, [userId, epoch]);
 

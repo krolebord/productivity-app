@@ -4,6 +4,7 @@
 // ship over the air. See docs/widgets.md.
 import "expo-router/entry";
 import { registerAndroidWidgets } from "./src/widgets/android-widgets";
+import { refreshWidgetsInBackground } from "./src/widgets/background";
 import "./src/widgets/ios-widgets";
 
-registerAndroidWidgets();
+registerAndroidWidgets(refreshWidgetsInBackground);

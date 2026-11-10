@@ -65,13 +65,14 @@ a change old layouts would misread; the Android store treats an unknown `v` as "
 | `kinds.ts` | native widget names (match app.json) and the `WidgetPublisher` interface |
 | `refresh.ts` | `refreshWidgets(db)`: build, hash, publish changed kinds (serialized queue); `publishSignedOutWidgets()` |
 | `session.ts` | `startWidgetPublishing(db)`: when to refresh (below); started by `UserDbProvider` |
+| `background.ts` | `refreshWidgetsInBackground()`: sync (`catchUp`) and republish without the UI (below) |
 | `ios-widgets.ios.tsx` | iOS layouts, placeholders, `createWidget`, the iOS publisher; `ios-widgets.tsx` is the no-op elsewhere |
 | `android-widgets.android.tsx` | Android task handler and publisher; `android-widgets.tsx` is the no-op elsewhere |
 | `android/` | Android layouts (`*-widget.tsx`), shared pieces, the snapshot file store |
 | `theme.ts` | light/dark palettes from `src/global.css` (the iOS layouts inline the same values) |
 
 `apps/mobile/index.ts` is the app entry (`main` in package.json): it imports `expo-router/entry`,
-registers the Android task handler, and imports the iOS module, whose `createWidget` calls store each
+registers the Android task handler (handing it the background refresh), and imports the iOS module, whose `createWidget` calls store each
 layout in App Group defaults. It runs on every launch, including Android's headless ones.
 
 ### When the app publishes
@@ -89,6 +90,30 @@ Each time, every kind is rebuilt (a handful of small indexed queries) but only k
 hash changed are published. `writtenAt` is left out of the hash. On iOS, reloads while the app is in
 the foreground are free; background ones count against WidgetKit's daily budget.
 
+### Background refresh (Android)
+
+`refreshWidgetsInBackground()` (`background.ts`) reads the stored session, runs sqlite-sync's
+best-effort `db.state.catchUp()` (15 s at most), then `refreshWidgets` whatever the sync got (offline it
+still moves Today on to the current day), and drops the connection `catchUp` reopened.
+
+- **Trigger:** the Android widget handler awaits it after drawing from the snapshot file, so it runs
+  whenever Android asks a widget to draw: added, resized, after a reboot or app update, and on the
+  periodic update. Only Today sets `updatePeriodMillis` (30 min), so the periodic run needs a placed
+  Today widget; giving Notes and Finances a period is an `app.json` change (new build). The handler is
+  a headless JS task, so timers run (unlike expo-background-task, see widgets-research.md) for as long
+  as the handler's promise is pending, up to the library's 30 s task timeout.
+- **Not in the foreground** (`AppState` is `active`): the open DB already syncs and publishes on change.
+  It does run when the process is alive in the background, which is the usual case.
+- **One run** serves every widget that asks at once, and runs start at least 15 minutes apart.
+- **One DB per runtime.** `withBackgroundUserDb` in `lib/user-db.tsx` hands the job the DB the screens
+  have open; only when there is none does it open its own and dispose it afterwards. If the UI mounts
+  during a job (Android attaches it to the headless runtime), `UserDbProvider` takes that instance over
+  instead of opening a second one. Never call `createSyncedDb` for the user DB anywhere else.
+- A cold process has no record of what was last published, so its first run redraws every kind.
+
+iOS has no such trigger: WidgetKit renders in the extension and never wakes the app. It needs
+expo-background-task (a native dependency, so a new build) calling the same function.
+
 ### Midnight
 
 The Today snapshot carries today and tomorrow (tomorrow's overdue = today's unfinished tasks). iOS
@@ -98,7 +123,8 @@ over without the app. Android has no timeline: the handler picks the day for the
 minimum) so Android redraws it from the file after midnight. Notes and Finances don't depend on the
 clock within a day; Finances' selected dashboard period advances when the app next publishes.
 
-**Stale Today.** Nothing refreshes widgets in the background in v1, so a snapshot runs out when
+**Stale Today.** Nothing refreshes widgets in the background on iOS, or on Android without a placed
+Today widget, so a snapshot can run out when
 tomorrow ends (`todayWidgetExpiresAt`: the last day's `endsAt`). Past that, a widget would show an old
 day under "Today", so it draws "Open the app / to refresh your day" instead; the tap opens Today, and
 the foreground refresh republishes. iOS gets it as a third timeline entry at that midnight
@@ -210,11 +236,10 @@ builders).
 
 ## Not in v1
 
-Background refresh (expo-background-task, plus the Android timers workaround from the spike), server
+Background refresh on iOS (expo-background-task calling `refreshWidgetsInBackground()`), server
 push, per-instance configuration (`ios.configuration`; plan it before release, adding it later changes
 the native code), interactive buttons (ticking a task), a "hide amounts" setting, lock-screen and
-accessory widgets, a large Finances widget, Android preview images and Glance. `refreshWidgets(db)` is
-the entry point a background job would call after opening the DB and syncing.
+accessory widgets, a large Finances widget, Android preview images and Glance.
 
 ## Verification status (2026-11-09)
 

@@ -143,8 +143,11 @@ Notes, Today and Finances widgets on Android (`react-native-android-widget`) and
   the app publishes them (`apps/mobile/src/widgets/refresh.ts`) after the first sync settles, on
   (debounced) changes to exactly the queries a snapshot was read from, at midnight, on foreground and
   background (`session.ts`), and the signed-out state on sign-out. Only kinds whose content hash changed
-  are published (iOS reload budget, extension memory). `refreshWidgets(db)` is the entry a future
-  background job would call.
+  are published (iOS reload budget, extension memory).
+- **Background refresh (Android only so far):** the widget handler draws from the snapshot file, then
+  awaits `refreshWidgetsInBackground()` (`widgets/background.ts`): sqlite-sync's `catchUp()` and a
+  republish, skipped in the foreground and throttled to 15 min. It goes through `withBackgroundUserDb`
+  (`lib/user-db.tsx`) so a runtime never has two synced DBs open; don't open the user DB anywhere else.
 - **Platform files:** `ios-widgets.ios.tsx` is the only importer of `expo-widgets`/`@expo/ui`, and
   `android-widgets.android.tsx` + `widgets/android/` the only importers of `react-native-android-widget`
   (Biome `noRestrictedImports`; each has a no-op default file). `expo.autolinking.android.exclude` keeps

@@ -30,6 +30,16 @@ function parseStoredUser(value: string | null): SessionUser | null {
   }
 }
 
+/** The session saved on this device, for code that runs without the UI (the background widget refresh). */
+export async function readStoredSession(): Promise<{ token: string; user: SessionUser } | null> {
+  const [token, storedUser] = await Promise.all([
+    SecureStore.getItemAsync(TOKEN_KEY),
+    SecureStore.getItemAsync(USER_KEY),
+  ]);
+  const user = parseStoredUser(storedUser);
+  return token && user ? { token, user } : null;
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SessionState>({ status: "loading" });
 
@@ -43,16 +53,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function restore() {
-      const [token, storedUser] = await Promise.all([
-        SecureStore.getItemAsync(TOKEN_KEY),
-        SecureStore.getItemAsync(USER_KEY),
-      ]);
-      const user = parseStoredUser(storedUser);
+      const stored = await readStoredSession();
       if (cancelled) return;
-      if (!token || !user) {
+      if (!stored) {
         setState({ status: "signed-out" });
         return;
       }
+      const { token, user } = stored;
 
       setApiSessionToken(token);
       setState({ status: "signed-in", user });

@@ -12,20 +12,22 @@ import { readWidgetSnapshot, writeWidgetSnapshot } from "./android/store";
 import { WIDGET_NAMES, type WidgetPublisher, widgetKindForName } from "./kinds";
 
 /**
- * Runs whenever Android asks a widget to draw: added, resized, the periodic update, or after a
- * reboot or app update. It may run headless in a cold process, so it only reads the last
- * published snapshot file; it never opens the user DB. Taps are deep links handled natively.
+ * Called from the entry file on every launch, headless ones included.
+ *
+ * The handler runs whenever Android asks a widget to draw: added, resized, the periodic update, or
+ * after a reboot or app update, possibly headless in a cold process. It draws the last published
+ * snapshot file right away, then awaits `afterDraw` (the background refresh, which republishes
+ * what changed): the headless task, and with it JS timers, lasts until the handler resolves, 30 s
+ * at most. Taps are deep links handled natively.
  */
-async function widgetTaskHandler({ widgetInfo, widgetAction, renderWidget }: WidgetTaskHandlerProps) {
-  if (widgetAction === "WIDGET_DELETED") return;
-  const kind = widgetKindForName(widgetInfo.widgetName);
-  if (!kind) return;
-  renderWidget(renderAndroidWidget(kind, await readWidgetSnapshot(kind), widgetInfo, Date.now()));
-}
-
-/** Called from the entry file on every launch, headless ones included. */
-export function registerAndroidWidgets() {
-  registerWidgetTaskHandler(widgetTaskHandler);
+export function registerAndroidWidgets(afterDraw: () => Promise<void>) {
+  registerWidgetTaskHandler(async ({ widgetInfo, widgetAction, renderWidget }: WidgetTaskHandlerProps) => {
+    if (widgetAction === "WIDGET_DELETED") return;
+    const kind = widgetKindForName(widgetInfo.widgetName);
+    if (!kind) return;
+    renderWidget(renderAndroidWidget(kind, await readWidgetSnapshot(kind), widgetInfo, Date.now()));
+    await afterDraw();
+  });
 }
 
 /** Writes the snapshot file first (later redraws read it), then redraws placed widgets of the kind. */
