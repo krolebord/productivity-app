@@ -5,6 +5,7 @@ import { Alert, Animated, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_URL } from "../lib/config";
 import { cn } from "../lib/utils";
+import { useSchemaUpdateRequired } from "./app-update-provider";
 import { Icon } from "./ui/icon";
 
 /**
@@ -14,6 +15,7 @@ import { Icon } from "./ui/icon";
  */
 export function OfflineBanner() {
   const { phase, offline, reconnecting, reconnect, onLeft } = useConnectionBanner();
+  const { schemaVersionMismatched } = useDbState();
   const insets = useSafeAreaInsets();
   const [progress] = useState(() => new Animated.Value(0));
 
@@ -47,9 +49,15 @@ export function OfflineBanner() {
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={offline ? "You're offline. Tap to reconnect." : "Back online"}
-          accessibilityState={{ busy: reconnecting, disabled: !offline }}
-          disabled={!offline}
+          accessibilityLabel={
+            schemaVersionMismatched
+              ? "Syncing paused. App update required."
+              : offline
+                ? "You're offline. Tap to reconnect."
+                : "Back online"
+          }
+          accessibilityState={{ busy: reconnecting, disabled: !offline || schemaVersionMismatched }}
+          disabled={!offline || schemaVersionMismatched}
           onPress={reconnect}
           className={cn(
             "flex-row items-center gap-2 rounded-full border py-1.5 pr-3 pl-3.5 shadow-md active:opacity-80",
@@ -61,8 +69,12 @@ export function OfflineBanner() {
           {offline ? (
             <>
               <Icon name="wifi-off" size={16} colorClassName="accent-rose-700 dark:accent-rose-300" />
-              <Text className="text-rose-700 text-sm dark:text-rose-300">You're offline</Text>
-              <Icon name="refresh-cw" size={14} colorClassName="accent-rose-700 dark:accent-rose-300" />
+              <Text className="text-rose-700 text-sm dark:text-rose-300">
+                {schemaVersionMismatched ? "Syncing paused · Update required" : "You're offline"}
+              </Text>
+              {!schemaVersionMismatched && (
+                <Icon name="refresh-cw" size={14} colorClassName="accent-rose-700 dark:accent-rose-300" />
+              )}
             </>
           ) : (
             <>
@@ -78,13 +90,8 @@ export function OfflineBanner() {
 
 export function SyncStatusMonitor() {
   const db = useDb();
-
-  useDbEvent("remote-schema-version-mismatch", () => {
-    Alert.alert("Update required", "The server has a newer data format. Update the app to keep syncing.", [
-      { text: "Later", style: "cancel" },
-      { text: "Reload", onPress: () => void db.requestReload({ clean: false }) },
-    ]);
-  });
+  const { schemaVersionMismatched } = useDbState();
+  useSchemaUpdateRequired(schemaVersionMismatched);
 
   useDbEvent("de-sync-detected", () => {
     Alert.alert("Your data is out of sync", "Reset local data and re-sync from the server.", [
@@ -110,18 +117,31 @@ const REMOTE_STATE_DETAIL = {
  */
 export function useSyncStatus() {
   const db = useDb();
-  const { remoteState, deSynced } = useDbState();
-  const color = deSynced
-    ? "bg-rose-500"
-    : remoteState === "online"
-      ? "bg-emerald-500"
-      : remoteState === "connecting"
-        ? "bg-amber-500"
-        : "bg-rose-500";
-  const label = deSynced ? "Out of sync" : REMOTE_STATE_LABEL[remoteState];
+  const { remoteState, deSynced, schemaVersionMismatched } = useDbState();
+  const color = schemaVersionMismatched
+    ? "bg-amber-500"
+    : deSynced
+      ? "bg-rose-500"
+      : remoteState === "online"
+        ? "bg-emerald-500"
+        : remoteState === "connecting"
+          ? "bg-amber-500"
+          : "bg-rose-500";
+  const label = schemaVersionMismatched
+    ? "Update required"
+    : deSynced
+      ? "Out of sync"
+      : REMOTE_STATE_LABEL[remoteState];
   const host = API_URL.replace(/^https?:\/\//, "");
 
   const showDetails = () => {
+    if (schemaVersionMismatched) {
+      Alert.alert(
+        "Syncing paused",
+        "Update the app from a main tab to resume syncing. Your changes are saved on this device.",
+      );
+      return;
+    }
     if (deSynced) {
       Alert.alert(
         "Your data is out of sync",

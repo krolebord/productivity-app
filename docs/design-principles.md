@@ -45,6 +45,11 @@ Pick the transition by what the screen is, not by what the nearest file does.
   main tabs, deferred while the keyboard is visible or a quick-add task has unsaved text. Editors and
   other screens never offer a restart. Later hides the banner for that session; the next cold launch
   still applies the update. Returning to the foreground checks at most once every 15 minutes.
+- A sync schema mismatch keeps sqlite-sync offline and shows a persistent Update required banner on
+  the main tabs. The app checks for and downloads an OTA as soon as the mismatch appears (Update
+  retries); Restart applies it. Downloads never reset local data or reconnect the old code. No
+  available update or a failed download offers retry guidance. Leaving the user DB clears the schema
+  notice; normal OTA dismissal remains separate.
 
 ## Checkboxes
 
