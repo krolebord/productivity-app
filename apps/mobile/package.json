@@ -24,6 +24,7 @@
     "@sqlite-sync/react-native": "catalog:",
     "date-fns": "catalog:",
     "expo": "~58.0.23",
+    "expo-background-task": "~58.0.12",
     "expo-clipboard": "~58.0.4",
     "expo-constants": "~58.0.15",
     "expo-dev-client": "~58.0.18",
@@ -37,6 +38,7 @@
     "expo-splash-screen": "~58.0.13",
     "expo-status-bar": "~58.0.4",
     "expo-system-ui": "~58.0.7",
+    "expo-task-manager": "~58.0.13",
     "expo-updates": "~58.0.21",
     "expo-web-browser": "~58.0.7",
     "expo-widgets": "58.0.26",
@@ -74,7 +76,10 @@
       "android": {
         "exclude": [
           "expo-widgets",
-          "@expo/ui"
+          "@expo/ui",
+          "expo-background-task",
+          "expo-task-manager",
+          "unimodules-app-loader"
         ]
       }
     }

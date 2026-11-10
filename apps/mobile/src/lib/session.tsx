@@ -6,6 +6,8 @@ import { api, setApiSessionToken } from "./api";
 
 const TOKEN_KEY = "session-token";
 const USER_KEY = "session-user";
+// iOS only: the default (when unlocked) makes the keychain unreadable in a background launch on a locked phone.
+const STORE_OPTIONS = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 
 type SessionState = { status: "loading" } | { status: "signed-out" } | { status: "signed-in"; user: SessionUser };
 
@@ -63,6 +65,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       setApiSessionToken(token);
       setState({ status: "signed-in", user });
+      // Moves a session stored before STORE_OPTIONS existed to the new accessibility.
+      void Promise.all([
+        SecureStore.setItemAsync(TOKEN_KEY, token, STORE_OPTIONS),
+        SecureStore.setItemAsync(USER_KEY, JSON.stringify(user), STORE_OPTIONS),
+      ]).catch(() => {});
 
       // Starting offline keeps the stored session; only the server rejecting the token signs out.
       const { error, data } = await safe(api.auth.mobile.getSession());
@@ -70,7 +77,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (isDefinedError(error) && error.code === "UNAUTHORIZED") {
         await clearSession();
       } else if (data) {
-        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data));
+        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data), STORE_OPTIONS);
         setState({ status: "signed-in", user: data });
       }
     }
@@ -84,8 +91,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (token: string, user: SessionUser) => {
     setApiSessionToken(token);
     await Promise.all([
-      SecureStore.setItemAsync(TOKEN_KEY, token),
-      SecureStore.setItemAsync(USER_KEY, JSON.stringify(user)),
+      SecureStore.setItemAsync(TOKEN_KEY, token, STORE_OPTIONS),
+      SecureStore.setItemAsync(USER_KEY, JSON.stringify(user), STORE_OPTIONS),
     ]);
     setState({ status: "signed-in", user });
   }, []);

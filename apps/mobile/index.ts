@@ -5,6 +5,8 @@
 import "expo-router/entry";
 import { registerAndroidWidgets } from "./src/widgets/android-widgets";
 import { refreshWidgetsInBackground } from "./src/widgets/background";
+import { registerIosWidgetRefreshTask } from "./src/widgets/ios-background-task";
 import "./src/widgets/ios-widgets";
 
 registerAndroidWidgets(refreshWidgetsInBackground);
+registerIosWidgetRefreshTask();

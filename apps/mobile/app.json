@@ -28,6 +28,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-background-task",
       [
         "expo-dev-client",
         {

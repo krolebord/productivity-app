@@ -90,13 +90,13 @@ Each time, every kind is rebuilt (a handful of small indexed queries) but only k
 hash changed are published. `writtenAt` is left out of the hash. On iOS, reloads while the app is in
 the foreground are free; background ones count against WidgetKit's daily budget.
 
-### Background refresh (Android)
+### Background refresh
 
 `refreshWidgetsInBackground()` (`background.ts`) reads the stored session, runs sqlite-sync's
 best-effort `db.state.catchUp()` (15 s at most), then `refreshWidgets` whatever the sync got (offline it
 still moves Today on to the current day), and drops the connection `catchUp` reopened.
 
-- **Trigger:** the Android widget handler awaits it after drawing from the snapshot file, so it runs
+- **Android trigger:** the widget handler awaits it after drawing from the snapshot file, so it runs
   whenever Android asks a widget to draw: added, resized, after a reboot or app update, and on the
   periodic update. Only Today sets `updatePeriodMillis` (30 min), so the periodic run needs a placed
   Today widget; giving Notes and Finances a period is an `app.json` change (new build). The handler is
@@ -110,9 +110,18 @@ still moves Today on to the current day), and drops the connection `catchUp` reo
   during a job (Android attaches it to the headless runtime), `UserDbProvider` takes that instance over
   instead of opening a second one. Never call `createSyncedDb` for the user DB anywhere else.
 - A cold process has no record of what was last published, so its first run redraws every kind.
-
-iOS has no such trigger: WidgetKit renders in the extension and never wakes the app. It needs
-expo-background-task (a native dependency, so a new build) calling the same function.
+- **iOS trigger:** WidgetKit renders in the extension and never wakes the app, so
+  `ios-background-task.ios.ts` registers the same function as an expo-background-task task (a
+  `BGProcessingTask`; the `expo-background-task` config plugin adds the background mode and identifier).
+  iOS decides when it runs, often hours apart and not at all for apps the user rarely opens, and each
+  published kind counts against WidgetKit's reload budget. The simulator has no
+  BGTaskScheduler (registration is skipped there), so it needs a device, and it hasn't been run on one
+  yet. Only the
+  `.ios.ts` file imports the two packages (Biome rule); `expo.autolinking.android.exclude` keeps them
+  and `unimodules-app-loader` out of the Android build, where their tasks run with JS timers paused
+  (widgets-research.md).
+- **Keychain:** the session is stored with `AFTER_FIRST_UNLOCK` (`lib/session.tsx`), because the default
+  accessibility makes it unreadable when iOS launches the app in the background on a locked phone.
 
 ### Midnight
 
@@ -123,9 +132,8 @@ over without the app. Android has no timeline: the handler picks the day for the
 minimum) so Android redraws it from the file after midnight. Notes and Finances don't depend on the
 clock within a day; Finances' selected dashboard period advances when the app next publishes.
 
-**Stale Today.** Nothing refreshes widgets in the background on iOS, or on Android without a placed
-Today widget, so a snapshot can run out when
-tomorrow ends (`todayWidgetExpiresAt`: the last day's `endsAt`). Past that, a widget would show an old
+**Stale Today.** Background refresh is best effort (iOS picks the time; Android needs a placed Today
+widget), so a snapshot can still run out when tomorrow ends (`todayWidgetExpiresAt`: the last day's `endsAt`). Past that, a widget would show an old
 day under "Today", so it draws "Open the app / to refresh your day" instead; the tap opens Today, and
 the foreground refresh republishes. iOS gets it as a third timeline entry at that midnight
 (`staleTodayWidgetSnapshot`, `state: "stale"`), so the layout reads the state from its props and doesn't
@@ -236,8 +244,7 @@ builders).
 
 ## Not in v1
 
-Background refresh on iOS (expo-background-task calling `refreshWidgetsInBackground()`), server
-push, per-instance configuration (`ios.configuration`; plan it before release, adding it later changes
+Server push, per-instance configuration (`ios.configuration`; plan it before release, adding it later changes
 the native code), interactive buttons (ticking a task), a "hide amounts" setting, lock-screen and
 accessory widgets, a large Finances widget, Android preview images and Glance.
 
