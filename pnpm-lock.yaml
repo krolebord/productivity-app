@@ -16,14 +16,14 @@ catalogs:
       specifier: ^1.15.4
       version: 1.15.4
     '@sqlite-sync/core':
-      specifier: ^0.14.1
-      version: 0.14.1
+      specifier: ^0.14.3
+      version: 0.14.3
     '@sqlite-sync/react':
-      specifier: ^0.14.1
-      version: 0.14.1
+      specifier: ^0.14.3
+      version: 0.14.3
     '@sqlite-sync/react-native':
-      specifier: ^0.14.1
-      version: 0.14.1
+      specifier: ^0.14.3
+      version: 0.14.3
     '@tanstack/react-form':
       specifier: ^1.33.5
       version: 1.33.5
@@ -111,13 +111,13 @@ importers:
         version: 9.2.1(expo@58.0.23)(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
       '@sqlite-sync/core':
         specifier: 'catalog:'
-        version: 0.14.1(kysely@0.28.17)
+        version: 0.14.3(kysely@0.28.17)
       '@sqlite-sync/react':
         specifier: 'catalog:'
-        version: 0.14.1(@sqlite-sync/core@0.14.1(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
+        version: 0.14.3(@sqlite-sync/core@0.14.3(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
       '@sqlite-sync/react-native':
         specifier: 'catalog:'
-        version: 0.14.1(@op-engineering/op-sqlite@18.2.5(patch_hash=ba9a089c70e7012ce36cf77ee2380fb8cb0419b71c39833b2c5f782470b0404c)(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(@sqlite-sync/core@0.14.1(kysely@0.28.17))(kysely@0.28.17)(react-native-get-random-values@2.0.0(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)))(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
+        version: 0.14.3(@op-engineering/op-sqlite@18.2.5(patch_hash=ba9a089c70e7012ce36cf77ee2380fb8cb0419b71c39833b2c5f782470b0404c)(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(@sqlite-sync/core@0.14.3(kysely@0.28.17))(kysely@0.28.17)(react-native-get-random-values@2.0.0(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)))(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
       date-fns:
         specifier: 'catalog:'
         version: 4.4.0
@@ -297,20 +297,20 @@ importers:
         specifier: ^1.0.12
         version: 1.0.12(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@sqlite-sync/ai':
-        specifier: ^0.14.1
-        version: 0.14.1(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5))(@sqlite-sync/core@0.14.1(kysely@0.28.17))(ai@6.0.300(zod@4.6.5))(zod@4.6.5)
+        specifier: ^0.14.3
+        version: 0.14.3(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5))(@sqlite-sync/core@0.14.3(kysely@0.28.17))(ai@6.0.300(zod@4.6.5))(zod@4.6.5)
       '@sqlite-sync/cloudflare':
-        specifier: ^0.14.1
-        version: 0.14.1(@sqlite-sync/core@0.14.1(kysely@0.28.17))(kysely@0.28.17)
+        specifier: ^0.14.3
+        version: 0.14.3(@sqlite-sync/core@0.14.3(kysely@0.28.17))(kysely@0.28.17)
       '@sqlite-sync/core':
         specifier: 'catalog:'
-        version: 0.14.1(kysely@0.28.17)
+        version: 0.14.3(kysely@0.28.17)
       '@sqlite-sync/devtools':
-        specifier: ^0.14.1
-        version: 0.14.1(@sqlite-sync/core@0.14.1(kysely@0.28.17))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: ^0.14.3
+        version: 0.14.3(@sqlite-sync/core@0.14.3(kysely@0.28.17))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@sqlite-sync/react':
         specifier: 'catalog:'
-        version: 0.14.1(@sqlite-sync/core@0.14.1(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
+        version: 0.14.3(@sqlite-sync/core@0.14.3(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.1.5(@types/node@26.6.4)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
@@ -494,10 +494,10 @@ importers:
         version: 1.15.4(@opentelemetry/api@1.9.1)
       '@sqlite-sync/core':
         specifier: 'catalog:'
-        version: 0.14.1(kysely@0.28.17)
+        version: 0.14.3(kysely@0.28.17)
       '@sqlite-sync/react':
         specifier: 'catalog:'
-        version: 0.14.1(@sqlite-sync/core@0.14.1(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
+        version: 0.14.3(@sqlite-sync/core@0.14.3(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)
       '@tanstack/react-form':
         specifier: 'catalog:'
         version: 1.33.5(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -4079,49 +4079,49 @@ packages:
   '@speed-highlight/core@1.2.16':
     resolution: {integrity: sha512-yNm/fYEcnpRjYduLMaddTK9XKYil6xB88+qFg79ZdZhHu1PadfoQmFW7pVTx7FZqMBNcUuThiAhxhENgtAO2/w==}
 
-  '@sqlite-sync/ai@0.14.1':
-    resolution: {integrity: sha512-V+HlMNbJ34FTrjj4aKsPb73/n7Xl9kmPIGk6MwzOZABYQm3VIov7/DratIBlSkG2lapa4vn8zDifICuy4dObeA==}
+  '@sqlite-sync/ai@0.14.3':
+    resolution: {integrity: sha512-Xt5HgCr5QsIbgFMQJeId9NTXb4e2jliqByc1jtupnh/laBSPpxSshqkNYmUqtw09gv0pEM1FKTlmhImBCRCh1A==}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.29.0
-      '@sqlite-sync/core': ^0.14.1
+      '@sqlite-sync/core': ^0.14.3
       ai: ^6.0.0
       zod: ^4.1.8
     peerDependenciesMeta:
       '@modelcontextprotocol/sdk':
         optional: true
 
-  '@sqlite-sync/cloudflare@0.14.1':
-    resolution: {integrity: sha512-+1MZgJsi+9lPQhTx9lNLwdiPleePWM5DHY5ESpImjtwH+Rs5vQhoQndUB74z4dVO27yT9s1Iua1lyoSuL8IJJQ==}
+  '@sqlite-sync/cloudflare@0.14.3':
+    resolution: {integrity: sha512-PhdymSU2rwIykw5HCfMy4Qvrfq6xDXszKr0UKKEbVoNQWdfos8I8WQWk13bv+31Tnv3qUgDea6UUUbFzTmNowQ==}
     peerDependencies:
       '@cloudflare/workers-types': ^4.0.0
-      '@sqlite-sync/core': ^0.14.1
+      '@sqlite-sync/core': ^0.14.3
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/core@0.14.1':
-    resolution: {integrity: sha512-4yaL8SAzX5UkEVL1PydASeAZCB4z4XQ1aAxIbf0XfhRkCUxYUGnJa0HZc+3S0OMZXVtkyq0yRfQnsbGWLBVwcg==}
+  '@sqlite-sync/core@0.14.3':
+    resolution: {integrity: sha512-KwWqA3fKuyG9zJbiVP+qox48htOwD8W5brtMpYVSMB+2nTaWIJjz+B1jofA6WAE5rZNatlARGtK4q7lzykPBYA==}
     peerDependencies:
       kysely: ^0.28.0 || ^0.29.0
 
-  '@sqlite-sync/devtools@0.14.1':
-    resolution: {integrity: sha512-y5DEx3znF5o8E2V3R/6Vkty5VfZwSAmCuk/w3XPrP5bB7rxi3xxBC7Rn4HSyyEM8z/0rRUTnTRfZVlJGojVFgA==}
+  '@sqlite-sync/devtools@0.14.3':
+    resolution: {integrity: sha512-N7tVenyc+f5LM/6jYcMHYi9PMS0HN9+ha+e7Whz6LUbbl260wzmFy5hu3WCEKxHc6gLVU1qgd2ZNtsB3QnPO/Q==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.14.1
+      '@sqlite-sync/core': ^0.14.3
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
-  '@sqlite-sync/react-native@0.14.1':
-    resolution: {integrity: sha512-/NbHU/TrNtlTK0t/2+8GwQuz8i6CIsZwuhlgQpmLy1fIs+zDykIwdVgF16MLNf2jcvWvQgx4gJHHHvnHE+5Ugg==}
+  '@sqlite-sync/react-native@0.14.3':
+    resolution: {integrity: sha512-y4Y8cutOEY3xjKGbSc3blIMxWfs2KkeX2W2sBLSQogozUDFZvbhLN6a+h9iTRXOV9X7Msrxz2Y4b2bLwE2JIcA==}
     peerDependencies:
       '@op-engineering/op-sqlite': '>=18.2.0'
-      '@sqlite-sync/core': ^0.14.1
+      '@sqlite-sync/core': ^0.14.3
       kysely: ^0.28.0 || ^0.29.0
       react-native: '>=0.76.0'
       react-native-get-random-values: ^1.11.0 || ^2.0.0
 
-  '@sqlite-sync/react@0.14.1':
-    resolution: {integrity: sha512-xMAcqqF9SYFoNLM2L3YyEtAWUDp9s94WnN6kgAsqQ8R2mnDtS/09KroGChBMOYeUInjPj6EEiszwtjgyd1aXyw==}
+  '@sqlite-sync/react@0.14.3':
+    resolution: {integrity: sha512-06n63p3b5aWdb6Y47JIm5NaHdb/YckvEsgYxHdtO4g4f28yNJege59c1H9n2bYDKksSMRZNlZVtK8Wp/H9Pq2A==}
     peerDependencies:
-      '@sqlite-sync/core': ^0.14.1
+      '@sqlite-sync/core': ^0.14.3
       kysely: ^0.28.0 || ^0.29.0
       react: ^18.0.0 || ^19.0.0
 
@@ -12678,20 +12678,20 @@ snapshots:
 
   '@speed-highlight/core@1.2.16': {}
 
-  '@sqlite-sync/ai@0.14.1(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5))(@sqlite-sync/core@0.14.1(kysely@0.28.17))(ai@6.0.300(zod@4.6.5))(zod@4.6.5)':
+  '@sqlite-sync/ai@0.14.3(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5))(@sqlite-sync/core@0.14.3(kysely@0.28.17))(ai@6.0.300(zod@4.6.5))(zod@4.6.5)':
     dependencies:
-      '@sqlite-sync/core': 0.14.1(kysely@0.28.17)
+      '@sqlite-sync/core': 0.14.3(kysely@0.28.17)
       ai: 6.0.300(zod@4.6.5)
       zod: 4.6.5
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.5)
 
-  '@sqlite-sync/cloudflare@0.14.1(@sqlite-sync/core@0.14.1(kysely@0.28.17))(kysely@0.28.17)':
+  '@sqlite-sync/cloudflare@0.14.3(@sqlite-sync/core@0.14.3(kysely@0.28.17))(kysely@0.28.17)':
     dependencies:
-      '@sqlite-sync/core': 0.14.1(kysely@0.28.17)
+      '@sqlite-sync/core': 0.14.3(kysely@0.28.17)
       kysely: 0.28.17
 
-  '@sqlite-sync/core@0.14.1(kysely@0.28.17)':
+  '@sqlite-sync/core@0.14.3(kysely@0.28.17)':
     dependencies:
       '@sqlite.org/sqlite-wasm': 3.53.0-build1
       idb-keyval: 6.3.0
@@ -12699,23 +12699,23 @@ snapshots:
       xxhash-wasm: 1.1.0
       zod: 4.6.5
 
-  '@sqlite-sync/devtools@0.14.1(@sqlite-sync/core@0.14.1(kysely@0.28.17))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@sqlite-sync/devtools@0.14.3(@sqlite-sync/core@0.14.3(kysely@0.28.17))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@sqlite-sync/core': 0.14.1(kysely@0.28.17)
+      '@sqlite-sync/core': 0.14.3(kysely@0.28.17)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
 
-  '@sqlite-sync/react-native@0.14.1(@op-engineering/op-sqlite@18.2.5(patch_hash=ba9a089c70e7012ce36cf77ee2380fb8cb0419b71c39833b2c5f782470b0404c)(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(@sqlite-sync/core@0.14.1(kysely@0.28.17))(kysely@0.28.17)(react-native-get-random-values@2.0.0(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)))(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))':
+  '@sqlite-sync/react-native@0.14.3(@op-engineering/op-sqlite@18.2.5(patch_hash=ba9a089c70e7012ce36cf77ee2380fb8cb0419b71c39833b2c5f782470b0404c)(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0))(@sqlite-sync/core@0.14.3(kysely@0.28.17))(kysely@0.28.17)(react-native-get-random-values@2.0.0(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)))(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))':
     dependencies:
       '@op-engineering/op-sqlite': 18.2.5(patch_hash=ba9a089c70e7012ce36cf77ee2380fb8cb0419b71c39833b2c5f782470b0404c)(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
-      '@sqlite-sync/core': 0.14.1(kysely@0.28.17)
+      '@sqlite-sync/core': 0.14.3(kysely@0.28.17)
       kysely: 0.28.17
       react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
       react-native-get-random-values: 2.0.0(react-native@0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
 
-  '@sqlite-sync/react@0.14.1(@sqlite-sync/core@0.14.1(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)':
+  '@sqlite-sync/react@0.14.3(@sqlite-sync/core@0.14.3(kysely@0.28.17))(kysely@0.28.17)(react@19.3.0)':
     dependencies:
-      '@sqlite-sync/core': 0.14.1(kysely@0.28.17)
+      '@sqlite-sync/core': 0.14.3(kysely@0.28.17)
       kysely: 0.28.17
       react: 19.3.0
 
