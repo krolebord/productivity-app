@@ -1,14 +1,33 @@
+import { taskBucket } from "@productivity/core/agenda";
 import { combineLocalDateAndTime, localMidnightMs } from "@productivity/core/date-time";
-import { format } from "date-fns";
-import { useRef } from "react";
+import { addDays, format, isSameDay, isToday, isTomorrow } from "date-fns";
+import { View } from "react-native";
 import { DateTimeField } from "./date-time-field";
-import { FormRow, FormSection, FormSwitch } from "./ui/form";
+import { Chip } from "./ui/chip";
+import { FormRow, FormSection, FormValue } from "./ui/form";
 
 export type TaskScheduleFields = { dueAt: number | null; hasDueTime: boolean; completedAt: null };
 
-const DEFAULT_TIME = "09:00";
+type TimeOfDay = "anytime" | "morning" | "afternoon" | "evening";
 
-/** Rescheduling, including moving to the inbox, reopens the task — same as on the web. */
+const TIME_OF_DAY_OPTIONS: readonly { value: TimeOfDay; label: string }[] = [
+  { value: "anytime", label: "All day" },
+  { value: "morning", label: "Morning" },
+  { value: "afternoon", label: "Afternoon" },
+  { value: "evening", label: "Evening" },
+];
+
+const TIME_OF_DAY_DEFAULTS: Record<Exclude<TimeOfDay, "anytime">, string> = {
+  morning: "09:00",
+  afternoon: "14:00",
+  evening: "19:00",
+};
+
+/**
+ * Quick picks for the day (Today, Tomorrow, the day after as its weekday, Unset) and the time of
+ * day (matching Today's groups), above the date and, once set, the exact time. Day picks keep
+ * the chosen time. Rescheduling, including unsetting the date, reopens the task — same as on the web.
+ */
 export function TaskScheduleSection({
   dueAt,
   hasDueTime,
@@ -17,65 +36,78 @@ export function TaskScheduleSection({
 }: {
   dueAt: number | null;
   hasDueTime: boolean;
-  /** Where turning "Scheduled" on lands when the task has no earlier date, e.g. the day being viewed. */
+  /** Where setting a date lands when the task has none, e.g. the day being viewed. */
   defaultDay?: Date;
   onChange: (fields: TaskScheduleFields) => void;
 }) {
   const selected = dueAt != null ? new Date(dueAt) : null;
-  const time = selected && hasDueTime ? format(selected, "HH:mm") : DEFAULT_TIME;
-  // Switching "Scheduled" off and on again restores the date (and time) it had when switched off,
-  // including one the editor set itself, e.g. completing an inbox task schedules it for today.
-  const lastSchedule = useRef<{ dueAt: number; hasDueTime: boolean } | null>(null);
+  const time = selected && hasDueTime ? format(selected, "HH:mm") : null;
   const commit = (nextDueAt: number | null, nextHasDueTime: boolean) =>
     onChange({ dueAt: nextDueAt, hasDueTime: nextHasDueTime, completedAt: null });
-  const unschedule = () => {
-    if (dueAt != null) lastSchedule.current = { dueAt, hasDueTime };
-    commit(null, false);
-  };
-  const schedule = () => {
-    const last = lastSchedule.current;
-    if (last) commit(last.dueAt, last.hasDueTime);
-    else commit(localMidnightMs(defaultDay ?? new Date()), false);
-  };
+  const onDay = (day: Date) => commit(time ? combineLocalDateAndTime(day, time) : localMidnightMs(day), time != null);
+
+  const today = new Date();
+  const dayAfter = addDays(today, 2);
 
   return (
-    <FormSection footer={selected ? undefined : "Unscheduled tasks live in the inbox."}>
-      <FormSwitch
-        label="Scheduled"
-        value={selected != null}
-        onValueChange={(on) => (on ? schedule() : unschedule())}
-        last={selected == null}
-      />
-      {selected && (
+    <View className="gap-3">
+      <View className="flex-row flex-wrap gap-2">
+        <Chip label="Today" selected={selected != null && isToday(selected)} onPress={() => onDay(today)} />
+        <Chip
+          label="Tomorrow"
+          selected={selected != null && isTomorrow(selected)}
+          onPress={() => onDay(addDays(today, 1))}
+        />
+        <Chip
+          label={format(dayAfter, "EEE")}
+          accessibilityLabel={format(dayAfter, "EEEE")}
+          selected={selected != null && isSameDay(selected, dayAfter)}
+          onPress={() => onDay(dayAfter)}
+        />
+        <Chip label="Unset" selected={selected == null} onPress={() => commit(null, false)} />
+      </View>
+      {selected ? (
         <>
-          <FormRow label="Date">
-            <DateTimeField
-              mode="date"
-              value={selected}
-              onChange={(day) =>
-                commit(hasDueTime ? combineLocalDateAndTime(day, time) : localMidnightMs(day), hasDueTime)
-              }
-            />
-          </FormRow>
-          <FormSwitch
-            label="Time"
-            value={hasDueTime}
-            onValueChange={(on) =>
-              commit(on ? combineLocalDateAndTime(selected, DEFAULT_TIME) : localMidnightMs(selected), on)
-            }
-            last={!hasDueTime}
-          />
-          {hasDueTime ? (
-            <FormRow label="At" last>
-              <DateTimeField
-                mode="time"
-                value={selected}
-                onChange={(value) => commit(combineLocalDateAndTime(selected, format(value, "HH:mm")), true)}
+          <View className="flex-row flex-wrap gap-2">
+            {TIME_OF_DAY_OPTIONS.map((option) => (
+              <Chip
+                key={option.value}
+                label={option.label}
+                // A night time (21:00–04:59) has no chip, so none shows as selected.
+                selected={taskBucket({ dueAt, hasDueTime }) === option.value}
+                onPress={() =>
+                  commit(
+                    option.value === "anytime"
+                      ? localMidnightMs(selected)
+                      : combineLocalDateAndTime(selected, TIME_OF_DAY_DEFAULTS[option.value]),
+                    option.value !== "anytime",
+                  )
+                }
               />
+            ))}
+          </View>
+          <FormSection>
+            <FormRow label="Date" last={!time}>
+              <DateTimeField mode="date" value={selected} onChange={onDay} />
             </FormRow>
-          ) : null}
+            {time && (
+              <FormRow label="Time" last>
+                <DateTimeField
+                  mode="time"
+                  value={selected}
+                  onChange={(value) => commit(combineLocalDateAndTime(selected, format(value, "HH:mm")), true)}
+                />
+              </FormRow>
+            )}
+          </FormSection>
         </>
+      ) : (
+        <FormSection>
+          <FormRow label="Date" onPress={() => onDay(defaultDay ?? today)} last>
+            <FormValue muted>None</FormValue>
+          </FormRow>
+        </FormSection>
       )}
-    </FormSection>
+    </View>
   );
 }
