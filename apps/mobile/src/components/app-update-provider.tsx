@@ -9,6 +9,19 @@ const CHECK_GAP_MS = 15 * 60 * 1000;
 const RestartBlockers = createContext<((token: symbol, blocked: boolean) => void) | null>(null);
 const SchemaMismatch = createContext<((required: boolean) => void) | null>(null);
 type DownloadStatus = "idle" | "checking" | "downloading" | "ready" | "unavailable" | "error";
+type ManualCheck = {
+  enabled: boolean;
+  status: "idle" | "checking" | "ready" | "up-to-date" | "error";
+  check: () => void;
+};
+const ManualCheck = createContext<ManualCheck | null>(null);
+
+/** For a "Check for updates" control: an update it finds downloads and offers the usual restart banner. */
+export function useAppUpdateCheck() {
+  const context = useContext(ManualCheck);
+  if (!context) throw new Error("useAppUpdateCheck must be used inside AppUpdateProvider");
+  return context;
+}
 
 /** Read the DB's durable state, including mismatches detected before this monitor mounted. */
 export function useSchemaUpdateRequired(required: boolean) {
@@ -149,11 +162,27 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
   }
   if (error) description = "Couldn't restart. Try again, or close and reopen the app later.";
   const action = pending ? "Restart" : downloading ? "Updating…" : "Update";
+  const manualCheck: ManualCheck = {
+    enabled,
+    status: pending
+      ? "ready"
+      : downloading
+        ? "checking"
+        : downloadStatus === "unavailable"
+          ? "up-to-date"
+          : downloadStatus === "error"
+            ? "error"
+            : "idle",
+    check: () => {
+      setDismissed(false);
+      void download();
+    },
+  };
 
   return (
     <RestartBlockers.Provider value={setBlocked}>
       <SchemaMismatch.Provider value={reportSchemaMismatch}>
-        {children}
+        <ManualCheck.Provider value={manualCheck}>{children}</ManualCheck.Provider>
         {visible && (
           <View
             accessibilityLiveRegion="polite"

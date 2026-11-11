@@ -1,11 +1,12 @@
 import { useIntegrationsHasError } from "@productivity/core/data/integrations";
 import { useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
+import { useAppUpdateCheck } from "../../../components/app-update-provider";
 import { useAssistantEnabled, useTabContentInset } from "../../../components/assistant-button";
 import { GlobalActions } from "../../../components/global-actions";
 import { ScreenHeader } from "../../../components/screen-header";
 import { SyncStatus } from "../../../components/sync-status";
-import { FormRow, FormSection } from "../../../components/ui/form";
+import { FormRow, FormSection, FormValue } from "../../../components/ui/form";
 import { useSession } from "../../../lib/session";
 
 export default function MoreScreen() {
@@ -39,8 +40,34 @@ export default function MoreScreen() {
             <FormRow icon="layers" label="Skills" onPress={() => router.push("/skills")} last />
           </FormSection>
         )}
+        <UpdateCheckSection />
       </ScrollView>
     </View>
+  );
+}
+
+const UPDATE_CHECK_LABELS = {
+  idle: null,
+  checking: "Checking…",
+  ready: "Ready to restart",
+  "up-to-date": "Up to date",
+  error: "Couldn't check",
+} as const;
+
+function UpdateCheckSection() {
+  const { enabled, status, check } = useAppUpdateCheck();
+  const label = enabled ? UPDATE_CHECK_LABELS[status] : "Not in this build";
+  return (
+    <FormSection>
+      <FormRow
+        icon="refresh-cw"
+        label="Check for updates"
+        onPress={enabled && status !== "checking" ? check : undefined}
+        last
+      >
+        {label && <FormValue muted>{label}</FormValue>}
+      </FormRow>
+    </FormSection>
   );
 }
 
