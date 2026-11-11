@@ -11,7 +11,7 @@ import { Chip } from "./ui/chip";
 import { FormRow, FormSection, FormValue } from "./ui/form";
 import { IconButton } from "./ui/icon-button";
 import { PickerScreen } from "./ui/picker-screen";
-import { SelectField } from "./ui/select-sheet";
+import { ColorDot, SelectField } from "./ui/select-sheet";
 
 const TYPE_OPTIONS = TRANSACTION_TYPES.map((type) => ({ value: type, label: TRANSACTION_TYPE_META[type].label }));
 const IMPORTANCE_OPTIONS: { value: ImportanceFilter; label: string }[] = [
@@ -36,7 +36,7 @@ export function TransactionFiltersSheet({
   filters: TransactionFilters;
   onChange: (filters: TransactionFilters) => void;
   onClose: () => void;
-  accounts: readonly { id: string; labelText: string; currency: string }[];
+  accounts: readonly { id: string; labelText: string; labelColor: string; currency: string }[];
   currencies: readonly string[];
   categories: readonly string[];
 }) {
@@ -77,6 +77,7 @@ export function TransactionFiltersSheet({
               value: account.id,
               label: account.labelText || "Untitled",
               description: account.currency,
+              leading: <ColorDot color={account.labelColor} />,
             }))}
             onChange={(accountId) => patch({ accountId: accountId || undefined })}
             placeholder="All accounts"

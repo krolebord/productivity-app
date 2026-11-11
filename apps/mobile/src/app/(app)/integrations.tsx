@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../components/screen-header";
 import { FormRow, FormSection } from "../../components/ui/form";
 import { Icon, type IconName } from "../../components/ui/icon";
-import { SelectField } from "../../components/ui/select-sheet";
+import { ColorDot, SelectField } from "../../components/ui/select-sheet";
 import { Switch } from "../../components/ui/switch";
 import { api } from "../../lib/api";
 import { API_URL } from "../../lib/config";
@@ -229,7 +229,11 @@ function MonobankAccountRow({
         account.currency === monoAccount.currency &&
         (!linkedElsewhere.has(account.id) || account.id === monoAccount.linkedAccountId),
     )
-    .map((account) => ({ value: account.id, label: account.labelText || account.description || "Untitled account" }));
+    .map((account) => ({
+      value: account.id,
+      label: account.labelText || account.description || "Untitled account",
+      leading: <ColorDot color={account.labelColor} />,
+    }));
 
   const link = (accountId: string) => {
     try {

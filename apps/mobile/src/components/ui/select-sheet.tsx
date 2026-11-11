@@ -14,6 +14,8 @@ export type SelectOption<T extends string> = {
   description?: string;
   /** Extra search text that isn't shown, e.g. what the accessories stand for. */
   keywords?: string;
+  /** Shown before the label, e.g. a color dot. */
+  leading?: ReactNode;
   /** Shown after the label, e.g. icons. `label`/`description` stay plain text for search. */
   labelAccessory?: ReactNode;
   /** Shown at the end of the description line. */
@@ -21,6 +23,11 @@ export type SelectOption<T extends string> = {
 };
 
 const SEARCH_THRESHOLD = 10;
+
+/** The account's color as a dot, for `leading` on account options. */
+export function ColorDot({ color }: { color: string }) {
+  return <View className="size-2.5 rounded-full" style={{ backgroundColor: color }} />;
+}
 
 /** A form row that opens a searchable list of options in a sheet. */
 export function SelectField<T extends string>({
@@ -175,6 +182,7 @@ function Option<T extends string>({
     <OptionRow
       label={option.label}
       description={option.description}
+      leading={option.leading}
       labelAccessory={option.labelAccessory}
       descriptionAccessory={option.descriptionAccessory}
       selected={option.value === value}
@@ -186,6 +194,7 @@ function Option<T extends string>({
 function OptionRow({
   label,
   description,
+  leading,
   labelAccessory,
   descriptionAccessory,
   muted = false,
@@ -194,6 +203,7 @@ function OptionRow({
 }: {
   label: string;
   description?: string;
+  leading?: ReactNode;
   labelAccessory?: ReactNode;
   descriptionAccessory?: ReactNode;
   muted?: boolean;
@@ -205,8 +215,9 @@ function OptionRow({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      className="min-h-12 flex-row items-center border-border border-b px-5 py-2 active:bg-muted"
+      className="min-h-12 flex-row items-center gap-3 border-border border-b px-5 py-2 active:bg-muted"
     >
+      {leading}
       <View className="flex-1 gap-0.5">
         <View className="flex-row items-center gap-2">
           <Text className={`shrink text-base ${muted ? "text-muted-foreground" : "text-foreground"}`}>{label}</Text>

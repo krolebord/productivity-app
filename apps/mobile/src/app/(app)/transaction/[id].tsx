@@ -35,7 +35,7 @@ import { FieldError } from "../../../components/ui/form";
 import { Icon, MaterialIcon } from "../../../components/ui/icon";
 import { IconButton } from "../../../components/ui/icon-button";
 import { Input } from "../../../components/ui/input";
-import { SelectSheet } from "../../../components/ui/select-sheet";
+import { ColorDot, SelectSheet } from "../../../components/ui/select-sheet";
 import { IMPORTANCE_STYLE, parseAmountInput, TRANSACTION_TYPE_STYLE } from "../../../lib/finance";
 import { cn } from "../../../lib/utils";
 
@@ -222,6 +222,7 @@ function TransactionForm({
     value: account.id,
     label: account.labelText || "Untitled",
     description: account.currency,
+    leading: <ColorDot color={account.labelColor} />,
   }));
   const categoryOptions = categories.map((category) => ({ value: category, label: category }));
   const source = accounts.find((account) => account.id === form.accountId);
