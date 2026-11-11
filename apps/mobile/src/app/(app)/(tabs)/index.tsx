@@ -17,8 +17,8 @@ import { useReorderable } from "@productivity/core/use-reorderable";
 import { useDb } from "@productivity/core/user-db/db-context";
 import { differenceInCalendarDays, format } from "date-fns";
 import { useRouter } from "expo-router";
-import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, Text, type TextInputInstance, useWindowDimensions, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Canvas, Path, Skia } from "react-native-skia";
 import { useCSSVariable } from "uniwind";
@@ -252,20 +252,15 @@ function CollapsibleSectionTitle({
   );
 }
 
-type RingColors = { fill: string; selectedFill: string; track: string };
+type RingColors = { fill: string; track: string };
 
 function CalendarStrip({ agenda }: { agenda: Agenda }) {
   const { dayInfos, calendarExpanded, selectedDate, selectedKey, todayKey } = agenda;
-  const [primary, primaryForeground, mutedForeground] = useCSSVariable([
-    "--color-primary",
-    "--color-primary-foreground",
-    "--color-muted-foreground",
-  ]) as (string | undefined)[];
-  const ringColors: RingColors = {
-    fill: primary ?? "#8b5cf6",
-    selectedFill: primaryForeground ?? "#ffffff",
-    track: mutedForeground ?? "#71717a",
-  };
+  const [primary, mutedForeground] = useCSSVariable(["--color-primary", "--color-muted-foreground"]) as (
+    | string
+    | undefined
+  )[];
+  const ringColors: RingColors = { fill: primary ?? "#8b5cf6", track: mutedForeground ?? "#71717a" };
   const weeks = useMemo(() => {
     const rows: CalendarDayInfo[][] = [];
     for (let i = 0; i < dayInfos.length; i += 7) rows.push(dayInfos.slice(i, i + 7));
@@ -283,29 +278,19 @@ function CalendarStrip({ agenda }: { agenda: Agenda }) {
     return () => cancelAnimationFrame(frame);
   }, [mountedMonth, monthKey]);
 
-  return (
-    <View className="gap-1">
-      <View className="flex-row items-center">
-        <IconButton
-          icon="chevron-left"
-          label={calendarExpanded ? "Previous month" : "Previous week"}
-          onPress={() => agenda.shiftCalendar(-1)}
-          iconClassName="accent-muted-foreground"
-          size={18}
-          className="size-8"
-        />
-        <Text className="flex-1 text-center font-medium text-muted-foreground text-sm">
-          {format(selectedDate, "MMMM yyyy")}
-        </Text>
-        <IconButton
-          icon="chevron-right"
-          label={calendarExpanded ? "Next month" : "Next week"}
-          onPress={() => agenda.shiftCalendar(1)}
-          iconClassName="accent-muted-foreground"
-          size={18}
-          className="size-8"
-        />
-      </View>
+  const arrow = (delta: -1 | 1, className?: string) => (
+    <IconButton
+      icon={delta < 0 ? "chevron-left" : "chevron-right"}
+      label={`${delta < 0 ? "Previous" : "Next"} ${calendarExpanded ? "month" : "week"}`}
+      onPress={() => agenda.shiftCalendar(delta)}
+      iconClassName="accent-muted-foreground"
+      size={18}
+      className={cn("size-8", className)}
+    />
+  );
+
+  const grid = (
+    <View className="flex-1 gap-1">
       <View className="flex-row">
         {WEEKDAYS.map((weekday) => (
           <Text key={weekday} className="flex-1 text-center font-medium text-[11px] text-muted-foreground">
@@ -332,6 +317,31 @@ function CalendarStrip({ agenda }: { agenda: Agenda }) {
           </View>
         );
       })}
+    </View>
+  );
+
+  // The month title only shows with the month grid; a single week has its arrows beside it,
+  // lined up with the dates.
+  if (!calendarExpanded) {
+    return (
+      <View className="-mx-2 flex-row items-end">
+        {arrow(-1, "mb-2.5")}
+        {grid}
+        {arrow(1, "mb-2.5")}
+      </View>
+    );
+  }
+
+  return (
+    <View className="gap-1">
+      <View className="flex-row items-center">
+        {arrow(-1)}
+        <Text className="flex-1 text-center font-medium text-muted-foreground text-sm">
+          {format(selectedDate, "MMMM yyyy")}
+        </Text>
+        {arrow(1)}
+      </View>
+      <View className="flex-row">{grid}</View>
     </View>
   );
 }
@@ -365,12 +375,12 @@ function DayCell({
       }`}
       accessibilityState={{ selected }}
       onPress={() => onSelect(day.dateKey)}
-      className={`mx-0.5 flex-1 items-center gap-0.5 rounded-lg py-1 ${selected ? "bg-primary" : "active:bg-muted"} ${
+      className={`mx-0.5 flex-1 items-center gap-0.5 rounded-lg py-1 active:bg-muted ${
         muted && !selected ? "opacity-40" : ""
       }`}
     >
-      <View className="size-8 items-center justify-center">
-        {progress && <HabitProgressRing progress={progress} selected={selected} colors={ringColors} />}
+      <View className={`size-8 items-center justify-center rounded-full ${selected ? "bg-primary" : ""}`}>
+        {progress && !selected && <HabitProgressRing progress={progress} colors={ringColors} />}
         <Text
           className={`font-semibold text-base ${
             selected ? "text-primary-foreground" : isToday ? "text-primary" : "text-foreground"
@@ -379,11 +389,7 @@ function DayCell({
           {day.date.getDate()}
         </Text>
       </View>
-      <View
-        className={`size-1 rounded-full ${
-          day.hasIncompleteTasks ? (selected ? "bg-primary-foreground" : "bg-primary") : "bg-transparent"
-        }`}
-      />
+      <View className={`size-1 rounded-full ${day.hasIncompleteTasks ? "bg-primary" : "bg-transparent"}`} />
     </Pressable>
   );
 }
@@ -392,15 +398,7 @@ const RING_SIZE = 32;
 const RING_STROKE = 2;
 
 /** The day's habits done so far as a ring around the date, filling clockwise from the top (as on web). */
-function HabitProgressRing({
-  progress,
-  selected,
-  colors,
-}: {
-  progress: DayHabitProgress;
-  selected: boolean;
-  colors: RingColors;
-}) {
+function HabitProgressRing({ progress, colors }: { progress: DayHabitProgress; colors: RingColors }) {
   const ratio = progress.due > 0 ? Math.min(1, progress.done / progress.due) : 0;
   const { track, arc } = useMemo(() => {
     const inset = RING_STROKE / 2;
@@ -413,20 +411,8 @@ function HabitProgressRing({
 
   return (
     <Canvas pointerEvents="none" style={{ position: "absolute", width: RING_SIZE, height: RING_SIZE }}>
-      <Path
-        path={track}
-        style="stroke"
-        strokeWidth={RING_STROKE}
-        color={selected ? colors.selectedFill : colors.track}
-        opacity={selected ? 0.3 : 0.25}
-      />
-      <Path
-        path={arc}
-        style="stroke"
-        strokeWidth={RING_STROKE}
-        strokeCap="round"
-        color={selected ? colors.selectedFill : colors.fill}
-      />
+      <Path path={track} style="stroke" strokeWidth={RING_STROKE} color={colors.track} opacity={0.25} />
+      <Path path={arc} style="stroke" strokeWidth={RING_STROKE} strokeCap="round" color={colors.fill} />
     </Canvas>
   );
 }
@@ -440,6 +426,7 @@ function QuickAddTask({
 }) {
   const [title, setTitle] = useState("");
   const [toInbox, setToInbox] = useState(false);
+  const inputRef = useRef<TextInputInstance>(null);
   useDeferAppUpdate(title.length > 0);
 
   const submit = () => {
@@ -449,8 +436,16 @@ function QuickAddTask({
   };
 
   return (
-    <View className="h-12 flex-row items-center gap-2 rounded-xl border border-border bg-card pr-1 pl-3">
+    <View className="h-12 flex-row items-center gap-1 rounded-xl border border-border bg-card px-1">
+      <IconButton
+        icon="plus"
+        label="Add task"
+        onPress={() => (title.trim() ? submit() : inputRef.current?.focus())}
+        iconClassName="accent-primary"
+        size={18}
+      />
       <Input
+        ref={inputRef}
         value={title}
         onChangeText={setTitle}
         onSubmitEditing={submit}
@@ -470,15 +465,6 @@ function QuickAddTask({
         onPress={() => setToInbox((value) => !value)}
         iconClassName="accent-muted-foreground"
         size={18}
-      />
-      <IconButton
-        icon="plus"
-        label="Add task"
-        onPress={submit}
-        disabled={!title.trim()}
-        iconClassName="accent-primary-foreground"
-        size={18}
-        className="size-9 bg-primary active:bg-primary/80"
       />
     </View>
   );
@@ -659,7 +645,6 @@ function HabitRow({
   const onIncrement = () => actions.incrementHabit(habit.id, dateKey, dayValue);
   const isSimple = habit.target <= 1;
   const unit = habit.unit.trim();
-  const progressLabel = `${value}/${habit.target}${unit ? ` ${unit}` : ""}`;
   const missedLabel = overdue ? format(parseDateKey(dateKey), "MMM d") : null;
 
   return (
@@ -687,24 +672,30 @@ function HabitRow({
       )}
       <View className="flex-1 py-2">
         <View className="flex-row items-center gap-2">
-          <Icon name="repeat" size={12} colorClassName="accent-muted-foreground" />
           <Text numberOfLines={1} className={`shrink text-base text-foreground ${done ? "line-through" : ""}`}>
             {habit.name}
           </Text>
+          <Icon name="repeat" size={12} colorClassName="accent-muted-foreground" />
         </View>
         {missedLabel && <Text className="mt-0.5 text-destructive text-xs">{missedLabel}</Text>}
-        {!isSimple && <Text className="text-muted-foreground text-xs">{progressLabel}</Text>}
+        {!isSimple && (
+          <Text numberOfLines={1} className="text-muted-foreground text-xs">
+            <Text className="font-semibold text-foreground">
+              {value}/{habit.target}
+            </Text>
+            {unit ? ` · ${unit}` : ""}
+          </Text>
+        )}
       </View>
       {!isSimple && editable && !done && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Add 1 to ${habit.name}`}
+        <IconButton
+          icon="plus"
+          label={`Add 1 to ${habit.name}`}
           onPress={onIncrement}
-          className="h-8 flex-row items-center gap-1 rounded-full border border-border px-3 active:bg-muted"
-        >
-          <Icon name="plus" size={14} colorClassName="accent-foreground" />
-          <Text className="font-medium text-foreground text-sm">1</Text>
-        </Pressable>
+          iconClassName="accent-muted-foreground"
+          size={16}
+          className="size-8 bg-muted active:bg-border"
+        />
       )}
     </Animated.View>
   );
