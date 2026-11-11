@@ -379,7 +379,12 @@ function DayCell({
         muted && !selected ? "opacity-40" : ""
       }`}
     >
-      <View className={`size-8 items-center justify-center rounded-full ${selected ? "bg-primary" : ""}`}>
+      {/* Not collapsable: Android flattens it while it has no background, and the native view it gets
+          once selected loses its corner radius. */}
+      <View
+        collapsable={false}
+        className={`size-8 items-center justify-center rounded-full ${selected ? "bg-primary" : "bg-transparent"}`}
+      >
         {progress && !selected && <HabitProgressRing progress={progress} colors={ringColors} />}
         <Text
           className={`font-semibold text-base ${
