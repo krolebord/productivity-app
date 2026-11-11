@@ -1,4 +1,5 @@
 import {
+  type ChecklistBlock,
   emptyTextBlock,
   insertChecklistAfter,
   type NoteBlock,
@@ -41,6 +42,9 @@ export function NoteDocument({
   const [focus, setFocus] = useState<ChecklistFocus>(null);
   const [focusText, setFocusText] = useState<string | null>(null);
   const activeBlock = useRef<string | null>(null);
+  // An empty text block a new checklist replaced, still shown until the checklist has focus:
+  // unmounting the focused editor blurs it, which on Android hides the keyboard just reopened.
+  const [replaced, setReplaced] = useState<{ block: NoteBlock; before: string } | null>(null);
   const textBlocks = useRef(new Map<string, NoteTextBlockHandle>());
 
   const commit = (next: NoteBlock[]) => {
@@ -71,6 +75,11 @@ export function NoteDocument({
     focus: () => focusBlock(blocksRef.current[0]),
     addChecklist: () => {
       const { blocks: next, itemId } = insertChecklistAfter(blocksRef.current, activeBlock.current);
+      const active = blocksRef.current.find((b) => b.id === activeBlock.current);
+      const checklist = next.find((b): b is ChecklistBlock => b.kind === "checklist" && b.items[0]?.id === itemId);
+      if (active && checklist && !next.some((b) => b.id === active.id)) {
+        setReplaced({ block: active, before: checklist.id });
+      }
       commit(next);
       setFocus({ itemId, at: "start" });
     },
@@ -87,26 +96,32 @@ export function NoteDocument({
     setFocusText(text.id);
   };
 
+  const textBlock = (block: Extract<NoteBlock, { kind: "text" }>, retired = false) => (
+    <NoteTextBlock
+      key={block.id}
+      ref={(handle) => {
+        if (handle) textBlocks.current.set(block.id, handle);
+        else textBlocks.current.delete(block.id);
+      }}
+      block={block}
+      placeholder={blocks.length === 1 && !retired ? placeholder : undefined}
+      onChange={(body) => {
+        const current = blocksRef.current.find((b) => b.id === block.id);
+        if (current?.kind === "text") replace(block.id, { ...current, body });
+      }}
+      onFocus={() => {
+        activeBlock.current = block.id;
+      }}
+    />
+  );
+
   return (
     <View className="flex-grow">
-      {blocks.map((block, index) =>
+      {/* Flat, so the replaced block keeps its key's slot and isn't remounted. */}
+      {blocks.flatMap((block, index) => [
+        ...(replaced?.before === block.id && replaced.block.kind === "text" ? [textBlock(replaced.block, true)] : []),
         block.kind === "text" ? (
-          <NoteTextBlock
-            key={block.id}
-            ref={(handle) => {
-              if (handle) textBlocks.current.set(block.id, handle);
-              else textBlocks.current.delete(block.id);
-            }}
-            block={block}
-            placeholder={blocks.length === 1 ? placeholder : undefined}
-            onChange={(body) => {
-              const current = blocksRef.current.find((b) => b.id === block.id);
-              if (current?.kind === "text") replace(block.id, { ...current, body });
-            }}
-            onFocus={() => {
-              activeBlock.current = block.id;
-            }}
-          />
+          textBlock(block)
         ) : (
           <NoteChecklist
             key={block.id}
@@ -120,12 +135,13 @@ export function NoteDocument({
             onRequestFocus={setFocus}
             onFocusItem={() => {
               activeBlock.current = block.id;
+              setReplaced(null);
             }}
             onLeaveStart={() => focusBlock(blocksRef.current[index - 1])}
             onDraggingChange={onDraggingChange}
           />
         ),
-      )}
+      ])}
       <Pressable accessibilityLabel="Continue writing" onPress={continueAtEnd} className="min-h-24 flex-grow" />
     </View>
   );
