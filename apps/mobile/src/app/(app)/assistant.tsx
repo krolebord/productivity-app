@@ -355,8 +355,7 @@ function Chat({
   };
 
   const submit = async () => {
-    const sent = input;
-    const sentFiles = files;
+    const { draft: sent, files: sentFiles } = getAssistantChat(conversationId);
     const text = sent.trim();
     // Read the store, not the render: a quick second tap lands before the lock re-renders.
     if (
@@ -379,6 +378,11 @@ function Chat({
       submittedUpdatedAt: conversation?.updatedAt ?? null,
     };
     setAssistantSubmitLock(conversationId, lock);
+    // Cleared up front: comparing against the sent text after the request lost to keyboards
+    // still committing a word, which left the composer full.
+    setAssistantDraft(conversationId, "");
+    setAssistantFiles(conversationId, []);
+    inputRef.current?.clear();
     scrollToBottom();
 
     const uploads = sentFiles.map(toUploadFile);
@@ -397,12 +401,10 @@ function Chat({
     if (error || !data.accepted) {
       clearAssistantSubmitLock(conversationId, lock);
       if (error) setRpcError(rpcErrorMessage(error));
-      return;
+      // Give the message back unless something new was typed in the meantime.
+      setAssistantDraft(conversationId, (current) => current || sent);
+      setAssistantFiles(conversationId, (current) => [...sentFiles, ...current]);
     }
-    // Keep anything typed or attached while the send was in flight.
-    setAssistantDraft(conversationId, (current) => (current === sent ? "" : current));
-    // By identity, so a file removed or added mid-send isn't resent or dropped.
-    setAssistantFiles(conversationId, (current) => current.filter((file) => !sentFiles.includes(file)));
   };
 
   const cancel = async () => {
