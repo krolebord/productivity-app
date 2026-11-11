@@ -24,7 +24,6 @@ import {
 import { isSubmitLockHolding, type SubmitLock } from "@productivity/core/submit-lock";
 import { useDb } from "@productivity/core/user-db/db-context";
 import type { ConversationItem, ConversationMessageItem } from "@productivity/core/user-db/migrations";
-import { useConnectionBanner } from "@productivity/core/user-db/use-connection-banner";
 import { generateId } from "@sqlite-sync/core";
 import { useIsFocused, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -74,6 +73,7 @@ import {
 } from "../../lib/assistant-chats";
 import { type PickedFile, pickDocuments, pickImages, toUploadFile } from "../../lib/assistant-uploads";
 import { setPreference, usePreference } from "../../lib/preferences";
+import { useConnectionBanner } from "../../lib/use-connection-banner";
 
 // Within this distance of the end, new content keeps the transcript pinned to the bottom.
 const STICK_TO_BOTTOM_THRESHOLD = 80;

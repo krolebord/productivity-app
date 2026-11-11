@@ -13,8 +13,10 @@ export type ConnectionBannerPhase = "hidden" | "offline" | "back-online" | "leav
  * connection has been down for `SHOW_DELAY_MS`, so quick reconnects never flash it. When the
  * connection returns it shows "Back online" (only if the offline banner was actually shown),
  * then enters `leaving`. The UI plays its exit animation and calls `onLeft` when it finishes.
+ * While `active` is false (a backgrounded mobile app) the banner hides and the delay doesn't run,
+ * so it restarts on return instead of having elapsed before the app was suspended.
  */
-export function useConnectionBanner() {
+export function useConnectionBanner({ active = true }: { active?: boolean } = {}) {
   const { state } = useDb();
   const { remoteState } = useDbState();
   const [phase, setPhase] = useState<ConnectionBannerPhase>("hidden");
@@ -27,11 +29,15 @@ export function useConnectionBanner() {
       setPhase((current) => (current === "offline" ? "back-online" : current));
       return;
     }
+    if (!active) {
+      setPhase("hidden");
+      return;
+    }
     // The banner is already on screen, so switch back to offline right away instead of hiding and reshowing it.
     setPhase((current) => (current === "back-online" || current === "leaving" ? "offline" : current));
     const timeout = setTimeout(() => setPhase("offline"), SHOW_DELAY_MS);
     return () => clearTimeout(timeout);
-  }, [online]);
+  }, [online, active]);
 
   useEffect(() => {
     if (phase !== "back-online") return;

@@ -1,9 +1,9 @@
 import { useDb, useDbEvent, useDbState } from "@productivity/core/user-db/db-context";
-import { useConnectionBanner } from "@productivity/core/user-db/use-connection-banner";
 import { useEffect, useState } from "react";
 import { Alert, Animated, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_URL } from "../lib/config";
+import { useConnectionBanner } from "../lib/use-connection-banner";
 import { cn } from "../lib/utils";
 import { useSchemaUpdateRequired } from "./app-update-provider";
 import { Icon } from "./ui/icon";
