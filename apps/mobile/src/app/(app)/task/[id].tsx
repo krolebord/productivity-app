@@ -43,10 +43,20 @@ export default function TaskScreen() {
       </View>
     );
   }
-  return <TaskEditor id={id} task={task} defaultDay={day ? parseDateKey(day) : undefined} />;
+  return <TaskEditor id={id} task={task} isNew={!!draft} defaultDay={day ? parseDateKey(day) : undefined} />;
 }
 
-function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | undefined; defaultDay?: Date }) {
+function TaskEditor({
+  id,
+  task,
+  isNew,
+  defaultDay,
+}: {
+  id: string;
+  task: NoteItem | undefined;
+  isNew: boolean;
+  defaultDay?: Date;
+}) {
   const db = useDb();
   const router = useRouter();
   const [openedBlank] = useState(() => isBlankItem(task ?? {}));
@@ -54,7 +64,7 @@ function TaskEditor({ id, task, defaultDay }: { id: string; task: NoteItem | und
     title: task?.title ?? "",
     content: task?.content ?? "",
     tags: parseTags(task?.tags),
-    dueAt: task?.dueAt ?? null,
+    dueAt: task ? task.dueAt : isNew && defaultDay ? localMidnightMs(defaultDay) : null,
     hasDueTime: Boolean(task?.hasDueTime),
     completedAt: task?.completedAt ?? null,
   }));

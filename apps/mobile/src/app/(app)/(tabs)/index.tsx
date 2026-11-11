@@ -92,7 +92,7 @@ export default function TodayScreen() {
         subtitle={daySubtitle(agenda.selectedDate, agenda.todayKey)}
         actions={
           <>
-            <GlobalActions />
+            <GlobalActions taskDay={agenda.selectedKey} />
             <IconButton
               icon={agenda.calendarExpanded ? "chevron-up" : "calendar"}
               label={agenda.calendarExpanded ? "Collapse calendar" : "Expand calendar"}

@@ -8,8 +8,9 @@ import { IconButton } from "./ui/icon-button";
  * Search and "New" for the tab headers, the mobile counterpart of the web's command palette:
  * search opens the global search screen, "New" a sheet to create a note, task, transaction
  * or habit from any tab. `showNew` is off on Notes, whose own "+" prefills the active filter.
+ * `taskDay` (a date key) schedules a new task for that day, so Today's "+" lands on the viewed day.
  */
-export function GlobalActions({ showNew = true }: { showNew?: boolean }) {
+export function GlobalActions({ showNew = true, taskDay }: { showNew?: boolean; taskDay?: string }) {
   const router = useRouter();
   const [newOpen, setNewOpen] = useState(false);
 
@@ -32,7 +33,8 @@ export function GlobalActions({ showNew = true }: { showNew?: boolean }) {
               {
                 label: "Task",
                 icon: "check-square",
-                onPress: () => router.push({ pathname: "/task/[id]", params: { id: generateId(), draft: "1" } }),
+                onPress: () =>
+                  router.push({ pathname: "/task/[id]", params: { id: generateId(), draft: "1", day: taskDay } }),
               },
               {
                 label: "Transaction",
