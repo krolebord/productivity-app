@@ -4,6 +4,7 @@ import { type NoteListItem, notePreviewMarkdown } from "@productivity/core/data/
 import { parseTags } from "@productivity/core/tags";
 import { useDb } from "@productivity/core/user-db/db-context";
 import { Trash2 } from "lucide-react";
+import { useCallback, useState } from "react";
 import { NoteMarkdown } from "@/components/note-markdown";
 import { useInlineConfirm } from "@/components/ui/inline-confirm";
 import { useAttachToAssistant } from "@/lib/use-attach-to-assistant";
@@ -21,15 +22,29 @@ export function NoteCardContent({
   const tags = parseTags(note.tags);
   const active = new Set(activeTags);
   const hasMeta = tags.length > 0;
+  const [clipped, setClipped] = useState(false);
+  const observeClipped = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return undefined;
+    const update = () => setClipped(el.scrollHeight > el.clientHeight);
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div className="px-4 py-3">
       {note.title && <p className="mb-1 line-clamp-2 font-medium text-sm leading-snug">{note.title}</p>}
       {note.preview ? (
-        <NoteMarkdown
-          content={notePreviewMarkdown(note.preview)}
-          className="max-h-72 overflow-hidden text-muted-foreground text-sm leading-relaxed"
-        />
+        <div
+          ref={observeClipped}
+          className={cn("max-h-72 overflow-hidden", clipped && "mask-b-from-[calc(100%-3rem)]")}
+        >
+          <NoteMarkdown
+            content={notePreviewMarkdown(note.preview)}
+            className="text-muted-foreground text-sm leading-relaxed"
+          />
+        </div>
       ) : (
         !note.title && !hasMeta && <p className="text-muted-foreground/50 text-sm italic">Empty note</p>
       )}

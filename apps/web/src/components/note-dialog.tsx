@@ -303,7 +303,7 @@ export function NoteDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && saveAndClose()}>
-      <DialogContent className="flex flex-col gap-3 overflow-hidden pb-2 sm:max-w-lg sm:pb-2" showCloseButton={false}>
+      <DialogContent className="flex flex-col gap-3 overflow-hidden pb-2 sm:max-w-2xl sm:pb-2" showCloseButton={false}>
         {noteId ? (
           <NoteDialogContent
             key={openRevision}

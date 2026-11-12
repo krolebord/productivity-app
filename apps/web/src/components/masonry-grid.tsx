@@ -5,12 +5,12 @@ export type MasonryRect = { x: number; y: number; width: number; height: number 
 export function useMasonryLayout<T>({
   items,
   itemKey,
-  columnWidth,
+  minColumnWidth,
   gap,
 }: {
   items: T[];
   itemKey: (item: T) => Key;
-  columnWidth: number;
+  minColumnWidth: number;
   gap: number;
 }) {
   const [outerEl, setOuterEl] = useState<HTMLElement | null>(null);
@@ -69,15 +69,14 @@ export function useMasonryLayout<T>({
     if (outerWidth === 0) {
       return {
         rects: new Map<Key, MasonryRect>(),
-        columnWidth,
+        columnWidth: minColumnWidth,
         columnCount: 1,
         innerWidth: 0,
         innerHeight: 0,
       };
     }
-    const targetWidth = Math.min(columnWidth, outerWidth);
-    const columnCount = Math.max(1, Math.floor((outerWidth + gap) / (targetWidth + gap)));
-    const colWidth = columnCount === 1 ? outerWidth : columnWidth;
+    const columnCount = Math.max(1, Math.floor((outerWidth + gap) / (minColumnWidth + gap)));
+    const colWidth = Math.floor((outerWidth - (columnCount - 1) * gap) / columnCount);
     const colHeights = new Array<number>(columnCount).fill(0);
     const rects = new Map<Key, MasonryRect>();
     for (const item of items) {
@@ -98,7 +97,7 @@ export function useMasonryLayout<T>({
       innerWidth: columnCount * colWidth + (columnCount - 1) * gap,
       innerHeight: Math.max(0, Math.max(...colHeights) - gap),
     };
-  }, [items, itemKey, heights, outerWidth, columnWidth, gap]);
+  }, [items, itemKey, heights, outerWidth, minColumnWidth, gap]);
 
   const prevRectsRef = useRef<ReadonlyMap<Key, MasonryRect>>(new Map());
   useEffect(() => {
@@ -137,7 +136,6 @@ export function useMasonryLayout<T>({
         position: "relative",
         width: layout.innerWidth,
         height: layout.innerHeight,
-        margin: "0 auto",
       } satisfies CSSProperties,
     },
     innerEl,

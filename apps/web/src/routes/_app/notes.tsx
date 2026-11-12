@@ -282,7 +282,7 @@ function NotesPage() {
   const masonry = useMasonryLayout({
     items: orderedNotes,
     itemKey: noteKey,
-    columnWidth: 240,
+    minColumnWidth: 280,
     gap: 16,
   });
 
