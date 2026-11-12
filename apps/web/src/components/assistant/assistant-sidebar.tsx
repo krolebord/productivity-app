@@ -34,6 +34,7 @@ import {
   resourceFilename,
   type SkillToolPayload,
   type ToolLink,
+  toolLabel,
   toolLinks,
   toolPayload,
   type WebToolPayload,
@@ -60,6 +61,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowDown,
+  ArrowUp,
   Brain,
   Check,
   ChevronDown,
@@ -71,18 +73,20 @@ import {
   ExternalLink,
   FileText,
   Gauge,
+  Globe,
   ImageIcon,
   Loader2,
+  type LucideIcon,
   Mic,
   Paperclip,
   PlusIcon,
   Search,
-  SendHorizontal,
   Sparkles,
   Trash2,
   Type,
   Video,
   Workflow,
+  Wrench,
   X,
 } from "lucide-react";
 import { type ClipboardEvent, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -101,11 +105,35 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import { warmAssistantAgent } from "@/lib/warm-assistant-agent";
 import { orpc } from "@/orpc/orpc-client";
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+  AttachmentTrigger,
+} from "../ui/attachment";
+import { Bubble, BubbleContent } from "../ui/bubble";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { useInlineConfirm } from "../ui/inline-confirm";
-import { Textarea } from "../ui/textarea";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "../ui/input-group";
+import { Message, MessageContent, MessageFooter } from "../ui/message";
+import { Spinner } from "../ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "../ui/trace";
 
 type ConversationRow = ConversationItem;
 type ConversationIdentity = Pick<ConversationRow, "id" | "title">;
@@ -167,23 +195,46 @@ function DownloadFileChip({ conversationId, file }: { conversationId: string; fi
   const href = assistantDownloadPath(conversationId, file.path);
 
   return (
-    <a
-      href={href}
-      download={file.filename}
-      className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-foreground text-xs transition-colors hover:bg-accent"
-    >
-      <Download className="size-3.5 shrink-0" />
-      <span className="max-w-48 truncate">{file.filename}</span>
-      <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
-    </a>
+    <Attachment size="sm">
+      <AttachmentMedia>
+        <FileText />
+      </AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle className="max-w-48">{file.filename}</AttachmentTitle>
+        <AttachmentDescription>{formatFileSize(file.size)}</AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions>
+        <Download className="mr-1 size-3.5 text-muted-foreground" />
+      </AttachmentActions>
+      <AttachmentTrigger render={<a href={href} download={file.filename} aria-label={`Download ${file.filename}`} />} />
+    </Attachment>
+  );
+}
+
+function ToolTraceLine({
+  icon: Icon,
+  title,
+  description,
+  failed,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description?: string;
+  failed: boolean;
+}) {
+  return (
+    <TraceLine status={failed ? "error" : undefined} className="text-xs">
+      <TraceIcon>{failed ? <CircleAlert className="size-3.5" /> : <Icon className="size-3.5" />}</TraceIcon>
+      <TraceTitle className="shrink-0">{title}</TraceTitle>
+      {description && <TraceDescription className="min-w-0 shrink truncate">{description}</TraceDescription>}
+    </TraceLine>
   );
 }
 
 function ToolCallChip({ name, failed }: { name: string; failed: boolean }) {
   return (
-    <div className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      {failed ? <CircleAlert className="size-3 text-destructive" /> : <Check className="size-3" />}
-      <span className="font-mono">{name}</span>
+    <div title={name}>
+      <ToolTraceLine icon={Wrench} title={toolLabel(name)} failed={failed} />
     </div>
   );
 }
@@ -229,9 +280,8 @@ function NewChatSkills() {
 
 function ChartErrorChip() {
   return (
-    <div className="flex w-fit items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      <CircleAlert className="size-3 text-destructive" />
-      Could not render chart
+    <div>
+      <ToolTraceLine icon={CircleAlert} title="Could not render chart" failed />
     </div>
   );
 }
@@ -290,63 +340,49 @@ function WebToolDetails({ name, payload }: { name: string; payload: WebToolPaylo
 }
 
 function WebToolChip({ name, failed, data }: { name: string; failed: boolean; data: string }) {
-  const [open, setOpen] = useState(false);
   const payload = toolPayload<WebToolPayload>(data);
-  const Icon = name === "web_search" ? Search : FileText;
-  const summary = webToolSummary(name, payload);
+  const icon = name === "web_search" ? Search : Globe;
+  const title = name === "web_search" ? "Searched the web" : "Read pages";
+  const line = <ToolTraceLine icon={icon} title={title} description={webToolSummary(name, payload)} failed={failed} />;
+
+  if (failed) return <div>{line}</div>;
 
   return (
-    <div className="w-fit max-w-full overflow-hidden rounded-md border bg-muted/50 text-xs">
-      <button
-        type="button"
-        disabled={failed}
-        onClick={() => setOpen((value) => !value)}
-        className={cn(
-          "flex w-full items-center gap-1.5 px-2 py-1 text-muted-foreground",
-          !failed && "hover:text-foreground",
-        )}
-      >
-        {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <Icon className="size-3 shrink-0" />}
-        <span className="font-mono">{name}</span>
-        {summary && <span className="min-w-0 truncate text-muted-foreground/80">{summary}</span>}
-        {!failed && <ChevronDown className={cn("size-3 shrink-0 transition-transform", open && "rotate-180")} />}
-      </button>
-      {open && !failed && (
-        <div className="border-t px-2 py-1.5">
-          <WebToolDetails name={name} payload={payload} />
-        </div>
-      )}
-    </div>
+    <TraceCollapsible>
+      <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+      <TraceCollapsibleContent className="text-xs">
+        <WebToolDetails name={name} payload={payload} />
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }
 
 function MemoryChip({ name, failed, data }: { name: MemoryToolName; failed: boolean; data: string }) {
   const payload = toolPayload<MemoryToolPayload>(data);
-  const label = memoryToolLabel(name);
 
   return (
-    <Link
-      to="/memories"
-      className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-    >
-      {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <Brain className="size-3 shrink-0" />}
-      <span className="shrink-0">{label}</span>
-      {name !== "forget" && payload.content && (
-        <span className="min-w-0 truncate text-muted-foreground/80">{payload.content}</span>
-      )}
+    <Link to="/memories">
+      <ToolTraceLine
+        icon={Brain}
+        title={memoryToolLabel(name)}
+        description={name !== "forget" ? payload.content : undefined}
+        failed={failed}
+      />
     </Link>
   );
 }
 
 function ReadFileChip({ failed, data }: { failed: boolean; data: string }) {
   const { path } = toolPayload<ReadToolPayload>(data);
-  const filename = path ? resourceFilename(path) : undefined;
 
   return (
-    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <FileText className="size-3 shrink-0" />}
-      <span className="shrink-0">{failed ? "Read failed" : "Read file"}</span>
-      {filename && <span className="min-w-0 truncate text-muted-foreground/80">{filename}</span>}
+    <div>
+      <ToolTraceLine
+        icon={FileText}
+        title={failed ? "Read failed" : "Read file"}
+        description={path ? resourceFilename(path) : undefined}
+        failed={failed}
+      />
     </div>
   );
 }
@@ -358,10 +394,13 @@ function ActivateSkillChip({ failed, data }: { failed: boolean; data: string }) 
   const name = builtin ? builtin.name : skill ? skill.name || "Untitled skill" : skillId;
 
   return (
-    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <Workflow className="size-3 shrink-0" />}
-      <span className="shrink-0">{failed ? "Skill activation failed" : "Activated skill"}</span>
-      {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
+    <div>
+      <ToolTraceLine
+        icon={Workflow}
+        title={failed ? "Skill activation failed" : "Activated skill"}
+        description={name}
+        failed={failed}
+      />
     </div>
   );
 }
@@ -369,21 +408,18 @@ function ActivateSkillChip({ failed, data }: { failed: boolean; data: string }) 
 function SkillChip({ failed, data }: { failed: boolean; data: string }) {
   const { id, name } = toolPayload<SkillToolPayload>(data);
 
+  if (failed || !id) {
+    return (
+      <div>
+        <ToolTraceLine icon={Workflow} title="Drafted skill" description={name} failed={failed} />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs">
-      {failed ? <CircleAlert className="size-3 shrink-0 text-destructive" /> : <Workflow className="size-3 shrink-0" />}
-      <span className="shrink-0">Drafted skill</span>
-      {name && <span className="min-w-0 truncate text-muted-foreground/80">{name}</span>}
-      {!failed && id && (
-        <Link
-          to="/skills"
-          search={{ selected: id }}
-          className="shrink-0 rounded-sm border px-1.5 py-0.5 font-medium transition-colors hover:bg-accent hover:text-foreground"
-        >
-          Review
-        </Link>
-      )}
-    </div>
+    <Link to="/skills" search={{ selected: id }}>
+      <ToolTraceLine icon={Workflow} title="Drafted skill — review" description={name} failed={false} />
+    </Link>
   );
 }
 
@@ -402,82 +438,215 @@ function groupMessageRows(messages: ConversationMessageItem[]): MessageGroup[] {
   return groups;
 }
 
-function MessageRow({ message, conversationId }: { message: ConversationMessageItem; conversationId: string }) {
-  if (message.kind === "tool") {
-    const { toolName, data } = message;
-    const failed = message.toolState === "error";
-    if (toolName === "saveDownload" && !failed) {
-      const file = downloadFileFromData(data);
-      if (file) return <DownloadFileChip conversationId={conversationId} file={file} />;
+function ToolRow({ message, conversationId }: { message: ConversationMessageItem; conversationId: string }) {
+  const { toolName, data } = message;
+  const failed = message.toolState === "error";
+  if (toolName === "saveDownload" && !failed) {
+    const file = downloadFileFromData(data);
+    if (file) return <DownloadFileChip conversationId={conversationId} file={file} />;
+  }
+  if (toolName === "web_search" || toolName === "web_extract") {
+    return <WebToolChip name={toolName} failed={failed} data={data} />;
+  }
+  if (isMemoryToolName(toolName)) {
+    return <MemoryChip name={toolName} failed={failed} data={data} />;
+  }
+  if (toolName === "read" || toolName === "read_skill_resource") {
+    return <ReadFileChip failed={failed} data={data} />;
+  }
+  if (toolName === "activate_skill") {
+    return <ActivateSkillChip failed={failed} data={data} />;
+  }
+  if (toolName === "create_skill") {
+    return <SkillChip failed={failed} data={data} />;
+  }
+  if (toolName === "renderChart" && !failed) {
+    const spec = parseToolData(data);
+    return (
+      <ErrorBoundary fallback={<ChartErrorChip />} onError={logChartError} resetKeys={[data]}>
+        <Suspense fallback={<ToolCallChip name={toolName} failed={false} />}>
+          <ChartCard spec={spec} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+  if (toolName === "renderTransactions" && !failed) {
+    const spec = parseToolData(data);
+    return (
+      <ErrorBoundary
+        fallback={<ToolCallChip name={toolName} failed={false} />}
+        onError={logChartError}
+        resetKeys={[data]}
+      >
+        <Suspense fallback={<ToolCallChip name={toolName} failed={false} />}>
+          <TransactionsCard spec={spec} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+  return <ToolCallChip name={toolName} failed={failed} />;
+}
+
+type AssistantChunk =
+  | { kind: "text"; message: ConversationMessageItem }
+  | { kind: "tools"; messages: ConversationMessageItem[] };
+
+function chunkAssistantRows(messages: ConversationMessageItem[]): AssistantChunk[] {
+  const chunks: AssistantChunk[] = [];
+  for (const message of messages) {
+    if (message.kind !== "tool") {
+      if (message.text) chunks.push({ kind: "text", message });
+      continue;
     }
-    if (toolName === "web_search" || toolName === "web_extract") {
-      return <WebToolChip name={toolName} failed={failed} data={data} />;
-    }
-    if (isMemoryToolName(toolName)) {
-      return <MemoryChip name={toolName} failed={failed} data={data} />;
-    }
-    if (toolName === "read" || toolName === "read_skill_resource") {
-      return <ReadFileChip failed={failed} data={data} />;
-    }
-    if (toolName === "activate_skill") {
-      return <ActivateSkillChip failed={failed} data={data} />;
-    }
-    if (toolName === "create_skill") {
-      return <SkillChip failed={failed} data={data} />;
-    }
-    if (toolName === "renderChart" && !failed) {
-      const spec = parseToolData(data);
-      return (
-        <ErrorBoundary fallback={<ChartErrorChip />} onError={logChartError} resetKeys={[data]}>
-          <Suspense fallback={<ToolCallChip name={toolName} failed={false} />}>
-            <ChartCard spec={spec} />
-          </Suspense>
-        </ErrorBoundary>
-      );
-    }
-    if (toolName === "renderTransactions" && !failed) {
-      const spec = parseToolData(data);
-      return (
-        <ErrorBoundary
-          fallback={<ToolCallChip name={toolName} failed={false} />}
-          onError={logChartError}
-          resetKeys={[data]}
-        >
-          <Suspense fallback={<ToolCallChip name={toolName} failed={false} />}>
-            <TransactionsCard spec={spec} />
-          </Suspense>
-        </ErrorBoundary>
-      );
-    }
-    return <ToolCallChip name={toolName || "tool"} failed={failed} />;
+    const open = chunks.at(-1);
+    if (open?.kind === "tools") open.messages.push(message);
+    else chunks.push({ kind: "tools", messages: [message] });
+  }
+  return chunks;
+}
+
+function CopyMessageButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetRef.current) clearTimeout(resetRef.current);
+    };
+  }, []);
+
+  async function copy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    if (resetRef.current) clearTimeout(resetRef.current);
+    resetRef.current = setTimeout(() => setCopied(false), 1500);
   }
 
-  if (message.role === "user") {
-    const files = conversationTurnFilesFromData(message.data);
-    if (!message.text && files.length === 0) return null;
-    return (
-      <div className="space-y-2">
-        {message.text ? <div className="whitespace-pre-wrap break-words">{message.text}</div> : null}
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground"
+            aria-label="Copy reply"
+            onClick={copy}
+          />
+        }
+      >
+        {copied ? <Check /> : <Copy />}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{copied ? "Copied" : "Copy"}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function UserTurn({ message }: { message: ConversationMessageItem }) {
+  const files = conversationTurnFilesFromData(message.data);
+  if (!message.text && files.length === 0) return null;
+
+  return (
+    <Message align="end">
+      <MessageContent>
+        {message.text ? (
+          <Bubble align="end">
+            <BubbleContent className="whitespace-pre-wrap selection:bg-primary-foreground/30 selection:text-primary">
+              {message.text}
+            </BubbleContent>
+          </Bubble>
+        ) : null}
         {files.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex max-w-[80%] flex-wrap justify-end gap-1.5">
             {files.map((file) => (
-              <span
-                key={file.path}
-                className="flex max-w-full items-center gap-1.5 rounded-md border border-primary-foreground/25 bg-primary-foreground/10 px-2 py-1 text-xs"
-              >
-                <FileText className="size-3.5 shrink-0" />
-                <span className="max-w-40 truncate">{file.filename}</span>
-              </span>
+              <Attachment key={file.path} size="xs">
+                <AttachmentMedia>
+                  <FileText />
+                </AttachmentMedia>
+                <AttachmentContent>
+                  <AttachmentTitle className="max-w-40">{file.filename}</AttachmentTitle>
+                </AttachmentContent>
+              </Attachment>
             ))}
           </div>
         )}
-      </div>
-    );
-  }
+      </MessageContent>
+    </Message>
+  );
+}
 
-  if (!message.text) return null;
+function AssistantTurn({
+  messages,
+  conversationId,
+  streaming,
+  latest,
+}: {
+  messages: ConversationMessageItem[];
+  conversationId: string;
+  streaming: boolean;
+  latest: boolean;
+}) {
+  const chunks = chunkAssistantRows(messages);
+  const text = chunks.flatMap((chunk) => (chunk.kind === "text" ? [chunk.message.text] : [])).join("\n\n");
 
-  return <Streamdown>{message.text}</Streamdown>;
+  return (
+    <Message>
+      <MessageContent className="gap-3">
+        {chunks.map((chunk) =>
+          chunk.kind === "text" ? (
+            <Streamdown key={chunk.message.id}>{chunk.message.text}</Streamdown>
+          ) : (
+            <Trace key={chunk.messages[0].id}>
+              {chunk.messages.map((message) => (
+                <ToolRow key={message.id} message={message} conversationId={conversationId} />
+              ))}
+            </Trace>
+          ),
+        )}
+        {text && !streaming && (
+          <MessageFooter
+            className={cn(
+              "-mt-2 px-0 transition-opacity",
+              !latest &&
+                "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-within:opacity-100",
+            )}
+          >
+            <CopyMessageButton text={text} />
+          </MessageFooter>
+        )}
+      </MessageContent>
+    </Message>
+  );
+}
+
+function ComposerAttachment({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const isImage = file.type.startsWith("image/");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isImage) return;
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file, isImage]);
+
+  return (
+    <Attachment size="sm" className="min-w-0 max-w-56">
+      <AttachmentMedia variant={previewUrl ? "image" : "icon"}>
+        {previewUrl ? <img src={previewUrl} alt="" /> : <FileText />}
+      </AttachmentMedia>
+      <AttachmentContent>
+        <AttachmentTitle>{file.name}</AttachmentTitle>
+        <AttachmentDescription>{formatFileSize(file.size)}</AttachmentDescription>
+      </AttachmentContent>
+      <AttachmentActions>
+        <AttachmentAction aria-label={`Remove ${file.name}`} onClick={onRemove}>
+          <X />
+        </AttachmentAction>
+      </AttachmentActions>
+    </Attachment>
+  );
 }
 
 function ScrollToBottomButton() {
@@ -550,7 +719,9 @@ function ModelSelect({
         >
           <Cpu className="size-3.5 shrink-0" />
           <span className="truncate">{active.label}</span>
-          <ModelModalityIcons modalities={active.inputModalities} />
+          <span className="contents max-sm:hidden">
+            <ModelModalityIcons modalities={active.inputModalities} />
+          </span>
         </TooltipTrigger>
         <TooltipContent side="bottom">Model is fixed once the conversation starts</TooltipContent>
       </Tooltip>
@@ -575,7 +746,9 @@ function ModelSelect({
         >
           <Cpu className="size-3.5 shrink-0" />
           <span className="truncate">{active.label}</span>
-          <ModelModalityIcons modalities={active.inputModalities} />
+          <span className="contents max-sm:hidden">
+            <ModelModalityIcons modalities={active.inputModalities} />
+          </span>
           <ChevronDown className="size-3 shrink-0" />
         </TooltipTrigger>
         <TooltipContent side="bottom">{formatModelPricing(active)}</TooltipContent>
@@ -827,6 +1000,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [rpcError, setRpcError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ensuredRef = useRef(false);
@@ -847,6 +1021,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
   }, [composerFocusNonce]);
 
   const messages = useConversationMessages(conversationId);
+  const groups = groupMessageRows(messages);
 
   // Opening the sidebar does not wake the agent. Ping it so onStart can copy a
   // pre-sqlite transcript into conversation_message. Skip brand-new empty chats.
@@ -967,14 +1142,19 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
     );
   }
 
+  function addFiles(files: File[]) {
+    if (files.length === 0) return;
+    setUploadError(null);
+    setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
+    warmAgent();
+  }
+
   function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
     const files = getPastedImageFiles(event);
     if (files.length === 0) return;
 
     event.preventDefault();
-    setUploadError(null);
-    setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
-    warmAgent();
+    addFiles(files);
   }
 
   return (
@@ -990,25 +1170,26 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
               <NewChatSkills />
             </div>
           )}
-          {groupMessageRows(messages).map((group) => (
-            <div
-              key={group.messages[0].id}
-              className={cn(
-                "min-w-0 space-y-2 text-sm",
-                group.role === "user" &&
-                  "ml-8 self-end rounded-lg bg-primary px-3 py-2 text-primary-foreground selection:bg-primary-foreground/30 selection:text-primary",
-              )}
-            >
-              {group.messages.map((message) => (
-                <MessageRow key={message.id} message={message} conversationId={conversationId} />
-              ))}
-            </div>
-          ))}
+          {groups.map((group, index) =>
+            group.role === "user" ? (
+              <UserTurn key={group.messages[0].id} message={group.messages[0]} />
+            ) : (
+              <AssistantTurn
+                key={group.messages[0].id}
+                messages={group.messages}
+                conversationId={conversationId}
+                latest={index === groups.length - 1}
+                streaming={isWorking && index === groups.length - 1}
+              />
+            ),
+          )}
           {isWorking && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="size-3.5 animate-spin" />
-              Thinking…
-            </div>
+            <TraceLine status="running">
+              <TraceIcon>
+                <Spinner className="size-3.5" />
+              </TraceIcon>
+              <TraceTitle>Thinking…</TraceTitle>
+            </TraceLine>
           )}
         </StickToBottom.Content>
         <ScrollToBottomButton />
@@ -1022,10 +1203,29 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
 
       <form
         ref={composerRef}
-        className="flex shrink-0 flex-col gap-2 border-t p-3"
+        className="shrink-0 p-3 pt-1"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
+        }}
+        onDragEnter={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+        }}
+        onDrop={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setDragging(false);
+          addFiles(Array.from(e.dataTransfer.files));
         }}
       >
         <input
@@ -1034,60 +1234,30 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
           multiple
           className="hidden"
           onChange={(event) => {
-            const files = Array.from(event.target.files ?? []);
-            setSelectedFiles((current) => [...current, ...files].slice(0, MAX_UPLOAD_FILES));
+            addFiles(Array.from(event.target.files ?? []));
             event.target.value = "";
-            warmAgent();
           }}
         />
-        {selectedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {selectedFiles.map((file, index) => (
-              <div
-                key={`${file.name}-${file.lastModified}-${index}`}
-                className="flex max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-muted-foreground text-xs"
-              >
-                <span className="max-w-40 truncate">{file.name}</span>
-                <span className="shrink-0">{formatFileSize(file.size)}</span>
-                <button
-                  type="button"
-                  className="rounded-sm p-0.5 hover:bg-accent hover:text-foreground"
-                  aria-label={`Remove ${file.name}`}
-                  onClick={() => setSelectedFiles((files) => files.filter((_, i) => i !== index))}
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1">
-            <ModelSelect model={model} locked={locked} onSelect={selectModel} />
-            {modelSupportsSelectableReasoning(model) && (
-              <ReasoningEffortSelect
-                effort={reasoningEffort}
-                efforts={getModelReasoningEfforts(model)}
-                locked={locked}
-                onSelect={selectReasoningEffort}
-              />
-            )}
-          </div>
-          {conversation && <ConversationCost conversation={conversation} />}
-        </div>
-        <div className="flex min-w-0 items-end gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0"
-            aria-label="Attach files"
-            disabled={isWorking || selectedFiles.length >= MAX_UPLOAD_FILES}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip className="size-4" />
-          </Button>
-          <Textarea
+        <InputGroup
+          className={cn(
+            "rounded-xl bg-background dark:bg-input/30",
+            dragging && "border-primary border-dashed ring-3 ring-primary/20",
+          )}
+        >
+          {selectedFiles.length > 0 && (
+            <InputGroupAddon align="block-start" className="cursor-default px-2 pt-2">
+              <AttachmentGroup className="w-full gap-2">
+                {selectedFiles.map((file, index) => (
+                  <ComposerAttachment
+                    key={`${file.name}-${file.lastModified}-${index}`}
+                    file={file}
+                    onRemove={() => setSelectedFiles((files) => files.filter((_, i) => i !== index))}
+                  />
+                ))}
+              </AttachmentGroup>
+            </InputGroupAddon>
+          )}
+          <InputGroupTextarea
             ref={textareaRef}
             autoFocus
             value={input}
@@ -1102,26 +1272,56 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
                 submit();
               }
             }}
-            placeholder="Send a message…"
+            placeholder={dragging ? "Drop files to attach" : "Send a message…"}
             rows={2}
-            className="max-h-40 min-h-0 flex-1 resize-none"
+            className="max-h-40 min-h-14 px-3"
           />
-          {canStop ? (
-            <Button type="button" variant="secondary" size="icon" aria-label="Stop generating" onClick={() => cancel()}>
-              <CircleStop className="size-4" />
-            </Button>
-          ) : (
-            <Button
-              type="submit"
-              size="icon"
-              className="shrink-0"
-              aria-label="Send message"
-              disabled={isWorking || (!input.trim() && selectedFiles.length === 0)}
+          <InputGroupAddon align="block-end" className="cursor-default gap-1 px-2 pb-2">
+            <InputGroupButton
+              size="icon-sm"
+              className="shrink-0 text-muted-foreground"
+              aria-label="Attach files"
+              disabled={isWorking || selectedFiles.length >= MAX_UPLOAD_FILES}
+              onClick={() => fileInputRef.current?.click()}
             >
-              {isWorking ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
-            </Button>
-          )}
-        </div>
+              <Paperclip className="size-4" />
+            </InputGroupButton>
+            <div className="flex min-w-0 flex-1 items-center gap-0.5 font-normal">
+              <ModelSelect model={model} locked={locked} onSelect={selectModel} />
+              {modelSupportsSelectableReasoning(model) && (
+                <ReasoningEffortSelect
+                  effort={reasoningEffort}
+                  efforts={getModelReasoningEfforts(model)}
+                  locked={locked}
+                  onSelect={selectReasoningEffort}
+                />
+              )}
+            </div>
+            {conversation && <ConversationCost conversation={conversation} />}
+            {canStop ? (
+              <InputGroupButton
+                size="icon-sm"
+                variant="secondary"
+                className="shrink-0 rounded-full"
+                aria-label="Stop generating"
+                onClick={() => cancel()}
+              >
+                <CircleStop className="size-4" />
+              </InputGroupButton>
+            ) : (
+              <InputGroupButton
+                type="submit"
+                size="icon-sm"
+                variant="default"
+                className="shrink-0 rounded-full"
+                aria-label="Send message"
+                disabled={isWorking || (!input.trim() && selectedFiles.length === 0)}
+              >
+                {isWorking ? <Spinner /> : <ArrowUp className="size-4" />}
+              </InputGroupButton>
+            )}
+          </InputGroupAddon>
+        </InputGroup>
       </form>
     </div>
   );

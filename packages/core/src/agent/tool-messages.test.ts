@@ -6,6 +6,7 @@ import {
   linkHostname,
   memoryToolLabel,
   resourceFilename,
+  toolLabel,
   toolLinks,
   toolPayload,
   webToolSummary,
@@ -60,6 +61,16 @@ describe("memory tools", () => {
     expect(memoryToolLabel("forget")).toBe("Forgot a memory");
     expect(isMemoryToolName("forget")).toBe(true);
     expect(isMemoryToolName("read")).toBe(false);
+  });
+});
+
+describe("toolLabel", () => {
+  it("names known tools and humanizes the rest", () => {
+    expect(toolLabel("queryDb")).toBe("Queried your data");
+    expect(toolLabel("execute")).toBe("Ran code");
+    expect(toolLabel("listCalendarEvents")).toBe("List calendar events");
+    expect(toolLabel("send_email")).toBe("Send email");
+    expect(toolLabel("")).toBe("Used a tool");
   });
 });
 

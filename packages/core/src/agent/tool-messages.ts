@@ -63,6 +63,28 @@ export function memoryToolLabel(name: MemoryToolName) {
   return "Remembered";
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  getDbSchema: "Checked data structure",
+  queryDb: "Queried your data",
+  mutateDb: "Updated your data",
+  execute: "Ran code",
+  renderChart: "Drew a chart",
+  renderTransactions: "Listed transactions",
+  saveDownload: "Saved a file",
+};
+
+/** A readable label for a tool row without a dedicated renderer; unknown names are humanized. */
+export function toolLabel(name: string): string {
+  const known = TOOL_LABELS[name];
+  if (known) return known;
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replaceAll("_", " ")
+    .trim()
+    .toLowerCase();
+  return words ? words[0].toUpperCase() + words.slice(1) : "Used a tool";
+}
+
 export function isMemoryToolName(name: string): name is MemoryToolName {
   return name === "remember" || name === "update_memory" || name === "forget";
 }
