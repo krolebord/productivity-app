@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appendToDraft, formatAttachToken } from "./attach";
-import { skillStarterPrompt, skillStarters } from "./builtin-skills";
+import { BUILTIN_SKILLS, findBuiltinSkill, skillStarterPrompt, skillStarters } from "./builtin-skills";
 import { inlineTransactionRecord } from "./transactions-spec";
 
 describe("attaching context", () => {
@@ -19,12 +19,23 @@ describe("skill starters", () => {
   it("lists user skills before built-ins", () => {
     const starters = skillStarters([{ id: "s1", name: "Weekly review", whenToUse: "Fridays" }]);
     expect(starters[0].id).toBe("s1");
-    expect(starters.slice(1).every((skill) => skill.id.startsWith("builtin:"))).toBe(true);
+    expect(starters.slice(1).every((skill) => skill.id.startsWith("builtin-"))).toBe(true);
   });
 
   it("names untitled skills", () => {
     expect(skillStarterPrompt({ name: "Weekly review" })).toBe('Use the "Weekly review" skill.');
     expect(skillStarterPrompt({ name: "" })).toBe('Use the "Untitled" skill.');
+  });
+});
+
+describe("built-in skills", () => {
+  it("use ids that are valid Agent Skills names", () => {
+    for (const skill of BUILTIN_SKILLS) expect(skill.id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+  });
+
+  it("still resolves ids stored before the rename", () => {
+    expect(findBuiltinSkill("builtin:import-transactions")?.name).toBe("Import transactions");
+    expect(findBuiltinSkill("builtin-import-transactions")?.name).toBe("Import transactions");
   });
 });
 

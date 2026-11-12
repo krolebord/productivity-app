@@ -16,13 +16,14 @@ export type BuiltinSkill = {
   instructions: string;
 };
 
+// Ids double as Agent Skills names, which allow only lowercase letters, digits and hyphens.
+// The "builtin-" prefix never collides with user skill ids, which are UUIDs (hex digits only).
 export function isBuiltinSkillId(id: string): boolean {
-  // The "builtin:" prefix never collides with generateId().
-  return id.startsWith("builtin:");
+  return id.startsWith("builtin-");
 }
 
 const importTransactions: BuiltinSkill = {
-  id: "builtin:import-transactions",
+  id: "builtin-import-transactions",
   name: "Import transactions",
   whenToUse:
     "Importing transactions into an account from a source the user provides — a bank statement, CSV/PDF export, screenshot, or pasted list.",
@@ -66,7 +67,9 @@ const importTransactions: BuiltinSkill = {
 export const BUILTIN_SKILLS: readonly BuiltinSkill[] = [importTransactions];
 
 export function findBuiltinSkill(id: string): BuiltinSkill | undefined {
-  return BUILTIN_SKILLS.find((skill) => skill.id === id);
+  // Chats from before the rename stored ids like "builtin:import-transactions".
+  const current = id.replace(/^builtin:/, "builtin-");
+  return BUILTIN_SKILLS.find((skill) => skill.id === current);
 }
 
 /** `whenToUse` is the line shown under the name: a user skill's own trigger text, a built-in's `description`. */
