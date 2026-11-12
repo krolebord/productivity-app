@@ -312,6 +312,19 @@ export class UserDbServer extends Server<Env> {
       .rows.map((row) => row.providerAccountId);
   }
 
+  /** The most recently used active skills, with full instructions (unlike the model-facing query tool, no cell cap). */
+  async getActiveSkills(limit: number) {
+    return this.syncDb.executeKysely((q) =>
+      q
+        .selectFrom("skill")
+        .select(["id", "name", "whenToUse", "instructions"])
+        .where("status", "=", "active")
+        .orderBy("lastUsedAt", "desc")
+        .orderBy("createdAt", "desc")
+        .limit(limit),
+    ).rows;
+  }
+
   async getConversation(id: string): Promise<ConversationItem | null> {
     const [row] = this.syncDb.executeKysely((q) => q.selectFrom("conversation").selectAll().where("id", "=", id)).rows;
     return row ?? null;

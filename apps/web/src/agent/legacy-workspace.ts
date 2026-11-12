@@ -22,9 +22,10 @@ function parentDir(path: string) {
   return path.slice(0, path.lastIndexOf("/")) || "/";
 }
 
-// Think 0.18+ keeps workspace files in @cloudflare/computer's tables and does not move the ones
+// Think 0.21+ keeps workspace files in @cloudflare/computer's tables and does not move the ones
 // @cloudflare/shell wrote. Copies them to the same paths so stored upload/download paths keep
-// resolving, then drops the old table; a failed copy leaves it in place to retry on next start.
+// resolving, then drops the old table. Entries that fail are logged and skipped so one bad row
+// can't make every start retry the copy.
 export async function copyLegacyShellWorkspace(sql: SqlStorage, fs: TargetFs): Promise<number> {
   const exists = sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", LEGACY_TABLE).toArray();
   if (exists.length === 0) return 0;
@@ -35,23 +36,28 @@ export async function copyLegacyShellWorkspace(sql: SqlStorage, fs: TargetFs): P
     .toArray();
   for (const entry of entries) {
     if (entry.path === "/") continue;
-    if (entry.type === "directory") {
-      await fs.mkdir(entry.path, { recursive: true });
-      continue;
-    }
-    if (entry.type !== "file" || entry.storage_backend !== "inline") {
+    if (entry.type !== "directory" && (entry.type !== "file" || entry.storage_backend !== "inline")) {
       console.warn(`Skipping legacy workspace entry ${entry.path} (${entry.type}, ${entry.storage_backend})`);
       continue;
     }
-    const { content_encoding, content } = sql
-      .exec<LegacyContent>(`SELECT content_encoding, content FROM ${LEGACY_TABLE} WHERE path = ?`, entry.path)
-      .one();
-    await fs.mkdir(parentDir(entry.path), { recursive: true });
-    await fs.writeFile(
-      entry.path,
-      content_encoding === "base64" ? new Uint8Array(Buffer.from(content ?? "", "base64")) : (content ?? ""),
-    );
-    copied++;
+    try {
+      if (entry.type === "directory") {
+        await fs.mkdir(entry.path, { recursive: true });
+        continue;
+      }
+      const { content_encoding, content } = sql
+        .exec<LegacyContent>(`SELECT content_encoding, content FROM ${LEGACY_TABLE} WHERE path = ?`, entry.path)
+        .one();
+      const parent = parentDir(entry.path);
+      if (parent !== "/") await fs.mkdir(parent, { recursive: true });
+      await fs.writeFile(
+        entry.path,
+        content_encoding === "base64" ? new Uint8Array(Buffer.from(content ?? "", "base64")) : (content ?? ""),
+      );
+      copied++;
+    } catch (error) {
+      console.error(`Failed to copy legacy workspace entry ${entry.path}`, error);
+    }
   }
 
   sql.exec(`DROP TABLE ${LEGACY_TABLE}`);

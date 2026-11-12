@@ -153,12 +153,7 @@ const DRAFT_AGENT_TTL_SECONDS = 6 * 60 * 60;
 
 export type AssistantTurnError = { code: "NOT_FOUND" | "BAD_REQUEST"; message: string };
 
-type SkillRow = {
-  id: string;
-  name: string;
-  whenToUse: string;
-  instructions: string;
-};
+const noSkillResources = skills.manifest({ id: "user-skills", skills: [] });
 
 function skillManifestEntry(skill: { name: string; title: string; whenToUse: string; instructions: string }) {
   const title = skill.title || "Untitled skill";
@@ -233,7 +228,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           sessionId: this.getConversationId(),
         }),
       },
-      ...(memories ? { system: `${ctx.system}\n\n${memories}` } : {}),
+      ...(memories ? { instructions: `${ctx.system}\n\n${memories}` } : {}),
       stopWhen: () => this.turnBudgetExhausted(),
     };
   }
@@ -275,11 +270,9 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       id,
       list: async () => {
         const stub = await this.getUserDbStub();
-        const result = (await stub.query({
-          sql: "SELECT id, name, whenToUse, instructions FROM skill WHERE status = 'active' ORDER BY lastUsedAt DESC, createdAt DESC LIMIT ?",
-          parameters: [SKILL_CATALOG_LIMIT],
-        })) as AiQueryResult;
-        const rows = "error" in result ? [] : (result.rows as SkillRow[]);
+        // Picks the most recently used skills, but lists them in a stable order so using a
+        // skill doesn't change the prompt and trigger a context reminder.
+        const rows = (await stub.getActiveSkills(SKILL_CATALOG_LIMIT)).sort((a, b) => a.id.localeCompare(b.id));
         this.userSkillIds = new Set(rows.map((row) => row.id));
         return skills
           .manifest({
@@ -295,7 +288,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
           })
           .list();
       },
-      readResource: (skill, path) => skills.manifest({ id, skills: [] }).readResource(skill, path),
+      readResource: (skill, path) => noSkillResources.readResource(skill, path),
     };
   }
 
