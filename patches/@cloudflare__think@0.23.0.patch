@@ -1,8 +1,8 @@
-diff --git a/dist/index-BZKPlFcA.d.ts b/dist/index-BZKPlFcA.d.ts
-index ded116e13a185d990bc84d1ba07ee20ae6902a0c..fce9f7f7a8ab980f19675d7e44a97525c78edc05 100644
---- a/dist/index-BZKPlFcA.d.ts
-+++ b/dist/index-BZKPlFcA.d.ts
-@@ -1712,6 +1712,13 @@ declare class Think<
+diff --git a/dist/index-DDnny6kt.d.ts b/dist/index-DDnny6kt.d.ts
+index 9275d7380cb7814fac0d3bab5295cb796211d06e..db1573056fcf6ef14c81cf198bba127b53e38cc8 100644
+--- a/dist/index-DDnny6kt.d.ts
++++ b/dist/index-DDnny6kt.d.ts
+@@ -2241,6 +2241,13 @@ declare class Think<
    private _pendingInteractionPromise;
    private _interactionApplyTail;
    private _streamingAssistant;
@@ -13,14 +13,14 @@ index ded116e13a185d990bc84d1ba07ee20ae6902a0c..fce9f7f7a8ab980f19675d7e44a97525
 +   * in-flight state. Returns `null` when no assistant message is streaming.
 +   */
 +  protected getStreamingAssistantMessage(): UIMessage | null;
+   private _deferredResolvedPauses;
+   private _deferredResolvedPausesLoad;
    private _submitConcurrency;
-   private static MESSAGE_DEBOUNCE_MS;
-   private _agentToolForwarders;
 diff --git a/dist/think.js b/dist/think.js
-index 76b792c60bf0f1f198e5516ab5ab1bec0e5c6437..d4d91cdacb4e27ff921e06bee6658d7db6e4bf5c 100644
+index 2e357041e740709a12010a2504cb4e4029bc8fc5..b2a962d406b89b34088977f606bd255af0beabd0 100644
 --- a/dist/think.js
 +++ b/dist/think.js
-@@ -1057,6 +1057,15 @@ var Think = class Think extends Agent {
+@@ -1786,6 +1786,15 @@ var Think = class Think extends Agent {
  		this.onStart = (props) => withAgentSpan(this, "think_start", "startup", { "cloudflare.agents.component": "think" }, (update) => startThink(props, update));
  	}
  	/**

@@ -50,10 +50,10 @@
       "react-native-enriched-markdown"
     ],
     "patchedDependencies": {
-      "@cloudflare/think@0.16.0": "patches/@cloudflare__think@0.16.0.patch",
       "kysely-d1@0.4.0": "patches/kysely-d1@0.4.0.patch",
       "@op-engineering/op-sqlite@18.2.5": "patches/@op-engineering__op-sqlite@18.2.5.patch",
-      "react-native-android-widget@0.26.0": "patches/react-native-android-widget@0.26.0.patch"
+      "react-native-android-widget@0.26.0": "patches/react-native-android-widget@0.26.0.patch",
+      "@cloudflare/think@0.23.0": "patches/@cloudflare__think@0.23.0.patch"
     }
   }
 }

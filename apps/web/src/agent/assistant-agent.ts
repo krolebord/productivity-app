@@ -1,19 +1,18 @@
-import { createWorkspaceStateBackend, type WorkspaceFsLike } from "@cloudflare/shell";
+import { createAITools } from "@cloudflare/computer/tools/ai-sdk";
 import {
   type ChatErrorContext,
   type ChatResponseResult,
-  type Session,
-  type SkillSource,
   type StepContext,
+  skills,
   Think,
   type ThinkSubmissionInspection,
+  type ToolCallResultContext,
   type TurnConfig,
   type TurnContext,
 } from "@cloudflare/think";
 import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { withTracing } from "@posthog/ai";
-import { BUILTIN_SKILLS, type BuiltinSkill } from "@productivity/core/agent/builtin-skills";
+import { BUILTIN_SKILLS } from "@productivity/core/agent/builtin-skills";
 import { RenderChartInputSchema } from "@productivity/core/agent/chart-spec";
 import { conversationTurnFilesData } from "@productivity/core/agent/conversation-files";
 import {
@@ -31,7 +30,6 @@ import {
   SKILL_CATALOG_LIMIT,
 } from "@productivity/core/user-db/migrations";
 import { type AiMutationResult, type AiQueryResult, createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
-import { tavilyExtract, tavilySearch } from "@tavily/ai-sdk";
 import { type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { PostHog } from "posthog-node";
@@ -43,6 +41,9 @@ import {
   projectionRowsFromUiMessages,
   userTurnModelText,
 } from "./conversation-projection";
+import { copyLegacyShellWorkspace } from "./legacy-workspace";
+import { posthogTelemetry } from "./posthog-telemetry";
+import { createWebTools } from "./web-tools";
 
 const TURN_BUDGET_USD = 0.5;
 const TURN_BUDGET_MESSAGE = `Stopped after reaching the $${TURN_BUDGET_USD.toFixed(2)} model budget for this turn. Send another message to continue.`;
@@ -145,18 +146,29 @@ type AssistantUsageState = {
   // agent it throws before the user DB is touched. Absent on legacy state, so draft cleanup
   // also checks the user DB before destroying anything.
   started?: boolean;
+  instructions?: string;
 };
 
 const DRAFT_AGENT_TTL_SECONDS = 6 * 60 * 60;
 
 export type AssistantTurnError = { code: "NOT_FOUND" | "BAD_REQUEST"; message: string };
 
-type SkillCatalogRow = {
+type SkillRow = {
   id: string;
   name: string;
   whenToUse: string;
-  updatedAt: number;
+  instructions: string;
 };
+
+function skillManifestEntry(skill: { name: string; title: string; whenToUse: string; instructions: string }) {
+  const title = skill.title || "Untitled skill";
+  const header = skill.whenToUse ? `When to use: ${skill.whenToUse}\n\n` : "";
+  return {
+    name: skill.name,
+    description: skill.whenToUse ? `${title} — ${skill.whenToUse}` : title,
+    body: `# ${title}\n\n${header}${skill.instructions}`,
+  };
+}
 
 export class AssistantAgent extends Think<Env, AssistantUsageState> {
   maxSteps = 100;
@@ -169,6 +181,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   };
 
   private turnNextSeq = 0;
+  private userSkillIds = new Set<string>();
   private posthogClient?: PostHog;
 
   private reserveFileIndices(count: number): number {
@@ -193,7 +206,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       apiKey: this.env.OPENROUTER_API_KEY,
     });
     const reasoningEffort = resolveAssistantReasoningEffort(modelId, reasoningEffortOverride);
-    const model = openrouter.chat(modelId, {
+    return openrouter.chat(modelId, {
       usage: { include: true },
       ...(reasoningEffort
         ? {
@@ -201,11 +214,6 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
             reasoning: { effort: reasoningEffort as "xhigh" | "high" | "medium" | "low" | "minimal" | "none" },
           }
         : {}),
-    });
-    return withTracing(model, this.getPosthogClient(), {
-      posthogDistinctId: this.getUserId(),
-      posthogTraceId: crypto.randomUUID(),
-      posthogProperties: { $ai_session_id: this.getConversationId() },
     });
   }
 
@@ -218,118 +226,87 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     const memories = await this.getMemoriesBlock();
     return {
       model,
+      telemetry: {
+        integrations: posthogTelemetry(this.getPosthogClient(), {
+          distinctId: this.getUserId(),
+          traceId: crypto.randomUUID(),
+          sessionId: this.getConversationId(),
+        }),
+      },
       ...(memories ? { system: `${ctx.system}\n\n${memories}` } : {}),
       stopWhen: () => this.turnBudgetExhausted(),
     };
   }
 
-  configureSession(session: Session): Session {
-    return session
-      .withContext("instructions", {
+  configureContext() {
+    return [
+      {
+        label: "instructions",
         description: "Base assistant instructions",
         provider: { get: async () => this.buildInstructions() },
-      })
-      .withCachedPrompt();
+      },
+    ];
   }
 
-  getSkills(): SkillSource[] {
-    return [this.skillSource(), this.builtinSkillSource()];
+  getSkills() {
+    return [this.userSkillSource(), this.builtinSkillSource()];
   }
 
-  // App-shipped skills defined in code (see builtin-skills.ts). Always active,
-  // never stored per-user; the fingerprint is static since the set only changes
-  // when the app is redeployed.
-  private builtinSkillSource(): SkillSource {
-    const describe = (skill: BuiltinSkill) => (skill.whenToUse ? `${skill.name} — ${skill.whenToUse}` : skill.name);
-    return {
+  // App-shipped skills defined in code (see builtin-skills.ts). Always active, never stored per-user.
+  private builtinSkillSource() {
+    return skills.manifest({
       id: "builtin-skills",
-      fingerprint: BUILTIN_SKILLS.map((skill) => skill.id).join(","),
-      async list() {
-        return BUILTIN_SKILLS.map((skill) => ({ name: skill.id, description: describe(skill) }));
-      },
-      async load(name) {
-        const skill = BUILTIN_SKILLS.find((entry) => entry.id === name);
-        if (!skill) {
-          return null;
-        }
-        const header = skill.whenToUse ? `When to use: ${skill.whenToUse}\n\n` : "";
-        return {
+      skills: BUILTIN_SKILLS.map((skill) =>
+        skillManifestEntry({
           name: skill.id,
-          description: describe(skill),
-          body: `# ${skill.name}\n\n${header}${skill.instructions}`,
-        };
+          title: skill.name,
+          whenToUse: skill.whenToUse,
+          instructions: skill.instructions,
+        }),
+      ),
+    });
+  }
+
+  // The user's active skills, read live from the synced `skill` table. Think lists every source
+  // before each turn, so activating or editing a skill reaches the next turn.
+  private userSkillSource(): skills.SkillSource {
+    const id = "user-skills";
+    return {
+      id,
+      list: async () => {
+        const stub = await this.getUserDbStub();
+        const result = (await stub.query({
+          sql: "SELECT id, name, whenToUse, instructions FROM skill WHERE status = 'active' ORDER BY lastUsedAt DESC, createdAt DESC LIMIT ?",
+          parameters: [SKILL_CATALOG_LIMIT],
+        })) as AiQueryResult;
+        const rows = "error" in result ? [] : (result.rows as SkillRow[]);
+        this.userSkillIds = new Set(rows.map((row) => row.id));
+        return skills
+          .manifest({
+            id,
+            skills: rows.map((row) =>
+              skillManifestEntry({
+                name: row.id,
+                title: row.name,
+                whenToUse: row.whenToUse,
+                instructions: row.instructions,
+              }),
+            ),
+          })
+          .list();
       },
+      readResource: (skill, path) => skills.manifest({ id, skills: [] }).readResource(skill, path),
     };
   }
 
-  // The user's active skills, read live from the synced `skill` table. Think renders list()
-  // into the system-prompt catalog and exposes the body via load_context; fingerprint drives
-  // the framework's per-turn refresh when the active set changes.
-  private skillSource(): SkillSource {
-    const fetchActive = async (): Promise<SkillCatalogRow[]> => {
-      const stub = await this.getUserDbStub();
-      const result = (await stub.query({
-        sql: "SELECT id, name, whenToUse, updatedAt FROM skill WHERE status = 'active' ORDER BY lastUsedAt DESC, createdAt DESC LIMIT ?",
-        parameters: [SKILL_CATALOG_LIMIT],
-      })) as AiQueryResult;
-      return "error" in result ? [] : (result.rows as SkillCatalogRow[]);
-    };
-    const loadStub = () => this.getUserDbStub();
-    const describe = (row: { name: string; whenToUse: string }) =>
-      row.whenToUse ? `${row.name} — ${row.whenToUse}` : row.name || "Untitled skill";
-
-    let cache: SkillCatalogRow[] = [];
-    let fingerprint = "";
-
-    return {
-      id: "user-skills",
-      get fingerprint() {
-        return fingerprint;
-      },
-      async refresh() {
-        cache = await fetchActive();
-        fingerprint = cache.map((row) => `${row.id}:${row.updatedAt}`).join(",");
-      },
-      async list() {
-        const rows = cache.length > 0 ? cache : await fetchActive();
-        return rows.map((row) => ({
-          name: row.id,
-          description: describe(row),
-        }));
-      },
-      async load(name) {
-        const stub = await loadStub();
-        const result = (await stub.query({
-          sql: "SELECT id, name, whenToUse, instructions FROM skill WHERE id = ? AND status = 'active' LIMIT 1",
-          parameters: [name],
-        })) as AiQueryResult;
-        if ("error" in result || result.rows.length === 0) {
-          return null;
-        }
-        const row = result.rows[0] as {
-          id: string;
-          name: string;
-          whenToUse: string;
-          instructions: string;
-        };
-        await stub.mutate({
-          events: [
-            {
-              type: "item-updated",
-              dataset: "_skill",
-              item_id: row.id,
-              payload: { lastUsedAt: Date.now() },
-            },
-          ],
-        });
-        const header = row.whenToUse ? `When to use: ${row.whenToUse}\n\n` : "";
-        return {
-          name: row.id,
-          description: describe(row),
-          body: `# ${row.name}\n\n${header}${row.instructions}`,
-        };
-      },
-    };
+  async afterToolCall(ctx: ToolCallResultContext): Promise<void> {
+    if (ctx.toolName !== "activate_skill" || !ctx.success) return;
+    const name = (ctx.input as { name?: unknown } | undefined)?.name;
+    if (typeof name !== "string" || !this.userSkillIds.has(name)) return;
+    const stub = await this.getUserDbStub();
+    await stub.mutate({
+      events: [{ type: "item-updated", dataset: "_skill", item_id: name, payload: { lastUsedAt: Date.now() } }],
+    });
   }
 
   private async getMemoriesBlock(): Promise<string | null> {
@@ -422,10 +399,31 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   // hiccup cannot brick isolate init (throwing from onStart retries forever).
   async onStart(): Promise<void> {
     try {
+      await copyLegacyShellWorkspace(this.ctx.storage.sql, this.workspace.fs);
+    } catch (error) {
+      console.error("Failed to copy the legacy workspace", error);
+    }
+    try {
+      await this.refreshInstructionsIfChanged();
+    } catch (error) {
+      console.error("Failed to refresh assistant instructions", error);
+    }
+    try {
       await this.ensureProjectionReady();
     } catch (error) {
       console.error("Failed to backfill conversation projection", error);
     }
+  }
+
+  // Think persists the system prompt a conversation started with; rebuild it when the
+  // instructions change so existing chats stop describing tools that no longer exist.
+  private async refreshInstructionsIfChanged(): Promise<void> {
+    const instructions = this.buildInstructions();
+    if (this.state.instructions === instructions) return;
+    if (this.state.instructions !== undefined || (await this.getMessages()).length > 0) {
+      await this.context.refreshSystemPrompt();
+    }
+    this.setState({ ...this.state, instructions });
   }
 
   async startConversation(input: {
@@ -711,8 +709,8 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       "The user can attach specific rows to a message as `@<table>:<id>` reference tokens (e.g. `@item:abc123` for a note, `@account:abc123`, `@transaction_entry:abc123`). Treat each as an explicit reference to that row; query the matching table by id with queryDb to load it before reasoning about it.",
       "Use mutateDb for requested changes to notes, accounts, transactions, or other synced data. Query first when updating or deleting existing rows. For create events, omit ids; mutateDb generates them and returns createdIds.",
       "For multi-step analysis or coordinated changes, use the execute tool to write JavaScript that calls tools.getDbSchema(), tools.queryDb(), and tools.mutateDb().",
-      "Inside execute, state.* is also available for temporary workspace files and multi-step scratch work.",
-      "When the user wants a file to download (CSV, JSON, report, etc.), first write it with the execute tool's state.* API, then call saveDownload with that file's path to make it downloadable from the chat.",
+      "You also have a workspace filesystem for temporary files and multi-step scratch work: use the read, ls, find, grep, write, edit, and delete tools directly, or the same tools as tools.write() etc. inside execute.",
+      "When the user wants a file to download (CSV, JSON, report, etc.), first write it to the workspace (with the write tool, or tools.write() inside execute), then call saveDownload with that file's path to make it downloadable from the chat.",
       "To visualize data, call the renderChart tool. Aggregate and group the data first (with queryDb or execute) and embed only the final summarized points in the spec — keep the number of points and series small. After rendering a chart, briefly describe what it shows in text; do not also paste the full underlying data as a table.",
       "To show the user individual transactions, call the renderTransactions tool instead of a markdown table. Prefer `ref` items that reference real transaction_entry rows by id (query them first); use `inline` items only for transactions that do not exist in the database. After rendering, keep any accompanying text brief; do not also repeat the same rows as a table.",
       "Use the web_search tool for current events, external facts, prices, or anything outside the user's own data — never for the user's notes/accounts/transactions, which live in the database. Search only when the answer genuinely depends on up-to-date or external information. When you rely on a search result, cite it inline as a markdown link; if the user asks for sources, list the relevant URLs.",
@@ -729,23 +727,17 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       access: () => this.getUserDbStub(),
       mutations: true,
     });
-    const codeDbTools = createDbTools({
-      access: () => this.getCodeDbAccess(),
-      mutations: true,
-    });
+    const codeTools = {
+      ...createDbTools({
+        access: () => this.getCodeDbAccess(),
+        mutations: true,
+      }),
+      ...createAITools({ workspace: this.workspace }),
+    };
 
     return {
       ...dbTools,
-      web_search: tavilySearch({
-        apiKey: this.env.TAVILY_API_KEY,
-        searchDepth: "basic",
-        includeAnswer: true,
-        maxResults: 5,
-      }),
-      web_extract: tavilyExtract({
-        apiKey: this.env.TAVILY_API_KEY,
-        extractDepth: "basic",
-      }),
+      ...createWebTools(this.env.TAVILY_API_KEY),
       remember: tool({
         description: [
           "Save a small, durable memory about the user that persists across all conversations.",
@@ -798,15 +790,14 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       }),
       execute: createExecuteTool({
         ctx: this.ctx,
-        tools: codeDbTools,
-        state: createWorkspaceStateBackend(this.workspace as WorkspaceFsLike),
+        tools: codeTools,
         loader: this.env.LOADER,
         globalOutbound: null,
         description: [
           "Execute JavaScript for multi-step analysis of the user's synced SQLite database.",
           "Available typed functions:",
           "{{types}}",
-          "The state.* workspace API is also available for temporary files, intermediate artifacts, and coordinated multi-step work.",
+          "The workspace file tools (tools.read, tools.ls, tools.find, tools.grep, tools.write, tools.edit, tools.delete) are also available for temporary files, intermediate artifacts, and coordinated multi-step work.",
           "Call tools.getDbSchema() before querying unfamiliar tables.",
           "Use tools.queryDb({ sql, parameters }) for read-only SELECT/WITH/VALUES SQL.",
           "Use tools.mutateDb({ events }) for writes. Query first when updating or deleting existing rows.",
@@ -820,7 +811,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       saveDownload: tool({
         description: [
           "Make an existing workspace file downloadable by the user directly in the chat.",
-          "First create the file — for example with the execute tool's state.* API — then call this with the file's path.",
+          "First create the file — with the write tool, or tools.write() inside execute — then call this with the file's path.",
           "Do not paste file contents here; pass only the path. The file is copied into the downloads area and returned as a downloadable link.",
         ].join("\n"),
         inputSchema: z.object({
@@ -935,9 +926,8 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
   private async writeTurnUploads(turnId: string, files: WorkspaceUploadInput[]): Promise<WorkspaceUploadResult[]> {
     if (files.length === 0) return [];
 
-    const workspace = this.workspace as WorkspaceFsLike;
     const uploadDir = `/uploads/${sanitizeWorkspaceFilename(turnId)}`;
-    await workspace.mkdir(uploadDir, { recursive: true });
+    await this.workspace.fs.mkdir(uploadDir, { recursive: true });
 
     const uploaded: WorkspaceUploadResult[] = [];
     let index = 0;
@@ -945,7 +935,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       const filename = `${String(index++).padStart(2, "0")}-${sanitizeWorkspaceFilename(file.filename)}`;
       const path = `${uploadDir}/${filename}`;
       const bytes = new Uint8Array(file.bytes);
-      await workspace.writeFileBytes(path, bytes, file.mediaType);
+      await this.workspace.fs.writeFile(path, bytes);
       uploaded.push({
         filename: file.filename,
         mediaType: file.mediaType,
@@ -957,44 +947,47 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     return uploaded;
   }
 
+  private async statFile(path: string) {
+    try {
+      const stat = await this.workspace.fs.stat(path);
+      return stat.isFile ? stat : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async readFileBytes(path: string): Promise<ArrayBuffer> {
+    return await new Response(await this.workspace.fs.readFile(path)).arrayBuffer();
+  }
+
   async saveDownloadFile(input: { path: string; filename?: string }): Promise<WorkspaceDownloadResult> {
-    const workspace = this.workspace as WorkspaceFsLike;
     const sourcePath = normalizeWorkspacePath(input.path);
     if (sourcePath.includes("\0")) {
       throw new Error("Invalid file path.");
     }
 
-    const stat = await workspace.stat(sourcePath);
-    if (stat?.type !== "file") {
+    const stat = await this.statFile(sourcePath);
+    if (!stat) {
       throw new Error(
-        `No file found at ${input.path}. Create it first (e.g. with the execute tool's state.* API) before saving it for download.`,
+        `No file found at ${input.path}. Create it first (e.g. with the write tool) before saving it for download.`,
       );
     }
 
     const filename = sanitizeWorkspaceFilename(input.filename || sourcePath.split("/").at(-1) || "download");
-    const mediaType = stat.mimeType || guessMediaType(filename);
-    await workspace.mkdir(DOWNLOAD_DIR, { recursive: true });
+    await this.workspace.fs.mkdir(DOWNLOAD_DIR, { recursive: true });
     const index = this.reserveFileIndices(1);
     const path = `${DOWNLOAD_DIR}/${String(index).padStart(2, "0")}-${filename}`;
 
-    await workspace.cp(sourcePath, path);
+    await this.workspace.fs.writeFile(path, new Uint8Array(await this.readFileBytes(sourcePath)));
 
-    return { filename, mediaType, size: stat.size, path };
+    return { filename, mediaType: guessMediaType(filename), size: stat.size, path };
   }
 
   async readDownloadFile(path: string): Promise<WorkspaceDownloadFile | null> {
-    if (!isDownloadPath(path)) {
+    if (!isDownloadPath(path) || !(await this.statFile(path))) {
       return null;
     }
-    const workspace = this.workspace as WorkspaceFsLike;
-    const bytes = await workspace.readFileBytes(path);
-    if (!bytes) {
-      return null;
-    }
-    const stat = await workspace.stat(path);
     const filename = (path.split("/").at(-1) || "download").replace(/^\d+-/, "");
-    const mediaType = stat?.mimeType || guessMediaType(filename);
-    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-    return { filename, mediaType, bytes: buffer };
+    return { filename, mediaType: guessMediaType(filename), bytes: await this.readFileBytes(path) };
   }
 }
