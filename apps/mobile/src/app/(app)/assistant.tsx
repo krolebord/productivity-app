@@ -42,7 +42,12 @@ import {
 } from "react-native";
 import Animated, { FadeIn, ReduceMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AttachmentChips, ModelPicker, ReasoningEffortPicker } from "../../components/assistant/composer-controls";
+import {
+  AttachmentChips,
+  ContextUsageRing,
+  ModelPicker,
+  ReasoningEffortPicker,
+} from "../../components/assistant/composer-controls";
 import {
   ActivityBadge,
   ConversationList,
@@ -519,6 +524,7 @@ function Chat({
               />
             )}
           </View>
+          {conversation && !offline && <ContextUsageRing contextTokens={conversation.contextTokens} />}
           {offline && (
             <View className="ml-auto shrink-0 flex-row items-center gap-1 px-1.5">
               <Icon name="wifi-off" size={12} colorClassName="accent-muted-foreground" />

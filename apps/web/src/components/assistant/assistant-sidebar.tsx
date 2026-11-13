@@ -5,6 +5,7 @@ import {
   skillStarterPrompt,
   skillStarters,
 } from "@productivity/core/agent/builtin-skills";
+import { contextUsageFraction, formatContextUsage } from "@productivity/core/agent/context-usage";
 import { type ConversationTurnFile, conversationTurnFilesFromData } from "@productivity/core/agent/conversation-files";
 import { formatCost, formatFileSize, formatModelPricing, MODEL_MODALITY_LABELS } from "@productivity/core/agent/format";
 import {
@@ -767,7 +768,7 @@ function ModelSelect({
       <Tooltip>
         <TooltipTrigger
           render={
-            <span className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs" />
+            <span className="flex w-fit min-w-0 max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs" />
           }
         >
           <Cpu className="size-3.5 shrink-0" />
@@ -790,7 +791,7 @@ function ModelSelect({
               render={
                 <button
                   type="button"
-                  className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+                  className="flex w-fit min-w-0 max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
                   aria-label="Select model"
                 />
               }
@@ -844,7 +845,7 @@ function ReasoningEffortSelect({
       <Tooltip>
         <TooltipTrigger
           render={
-            <span className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs" />
+            <span className="flex w-fit max-w-full shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs" />
           }
         >
           <Brain className="size-3.5 shrink-0" />
@@ -864,7 +865,7 @@ function ReasoningEffortSelect({
               render={
                 <button
                   type="button"
-                  className="flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
+                  className="flex w-fit max-w-full shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
                   aria-label="Select reasoning effort"
                 />
               }
@@ -886,6 +887,36 @@ function ReasoningEffortSelect({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function ContextUsageRing({ contextTokens }: { contextTokens: number }) {
+  if (contextTokens <= 0) return null;
+  const radius = 6;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = contextUsageFraction(contextTokens);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span role="img" aria-label={formatContextUsage(contextTokens)} className="flex shrink-0 p-1" />}
+      >
+        <svg viewBox="0 0 16 16" className="size-4 -rotate-90" aria-hidden="true">
+          <circle cx="8" cy="8" r={radius} fill="none" strokeWidth="2" className="stroke-muted-foreground/25" />
+          <circle
+            cx="8"
+            cy="8"
+            r={radius}
+            fill="none"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray={`${fraction * circumference} ${circumference}`}
+            className={fraction >= 0.9 ? "stroke-amber-500" : "stroke-muted-foreground"}
+          />
+        </svg>
+      </TooltipTrigger>
+      <TooltipContent side="top">{formatContextUsage(contextTokens)}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -1350,6 +1381,7 @@ function ConversationChat({ target }: { target: ConversationTarget }) {
                 />
               )}
             </div>
+            {conversation && <ContextUsageRing contextTokens={conversation.contextTokens} />}
             {conversation && <ConversationCost conversation={conversation} />}
             {canStop ? (
               <InputGroupButton

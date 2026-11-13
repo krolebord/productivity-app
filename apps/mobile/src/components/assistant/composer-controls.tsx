@@ -1,3 +1,4 @@
+import { contextUsageFraction, formatContextUsage } from "@productivity/core/agent/context-usage";
 import { formatFileSize, formatModelPricing, MODEL_MODALITY_LABELS } from "@productivity/core/agent/format";
 import {
   ASSISTANT_MODELS,
@@ -10,6 +11,8 @@ import {
 } from "@productivity/core/agent/models";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Canvas, Path } from "react-native-skia";
+import { useCSSVariable } from "uniwind";
 import type { PickedFile } from "../../lib/assistant-uploads";
 import { Icon, type IconName, MaterialIcon } from "../ui/icon";
 import { SelectSheet } from "../ui/select-sheet";
@@ -205,5 +208,40 @@ export function AttachmentChips({
         </View>
       ))}
     </ScrollView>
+  );
+}
+
+const RING_SIZE = 16;
+const RING_PATH = "M8 2 A6 6 0 1 1 7.99 2";
+const RING_VARS = ["--color-muted-foreground", "--color-border"];
+
+/** How full the model's context is; a full ring is where older messages get summarized. */
+export function ContextUsageRing({ contextTokens }: { contextTokens: number }) {
+  const [progress, track] = useCSSVariable(RING_VARS) as (string | undefined)[];
+  if (contextTokens <= 0) return null;
+  const fraction = contextUsageFraction(contextTokens);
+  const label = formatContextUsage(contextTokens);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={() => Alert.alert(label)}
+      hitSlop={8}
+      className="ml-auto shrink-0 rounded-md px-1.5 py-1 active:bg-muted"
+    >
+      <Canvas style={{ width: RING_SIZE, height: RING_SIZE }}>
+        <Path path={RING_PATH} style="stroke" strokeWidth={2} color={track ?? "#e5e7eb"} start={0} end={1} />
+        <Path
+          path={RING_PATH}
+          style="stroke"
+          strokeWidth={2}
+          strokeCap="round"
+          color={fraction >= 0.9 ? "#f59e0b" : (progress ?? "#888888")}
+          start={0}
+          end={fraction}
+        />
+      </Canvas>
+    </Pressable>
   );
 }

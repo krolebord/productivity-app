@@ -16,6 +16,7 @@ import { createExecuteTool } from "@cloudflare/think/tools/execute";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { BUILTIN_SKILLS } from "@productivity/core/agent/builtin-skills";
 import { RenderChartInputSchema } from "@productivity/core/agent/chart-spec";
+import { CONTEXT_COMPACT_AFTER_TOKENS } from "@productivity/core/agent/context-usage";
 import { conversationTurnFilesData } from "@productivity/core/agent/conversation-files";
 import {
   type AssistantModelId,
@@ -51,7 +52,6 @@ import { posthogTelemetry } from "./posthog-telemetry";
 import { createWebTools } from "./web-tools";
 
 const TURN_BUDGET_USD = 0.5;
-const COMPACT_AFTER_TOKENS = 232_000;
 const COMPACT_KEEP_RECENT_TOKENS = 20_000;
 const TURN_BUDGET_MESSAGE = `Stopped after reaching the $${TURN_BUDGET_USD.toFixed(2)} model budget for this turn. Send another message to continue.`;
 
@@ -175,7 +175,7 @@ function skillManifestEntry(skill: { name: string; title: string; whenToUse: str
 export class AssistantAgent extends Think<Env, AssistantUsageState> {
   maxSteps = 100;
 
-  // Models whose window is below COMPACT_AFTER_TOKENS overflow before the between-turns
+  // Models whose window is below CONTEXT_COMPACT_AFTER_TOKENS overflow before the between-turns
   // threshold; this compacts and retries the rejected turn instead of failing it.
   override contextOverflow = { reactive: true };
   override classifyChatError = defaultContextOverflowClassifier;
@@ -256,7 +256,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
         if (result) await this.projectContextSummaryMarker();
         return result;
       })
-      .compactAfter(COMPACT_AFTER_TOKENS);
+      .compactAfter(CONTEXT_COMPACT_AFTER_TOKENS);
   }
 
   private async summarizeHistory(prompt: string): Promise<string> {
@@ -943,15 +943,45 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     return this.name.slice(separatorIndex + 1);
   }
 
+  // The figure compactAfter() gates on: stamped row estimates, with a summarized span counted
+  // as its summary. Sessions computes it internally but doesn't expose it.
+  private async contextTokenEstimate(): Promise<number | null> {
+    try {
+      const rows = await this.session.getHistoryRowStats();
+      const compactions = await this.session.getCompactions();
+      const indexById = new Map(rows.map((row, index) => [row.id, index]));
+      let tokens = 0;
+      let i = 0;
+      while (i < rows.length) {
+        const span = compactions
+          .filter((c) => c.fromMessageId === rows[i].id && (indexById.get(c.toMessageId) ?? -1) >= i)
+          .at(-1);
+        if (span) {
+          tokens += Math.ceil(span.summary.length / 4);
+          i = (indexById.get(span.toMessageId) ?? i) + 1;
+        } else {
+          tokens += rows[i].tokenEstimate;
+          i++;
+        }
+      }
+      return Math.ceil(tokens);
+    } catch (error) {
+      console.error("Failed to estimate the conversation context size", error);
+      return null;
+    }
+  }
+
   private async syncConversationTurn(input: {
     turnStatus: "idle" | "running" | "error";
     turnError: string;
   }): Promise<void> {
     const stub = await this.getUserDbStub();
+    const contextTokens = await this.contextTokenEstimate();
     await stub.updateConversation(this.getConversationId(), {
       updatedAt: Date.now(),
       totalCost: this.state.totalCostUsd,
       totalTokens: this.state.totalTokens,
+      ...(contextTokens === null ? {} : { contextTokens }),
       turnStatus: input.turnStatus,
       turnError: input.turnError,
     });

@@ -351,6 +351,7 @@ export class UserDbServer extends Server<Env> {
       reasoningEffort: input.reasoningEffort,
       totalCost: 0,
       totalTokens: 0,
+      contextTokens: 0,
       turnStatus: "running",
       turnError: "",
     };

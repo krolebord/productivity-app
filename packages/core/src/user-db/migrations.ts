@@ -474,6 +474,15 @@ const migrations = createMigrations((b) => ({
       build: (col) => col.notNull(),
     }),
   ],
+  29: [
+    b.addColumn({
+      table: "_conversation",
+      column: "contextTokens",
+      type: "integer",
+      defaultValue: 0,
+      build: (col) => col.notNull(),
+    }),
+  ],
 }));
 
 export const MEMORY_INJECTION_LIMIT = 50;
@@ -625,6 +634,10 @@ export const syncDbSchema = defineSyncSchema({
         reasoningEffort: t.text().nullable().default(null).describe("Fixed after the first message."),
         totalCost: t.real().default(0).describe("Cumulative cost in USD."),
         totalTokens: t.integer().default(0),
+        contextTokens: t
+          .integer()
+          .default(0)
+          .describe("Estimated size of the history the model currently sees. 0 until a turn finishes."),
         turnStatus: t.enum(["idle", "running", "error"]).default("idle"),
         turnError: t.text().default(""),
       },
