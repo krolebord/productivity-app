@@ -20,7 +20,8 @@ const OUTPUT_PATH = fileURLToPath(new URL("../src/agent/models.gen.ts", import.m
 const INPUT_MODALITIES = ["text", "image", "file", "audio", "video"] as const;
 type InputModality = (typeof INPUT_MODALITIES)[number];
 
-const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const;
+// `max` is deliberately left out: the assistant never needs it, so models top out at `xhigh`.
+const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 type OpenRouterModel = {
@@ -82,7 +83,9 @@ function buildModel(seed: SupportedModel, remote: OpenRouterModel): GeneratedMod
   const cacheRead = perMillion(remote.pricing?.input_cache_read);
 
   const supportedReasoningEfforts = pickEfforts(remote.reasoning?.supported_efforts);
-  const defaultEffort = pickEfforts(remote.reasoning?.default_effort ? [remote.reasoning.default_effort] : [])[0];
+  const defaultEffort =
+    pickEfforts(remote.reasoning?.default_effort ? [remote.reasoning.default_effort] : [])[0] ??
+    supportedReasoningEfforts.at(-1);
   const intelligenceScore = remote.benchmarks?.artificial_analysis?.intelligence_index;
 
   const model: GeneratedModel = {

@@ -1,8 +1,8 @@
 import { os } from "@orpc/server";
 import {
   modelSupportsSelectableReasoning,
-  resolveAssistantModelId,
   resolveAssistantReasoningEffort,
+  resolveSelectableAssistantModelId,
 } from "@productivity/core/agent/models";
 import { orpcErrors } from "@productivity/core/api/contract";
 import { getAgentByName } from "agents";
@@ -71,7 +71,7 @@ const startConversation = api.startConversation
   .use(authMiddleware)
   .use(assistantAccess)
   .handler(async ({ input, context, errors }) => {
-    const model = resolveAssistantModelId(input.model);
+    const model = resolveSelectableAssistantModelId(input.model);
     const reasoningEffort = modelSupportsSelectableReasoning(model)
       ? (resolveAssistantReasoningEffort(model, input.reasoningEffort) ?? null)
       : null;

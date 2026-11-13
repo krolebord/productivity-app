@@ -3,7 +3,7 @@ import {
   type AssistantReasoningEffort,
   DEFAULT_ASSISTANT_MODEL,
   isAssistantReasoningEffort,
-  resolveAssistantModelId,
+  resolveSelectableAssistantModelId,
 } from "@productivity/core/agent/models";
 import * as SecureStore from "expo-secure-store";
 import { useSyncExternalStore } from "react";
@@ -50,7 +50,7 @@ function read(): Preferences {
       defaultHome: parsed.defaultHome === "finances" ? "finances" : "today",
       dismissedTimeZoneMismatch:
         typeof parsed.dismissedTimeZoneMismatch === "string" ? parsed.dismissedTimeZoneMismatch : "",
-      assistantModel: resolveAssistantModelId(parsed.assistantModel),
+      assistantModel: resolveSelectableAssistantModelId(parsed.assistantModel),
       assistantReasoningEffort: isAssistantReasoningEffort(parsed.assistantReasoningEffort)
         ? parsed.assistantReasoningEffort
         : null,

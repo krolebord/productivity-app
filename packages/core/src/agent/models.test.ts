@@ -8,6 +8,7 @@ import {
   modelSupportsSelectableReasoning,
   preferredConversationReasoningEffort,
   resolveAssistantModelId,
+  resolveSelectableAssistantModelId,
 } from "./models";
 
 describe("resolveAssistantModelId", () => {
@@ -23,6 +24,14 @@ describe("resolveAssistantModelId", () => {
   it("falls back to the default for unknown ids", () => {
     expect(resolveAssistantModelId("nope")).toBe(DEFAULT_ASSISTANT_MODEL);
     expect(resolveAssistantModelId(null)).toBe(DEFAULT_ASSISTANT_MODEL);
+  });
+});
+
+describe("resolveSelectableAssistantModelId", () => {
+  it("keeps selectable ids and replaces hidden ones with the default", () => {
+    expect(resolveSelectableAssistantModelId("openai/gpt-6.1-terra")).toBe("openai/gpt-6.1-terra");
+    expect(resolveSelectableAssistantModelId("deepseek/deepseek-v4.1-flash")).toBe(DEFAULT_ASSISTANT_MODEL);
+    expect(resolveSelectableAssistantModelId("stealth/ox-alpha")).toBe(DEFAULT_ASSISTANT_MODEL);
   });
 });
 

@@ -215,12 +215,7 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
     const reasoningEffort = resolveAssistantReasoningEffort(modelId, reasoningEffortOverride);
     return openrouter.chat(modelId, {
       usage: { include: true },
-      ...(reasoningEffort
-        ? {
-            // OpenRouter accepts GPT-5.6's `max`; the SDK typings lag behind.
-            reasoning: { effort: reasoningEffort as "xhigh" | "high" | "medium" | "low" | "minimal" | "none" },
-          }
-        : {}),
+      ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
     });
   }
 

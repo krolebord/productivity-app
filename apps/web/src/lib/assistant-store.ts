@@ -4,7 +4,7 @@ import {
   type AssistantReasoningEffort,
   DEFAULT_ASSISTANT_MODEL,
   isAssistantReasoningEffort,
-  resolveAssistantModelId,
+  resolveSelectableAssistantModelId,
 } from "@productivity/core/agent/models";
 import { omitSubmitLock, type SubmitLock } from "@productivity/core/submit-lock";
 import { create } from "zustand";
@@ -123,7 +123,7 @@ export const useAssistantStore = create<AssistantStore>()(
           ...state,
           showConversationList: false,
           submitLocks: {},
-          model: resolveAssistantModelId(state.model),
+          model: resolveSelectableAssistantModelId(state.model),
           reasoningEffort: isAssistantReasoningEffort(state.reasoningEffort) ? state.reasoningEffort : null,
         };
       },

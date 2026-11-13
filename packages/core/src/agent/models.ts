@@ -6,7 +6,7 @@ export type AssistantModelId = (typeof SUPPORTED_MODELS)[number]["id"];
 
 export type AssistantModelInputModality = "audio" | "file" | "image" | "text" | "video";
 
-export type AssistantReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max";
+export type AssistantReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
 
 /** Canonical ascending order for reasoning efforts, used for UI ordering and sorting. */
 export const REASONING_EFFORTS_ASCENDING = [
@@ -15,7 +15,6 @@ export const REASONING_EFFORTS_ASCENDING = [
   "medium",
   "high",
   "xhigh",
-  "max",
 ] as const satisfies readonly AssistantReasoningEffort[];
 
 /**
@@ -69,6 +68,12 @@ export function resolveAssistantModelId(value: unknown): AssistantModelId {
   return getAssistantModel(value)?.id ?? DEFAULT_ASSISTANT_MODEL;
 }
 
+/** Like `resolveAssistantModelId`, but hidden models fall back to the default. Use for new conversations. */
+export function resolveSelectableAssistantModelId(value: unknown): AssistantModelId {
+  const id = resolveAssistantModelId(value);
+  return getAssistantModel(id)?.selectable === false ? DEFAULT_ASSISTANT_MODEL : id;
+}
+
 export function getAssistantModel(id: string): AssistantModel | undefined {
   const canonical = ASSISTANT_MODEL_ALIAS_TO_ID.get(id) ?? id;
   return ASSISTANT_MODELS_BY_ID.get(canonical);
@@ -119,8 +124,6 @@ export function formatReasoningEffortLabel(effort: AssistantReasoningEffort): st
       return "High";
     case "xhigh":
       return "XHigh";
-    case "max":
-      return "Max";
   }
 }
 

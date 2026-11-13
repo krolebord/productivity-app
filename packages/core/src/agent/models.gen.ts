@@ -4,6 +4,97 @@ import type { AssistantModel, AssistantModelId } from "./models";
 
 export const ASSISTANT_MODELS = [
   {
+    id: "meta/muse-spark-1.3-contributor",
+    label: "Muse Spark 1.3",
+    inputModalities: [
+      "text",
+      "image",
+      "file",
+      "video"
+    ],
+    pricing: {
+      inputPerMillion: 0.1,
+      outputPerMillion: 0.2,
+      cacheReadPerMillion: 0.002
+    },
+    supportedReasoningEfforts: [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+    ],
+    reasoningEffort: "medium"
+  },
+  {
+    id: "meta/muse-ember",
+    label: "Muse Ember",
+    inputModalities: [
+      "text",
+      "image",
+      "file",
+      "audio",
+      "video"
+    ],
+    pricing: {
+      inputPerMillion: 0.1,
+      outputPerMillion: 0.5,
+      cacheReadPerMillion: 0.004
+    },
+    supportedReasoningEfforts: [
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+    ],
+    reasoningEffort: "medium"
+  },
+  {
+    id: "anthropic/claude-haiku-5.5",
+    label: "Claude Haiku 5.5",
+    inputModalities: [
+      "text",
+      "image",
+      "file"
+    ],
+    pricing: {
+      inputPerMillion: 0.1,
+      outputPerMillion: 0.5,
+      cacheReadPerMillion: 0.01
+    },
+    intelligenceScore: 36.5,
+    supportedReasoningEfforts: [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+    ],
+    reasoningEffort: "medium"
+  },
+  {
+    id: "openai/gpt-6.1-terra",
+    label: "GPT-6.1 Terra",
+    inputModalities: [
+      "text",
+      "image",
+      "file"
+    ],
+    pricing: {
+      inputPerMillion: 1,
+      outputPerMillion: 5,
+      cacheReadPerMillion: 0.05
+    },
+    intelligenceScore: 51.3,
+    supportedReasoningEfforts: [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+    ],
+    reasoningEffort: "medium"
+  },
+  {
     id: "z-ai/glm-5.3-flash",
     label: "GLM 5.3 Flash",
     inputModalities: [
@@ -12,17 +103,17 @@ export const ASSISTANT_MODELS = [
       "video"
     ],
     pricing: {
-      inputPerMillion: 0.15,
-      outputPerMillion: 0.5,
+      inputPerMillion: 0.0399,
+      outputPerMillion: 0.0784,
       cacheReadPerMillion: 0.03
     },
-    intelligenceScore: 41.9,
+    intelligenceScore: 27.8,
     supportedReasoningEfforts: [
       "low",
-      "high",
-      "max"
+      "high"
     ],
-    reasoningEffort: "max",
+    reasoningEffort: "high",
+    selectable: false,
     aliases: [
       "stealth/ox-alpha"
     ]
@@ -35,16 +126,17 @@ export const ASSISTANT_MODELS = [
       "image"
     ],
     pricing: {
-      inputPerMillion: 0.15,
-      outputPerMillion: 0.6,
-      cacheReadPerMillion: 0.003
+      inputPerMillion: 0.3,
+      outputPerMillion: 1.2,
+      cacheReadPerMillion: 0.006
     },
     supportedReasoningEfforts: [
+      "none",
       "low",
-      "high",
-      "max"
+      "high"
     ],
-    reasoningEffort: "high"
+    reasoningEffort: "high",
+    selectable: false
   },
   {
     id: "openai/gpt-5.6-luna",
@@ -59,16 +151,16 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 1.2,
       cacheReadPerMillion: 0.02
     },
-    intelligenceScore: 37.5,
+    intelligenceScore: 23.8,
     supportedReasoningEfforts: [
       "none",
       "low",
       "medium",
       "high",
-      "xhigh",
-      "max"
+      "xhigh"
     ],
-    reasoningEffort: "high"
+    reasoningEffort: "high",
+    selectable: false
   },
   {
     id: "deepseek/deepseek-v4-pro-0813",
@@ -77,17 +169,18 @@ export const ASSISTANT_MODELS = [
       "text"
     ],
     pricing: {
-      inputPerMillion: 0.57948,
-      outputPerMillion: 1.73844,
-      cacheReadPerMillion: 0.018438
+      inputPerMillion: 0.111,
+      outputPerMillion: 4.44,
+      cacheReadPerMillion: 0.097
     },
-    intelligenceScore: 36.3,
+    intelligenceScore: 23.1,
     supportedReasoningEfforts: [
+      "none",
       "low",
-      "high",
-      "max"
+      "high"
     ],
-    reasoningEffort: "high"
+    reasoningEffort: "high",
+    selectable: false
   },
   {
     id: "openai/gpt-5.6-terra",
@@ -102,16 +195,16 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 12,
       cacheReadPerMillion: 0.2
     },
-    intelligenceScore: 42.3,
+    intelligenceScore: 32.3,
     supportedReasoningEfforts: [
       "none",
       "low",
       "medium",
       "high",
-      "xhigh",
-      "max"
+      "xhigh"
     ],
-    reasoningEffort: "medium"
+    reasoningEffort: "medium",
+    selectable: false
   },
   {
     id: "openai/gpt-5.6-sol",
@@ -122,20 +215,19 @@ export const ASSISTANT_MODELS = [
       "file"
     ],
     pricing: {
-      inputPerMillion: 2,
-      outputPerMillion: 10,
-      cacheReadPerMillion: 0.2
+      inputPerMillion: 4.4,
+      outputPerMillion: 22,
+      cacheReadPerMillion: 0.44
     },
-    intelligenceScore: 47.1,
     supportedReasoningEfforts: [
       "none",
       "low",
       "medium",
       "high",
-      "xhigh",
-      "max"
+      "xhigh"
     ],
-    reasoningEffort: "low"
+    reasoningEffort: "low",
+    selectable: false
   },
   {
     id: "x-ai/grok-4.5",
@@ -150,13 +242,13 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 6,
       cacheReadPerMillion: 0.3
     },
-    intelligenceScore: 39.1,
     supportedReasoningEfforts: [
       "low",
       "medium",
       "high"
     ],
-    reasoningEffort: "high"
+    reasoningEffort: "high",
+    selectable: false
   },
   {
     id: "qwen/qwen3.8-27b",
@@ -167,17 +259,19 @@ export const ASSISTANT_MODELS = [
       "video"
     ],
     pricing: {
-      inputPerMillion: 0.42,
-      outputPerMillion: 3,
-      cacheReadPerMillion: 0.085
+      inputPerMillion: 0.15,
+      outputPerMillion: 1.875,
+      cacheReadPerMillion: 0.0375
     },
-    intelligenceScore: 33.9,
+    intelligenceScore: 20.1,
     supportedReasoningEfforts: [
+      "none",
       "low",
       "medium",
       "xhigh"
     ],
-    reasoningEffort: "xhigh"
+    reasoningEffort: "xhigh",
+    selectable: false
   },
   {
     id: "google/gemini-3.7-flash",
@@ -194,37 +288,13 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 3.75,
       cacheReadPerMillion: 0.075
     },
-    intelligenceScore: 39.4,
     supportedReasoningEfforts: [
       "low",
       "medium",
       "high"
     ],
-    reasoningEffort: "medium"
-  },
-  {
-    id: "meta/muse-spark-1.3-contributor",
-    label: "Muse Spark 1.3",
-    inputModalities: [
-      "text",
-      "image",
-      "file",
-      "audio",
-      "video"
-    ],
-    pricing: {
-      inputPerMillion: 0.1,
-      outputPerMillion: 0.2,
-      cacheReadPerMillion: 0.002
-    },
-    supportedReasoningEfforts: [
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max"
-    ],
-    reasoningEffort: "medium"
+    reasoningEffort: "medium",
+    selectable: false
   },
   {
     id: "deepseek/deepseek-v4-flash-0731",
@@ -233,15 +303,14 @@ export const ASSISTANT_MODELS = [
       "text"
     ],
     pricing: {
-      inputPerMillion: 0.065,
-      outputPerMillion: 0.18,
-      cacheReadPerMillion: 0.016
+      inputPerMillion: 0.0434,
+      outputPerMillion: 0.3,
+      cacheReadPerMillion: 0.035
     },
-    intelligenceScore: 34.5,
     supportedReasoningEfforts: [
+      "none",
       "low",
-      "high",
-      "max"
+      "high"
     ],
     reasoningEffort: "high",
     selectable: false
@@ -256,11 +325,10 @@ export const ASSISTANT_MODELS = [
       "video"
     ],
     pricing: {
-      inputPerMillion: 0.14,
-      outputPerMillion: 0.28,
-      cacheReadPerMillion: 0.0028
+      inputPerMillion: 0.4,
+      outputPerMillion: 2,
+      cacheReadPerMillion: 0.08
     },
-    intelligenceScore: 22.3,
     selectable: false
   },
   {
@@ -270,12 +338,13 @@ export const ASSISTANT_MODELS = [
       "text"
     ],
     pricing: {
-      inputPerMillion: 0.87,
-      outputPerMillion: 1.74,
-      cacheReadPerMillion: 0.0725
+      inputPerMillion: 0.9,
+      outputPerMillion: 1.5,
+      cacheReadPerMillion: 0.25
     },
-    intelligenceScore: 30.9,
+    intelligenceScore: 12.6,
     supportedReasoningEfforts: [
+      "none",
       "high",
       "xhigh"
     ],
@@ -289,12 +358,12 @@ export const ASSISTANT_MODELS = [
       "text"
     ],
     pricing: {
-      inputPerMillion: 0.08554,
-      outputPerMillion: 0.17108,
-      cacheReadPerMillion: 0.017108
+      inputPerMillion: 0.09,
+      outputPerMillion: 0.18,
+      cacheReadPerMillion: 0.018
     },
-    intelligenceScore: 24.8,
     supportedReasoningEfforts: [
+      "none",
       "high",
       "xhigh"
     ],
@@ -312,7 +381,6 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 0.87,
       cacheReadPerMillion: 0.0036
     },
-    intelligenceScore: 26.4,
     selectable: false
   },
   {
@@ -328,7 +396,6 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 30,
       cacheReadPerMillion: 0.5
     },
-    intelligenceScore: 38.6,
     supportedReasoningEfforts: [
       "none",
       "low",
@@ -352,7 +419,6 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 4.5,
       cacheReadPerMillion: 0.075
     },
-    intelligenceScore: 24.6,
     supportedReasoningEfforts: [
       "none",
       "low",
@@ -379,6 +445,7 @@ export const ASSISTANT_MODELS = [
       cacheReadPerMillion: 0.05
     },
     supportedReasoningEfforts: [
+      "none",
       "low",
       "medium",
       "high"
@@ -399,9 +466,9 @@ export const ASSISTANT_MODELS = [
       outputPerMillion: 1.2,
       cacheReadPerMillion: 0.06
     },
-    intelligenceScore: 29.6,
+    intelligenceScore: 18.9,
     selectable: false
   }
 ] satisfies AssistantModel[];
 
-export const DEFAULT_ASSISTANT_MODEL: AssistantModelId = "deepseek/deepseek-v4.1-flash";
+export const DEFAULT_ASSISTANT_MODEL: AssistantModelId = "meta/muse-spark-1.3-contributor";
