@@ -491,6 +491,11 @@ type AssistantChunk =
   | { kind: "text"; message: ConversationMessageItem }
   | { kind: "tools"; messages: ConversationMessageItem[] };
 
+// Streamdown's defaults (1rem between blocks, padded list items, 1.5rem above headings) read as
+// double-spaced in the narrow chat column. A paragraph right before a list is usually its label.
+const REPLY_MARKDOWN_CLASS =
+  "space-y-2.5 [&_li]:py-0.5 [&_p:has(+:is(ul,ol))]:mb-1 [&_:is(h1,h2,h3,h4,h5,h6)]:mt-4 [&_:is(h1,h2,h3,h4,h5,h6)]:mb-1.5";
+
 function chunkAssistantRows(messages: ConversationMessageItem[]): AssistantChunk[] {
   const chunks: AssistantChunk[] = [];
   for (const message of messages) {
@@ -595,7 +600,9 @@ function AssistantTurn({
       <MessageContent className="gap-3">
         {chunks.map((chunk) =>
           chunk.kind === "text" ? (
-            <Streamdown key={chunk.message.id}>{chunk.message.text}</Streamdown>
+            <Streamdown key={chunk.message.id} className={REPLY_MARKDOWN_CLASS}>
+              {chunk.message.text}
+            </Streamdown>
           ) : (
             <Trace key={chunk.messages[0].id}>
               {chunk.messages.map((message) => (
