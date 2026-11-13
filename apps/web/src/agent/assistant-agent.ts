@@ -2,6 +2,8 @@ import { createAITools } from "@cloudflare/computer/tools/ai-sdk";
 import {
   type ChatErrorContext,
   type ChatResponseResult,
+  defaultContextOverflowClassifier,
+  type Session,
   type StepContext,
   skills,
   Think,
@@ -19,9 +21,11 @@ import {
   type AssistantModelId,
   type AssistantReasoningEffort,
   DEFAULT_ASSISTANT_MODEL,
+  getModelReasoningEfforts,
   resolveAssistantModelId,
   resolveAssistantReasoningEffort,
 } from "@productivity/core/agent/models";
+import { CONTEXT_SUMMARY_TOOL_NAME } from "@productivity/core/agent/tool-messages";
 import { TransactionsSpecSchema } from "@productivity/core/agent/transactions-spec";
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from "@productivity/core/agent/uploads";
 import {
@@ -30,7 +34,8 @@ import {
   SKILL_CATALOG_LIMIT,
 } from "@productivity/core/user-db/migrations";
 import { type AiMutationResult, type AiQueryResult, createDbTools, type DbToolsAccess } from "@sqlite-sync/ai";
-import { type LanguageModel, type ToolSet, tool } from "ai";
+import { createCompactFunction } from "agents/sessions";
+import { generateText, type LanguageModel, type ToolSet, tool } from "ai";
 import { getServerByName } from "partyserver";
 import { PostHog } from "posthog-node";
 import { z } from "zod";
@@ -46,6 +51,8 @@ import { posthogTelemetry } from "./posthog-telemetry";
 import { createWebTools } from "./web-tools";
 
 const TURN_BUDGET_USD = 0.5;
+const COMPACT_AFTER_TOKENS = 232_000;
+const COMPACT_KEEP_RECENT_TOKENS = 20_000;
 const TURN_BUDGET_MESSAGE = `Stopped after reaching the $${TURN_BUDGET_USD.toFixed(2)} model budget for this turn. Send another message to continue.`;
 
 export type WorkspaceUploadInput = {
@@ -168,6 +175,11 @@ function skillManifestEntry(skill: { name: string; title: string; whenToUse: str
 export class AssistantAgent extends Think<Env, AssistantUsageState> {
   maxSteps = 100;
 
+  // Models whose window is below COMPACT_AFTER_TOKENS overflow before the between-turns
+  // threshold; this compacts and retries the rejected turn instead of failing it.
+  override contextOverflow = { reactive: true };
+  override classifyChatError = defaultContextOverflowClassifier;
+
   initialState: AssistantUsageState = {
     totalCostUsd: 0,
     totalTokens: 0,
@@ -231,6 +243,66 @@ export class AssistantAgent extends Think<Env, AssistantUsageState> {
       ...(memories ? { instructions: `${ctx.system}\n\n${memories}` } : {}),
       stopWhen: () => this.turnBudgetExhausted(),
     };
+  }
+
+  configureSession(session: Session) {
+    const compact = createCompactFunction({
+      summarize: (prompt) => this.summarizeHistory(prompt),
+      keepRecentTokens: COMPACT_KEEP_RECENT_TOKENS,
+    });
+    return session
+      .onCompaction(async (messages) => {
+        const result = await compact(messages);
+        if (result) await this.projectContextSummaryMarker();
+        return result;
+      })
+      .compactAfter(COMPACT_AFTER_TOKENS);
+  }
+
+  private async summarizeHistory(prompt: string): Promise<string> {
+    const stub = await this.getUserDbStub();
+    const conversation = await stub.getConversation(this.getConversationId());
+    const modelId = resolveAssistantModelId(conversation?.model);
+    const result = await generateText({
+      model: this.getModel(modelId, getModelReasoningEfforts(modelId)[0]),
+      prompt,
+    });
+    const usage = (
+      result.providerMetadata as { openrouter?: { usage?: { cost?: number; totalTokens?: number } } } | undefined
+    )?.openrouter?.usage;
+    this.setState({
+      ...this.state,
+      totalCostUsd: this.state.totalCostUsd + (usage?.cost ?? 0),
+      totalTokens: this.state.totalTokens + (usage?.totalTokens ?? result.usage.totalTokens ?? 0),
+    });
+    return result.text;
+  }
+
+  private async projectContextSummaryMarker(): Promise<void> {
+    try {
+      const stub = await this.getUserDbStub();
+      const seq = this.nextProjectionSeq();
+      if (seq <= 0) return;
+      this.turnNextSeq = seq + 1;
+      this.setState({ ...this.state, nextSeq: this.turnNextSeq });
+      await stub.upsertConversationMessages([
+        {
+          id: `context-summary:${crypto.randomUUID()}`,
+          conversationId: this.getConversationId(),
+          seq,
+          role: "assistant",
+          kind: "tool",
+          text: "",
+          toolName: CONTEXT_SUMMARY_TOOL_NAME,
+          toolCallId: "",
+          toolState: "done",
+          data: "",
+          createdAt: Date.now(),
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to project the context summary marker", error);
+    }
   }
 
   configureContext() {

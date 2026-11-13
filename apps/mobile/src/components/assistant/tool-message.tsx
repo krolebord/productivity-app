@@ -2,6 +2,7 @@ import { findBuiltinSkill } from "@productivity/core/agent/builtin-skills";
 import type { ConversationTurnFile } from "@productivity/core/agent/conversation-files";
 import { formatFileSize } from "@productivity/core/agent/format";
 import {
+  CONTEXT_SUMMARY_TOOL_NAME,
   downloadFileFromData,
   isMemoryToolName,
   linkHostname,
@@ -13,6 +14,7 @@ import {
   resourceFilename,
   type SkillToolPayload,
   type ToolLink,
+  toolLabel,
   toolLinks,
   toolPayload,
   type WebToolPayload,
@@ -255,6 +257,9 @@ export function ToolMessage({ message, conversationId }: { message: Conversation
         <TransactionsCard spec={parseToolData(data)} />
       </CardBoundary>
     );
+  }
+  if (toolName === CONTEXT_SUMMARY_TOOL_NAME) {
+    return <ToolChip icon="check" failed={failed} label={toolLabel(toolName)} />;
   }
   return <ToolChip icon="check" failed={failed} label={toolName || "tool"} mono />;
 }

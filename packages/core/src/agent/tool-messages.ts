@@ -63,7 +63,11 @@ export function memoryToolLabel(name: MemoryToolName) {
   return "Remembered";
 }
 
+/** Not a model tool: the row the agent adds when it replaces older history with a summary. */
+export const CONTEXT_SUMMARY_TOOL_NAME = "summarize_context";
+
 const TOOL_LABELS: Record<string, string> = {
+  [CONTEXT_SUMMARY_TOOL_NAME]: "Summarized earlier messages",
   getDbSchema: "Checked data structure",
   queryDb: "Queried your data",
   mutateDb: "Updated your data",
