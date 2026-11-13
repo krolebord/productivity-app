@@ -231,10 +231,15 @@ function ToolTraceLine({
   );
 }
 
-function ToolCallChip({ name, failed }: { name: string; failed: boolean }) {
+function ToolCallChip({ name, failed, count = 1 }: { name: string; failed: boolean; count?: number }) {
   return (
     <div title={name}>
-      <ToolTraceLine icon={Wrench} title={toolLabel(name)} failed={failed} />
+      <ToolTraceLine
+        icon={Wrench}
+        title={toolLabel(name)}
+        description={count > 1 ? `×${count}` : undefined}
+        failed={failed}
+      />
     </div>
   );
 }
@@ -438,7 +443,48 @@ function groupMessageRows(messages: ConversationMessageItem[]): MessageGroup[] {
   return groups;
 }
 
-function ToolRow({ message, conversationId }: { message: ConversationMessageItem; conversationId: string }) {
+const DETAILED_TOOL_NAMES = new Set([
+  "saveDownload",
+  "web_search",
+  "web_extract",
+  "read",
+  "read_skill_resource",
+  "activate_skill",
+  "create_skill",
+  "renderChart",
+  "renderTransactions",
+]);
+
+type ToolRowItem = { message: ConversationMessageItem; count: number };
+
+// Rows that show nothing but the tool's label are identical when repeated, so a run of them becomes one "×N" row.
+function collapseRepeatedToolCalls(messages: ConversationMessageItem[]): ToolRowItem[] {
+  const rows: ToolRowItem[] = [];
+  for (const message of messages) {
+    const previous = rows.at(-1);
+    const labelOnly = !DETAILED_TOOL_NAMES.has(message.toolName) && !isMemoryToolName(message.toolName);
+    if (
+      labelOnly &&
+      previous?.message.toolName === message.toolName &&
+      previous.message.toolState === message.toolState
+    ) {
+      previous.count += 1;
+    } else {
+      rows.push({ message, count: 1 });
+    }
+  }
+  return rows;
+}
+
+function ToolRow({
+  message,
+  count,
+  conversationId,
+}: {
+  message: ConversationMessageItem;
+  count: number;
+  conversationId: string;
+}) {
   const { toolName, data } = message;
   const failed = message.toolState === "error";
   if (toolName === "saveDownload" && !failed) {
@@ -484,7 +530,7 @@ function ToolRow({ message, conversationId }: { message: ConversationMessageItem
       </ErrorBoundary>
     );
   }
-  return <ToolCallChip name={toolName} failed={failed} />;
+  return <ToolCallChip name={toolName} failed={failed} count={count} />;
 }
 
 type AssistantChunk =
@@ -605,8 +651,8 @@ function AssistantTurn({
             </Streamdown>
           ) : (
             <Trace key={chunk.messages[0].id}>
-              {chunk.messages.map((message) => (
-                <ToolRow key={message.id} message={message} conversationId={conversationId} />
+              {collapseRepeatedToolCalls(chunk.messages).map(({ message, count }) => (
+                <ToolRow key={message.id} message={message} count={count} conversationId={conversationId} />
               ))}
             </Trace>
           ),
